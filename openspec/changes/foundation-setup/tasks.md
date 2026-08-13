@@ -80,15 +80,51 @@ Cubre la capability `platform/configuration`. Los tests van primero.
 
 Cubre la capability `platform/service-health`. Los tests van primero.
 
-- [ ] 5.1 Escribir los tests de la sonda de vida: respuesta exitosa, presencia de versión y marca temporal, acceso sin credenciales
-- [ ] 5.2 Escribir los tests de la sonda de disponibilidad en condiciones normales y degradadas, incluida la recuperación sin reinicio
-- [ ] 5.3 Escribir los tests de correlación de peticiones: identificador generado y provisto por el cliente
-- [ ] 5.4 Escribir el test de que la documentación interactiva no se sirve con `APP_ENV=production`
-- [ ] 5.5 Implementar `backend/app/main.py`: aplicación, middleware de CORS y GZip, lifespan asíncrono
-- [ ] 5.6 Implementar el middleware de identificador de correlación
-- [ ] 5.7 Implementar las sondas de vida y disponibilidad
-- [ ] 5.8 Implementar los handlers de excepción globales y el gate de documentación por ambiente
-- [ ] 5.9 Verificar que el servicio arranca y que detener Redis alterna la sonda de disponibilidad y la restablece
+- [x] 5.1 Escribir los tests de la sonda de vida: respuesta exitosa, presencia de versión y marca temporal, acceso sin credenciales
+- [x] 5.2 Escribir los tests de la sonda de disponibilidad en condiciones normales y degradadas, incluida la recuperación sin reinicio
+- [x] 5.3 Escribir los tests de correlación de peticiones: identificador generado y provisto por el cliente
+- [x] 5.4 Escribir el test de que la documentación interactiva no se sirve con `APP_ENV=production`
+- [x] 5.5 Implementar `backend/app/main.py`: aplicación, middleware de CORS y GZip, lifespan asíncrono
+- [x] 5.6 Implementar el middleware de identificador de correlación
+- [x] 5.7 Implementar las sondas de vida y disponibilidad
+- [x] 5.8 Implementar los handlers de excepción globales y el gate de documentación por ambiente
+- [x] 5.9 Verificar que el servicio arranca y que detener Redis alterna la sonda de disponibilidad y la restablece
+  > **Verificado el 13-ago-2026 contra el entorno real**, no solo con tests:
+  >
+  > ```
+  > /health                    200  {"status":"alive","version":"0.1.0","timestamp":"..."}
+  > /ready  (todo arriba)      200  {"status":"ready",...}
+  > docker compose stop redis
+  > /ready                     503  {"status":"not_ready","failed":["redis"],...}
+  > /health  mientras tanto    200   <- la sonda de vida ignora dependencias
+  > docker compose start redis
+  > /ready                     200  {"status":"ready",...}
+  > backend: Up 25 seconds     <- NO se reinicio
+  > ```
+  >
+  > Correlación verificada en vivo: identificador provisto por el cliente devuelto sin modificar, generado cuando no viene, y presente en el log — `INFO [mi-id-de-prueba] app.request: GET /health (0.5 ms)`. `/docs` responde 200 con `APP_ENV=local`. Un 404 sale en `application/problem+json`.
+  >
+  > **El contrato de configuración del bloque 4 encontró un defecto del bloque 3**: el servicio `backend` del compose no pasaba `TENANT_SECRETS_MASTER_KEY`, que es obligatoria. El proceso murió al arrancar nombrando la variable, exactamente como `T-004` especifica. Corregido en `docker-compose.yml` para `backend` y `worker`.
+  >
+  > **Dos correcciones más en `tools/check-services.sh`**: tenía los puertos del host hardcodeados y no leía los overrides del compose — con `BACKEND_PORT=8010`, verificaba `localhost:8000`, donde en esta máquina responde **otra aplicación entera**. Y reportaba el `worker` como `FAIL` cuando en realidad no puede arrancar hasta que exista `app/core/events.py` (`T-016`); ahora es `PENDIENTE`.
+
+> **Evidencia del ciclo TDD** — `pytest` en el contenedor con Python 3.12.14.
+>
+> | Tarea | Archivo de test | Capa | RED | GREEN | TRIANGULACIÓN | REFACTOR |
+> |---|---|---|---|---|---|---|
+> | 5.1 | `tests/unit/test_app_health.py` | Unit | ✅ `ModuleNotFoundError: app.main` | ✅ | ✅ éxito, versión y marca temporal, dependencias caídas, sin credenciales | ✅ `black` |
+> | 5.2 | ídem | Unit | ✅ | ✅ | ✅ normal, degradada por cada dependencia, todas a la vez, recuperación | ✅ |
+> | 5.3 | ídem | Unit | ✅ | ✅ | ✅ generado, único por petición, reutilizado, presente en el log | ✅ |
+> | 5.4 | ídem | Unit | ✅ | ✅ | ✅ los 3 ambientes no productivos + producción sobre `/docs`, `/redoc` y `/openapi.json` | ✅ |
+> | 5.7 | `tests/integration/test_app_health.py` | Integración | ✅ | ✅ | ✅ PostgreSQL y Redis **reales**, sin mocks (regla dura 8) | ✅ |
+>
+> **Resultado: 60 tests unitarios + 6 de integración. Cobertura 96.85 %** de líneas y de ramas (umbral de `ADR-014`: 80/60). `ruff`, `black --check` y `mypy --strict` en verde.
+>
+> Las 8 líneas sin cubrir de `main.py` son las sondas reales, que por diseño solo ejercitan los tests de integración — esos corren en su propio job (`8.6`) y no en la corrida unitaria.
+>
+> **Dos hallazgos del ciclo:**
+> - **La app no se construye al importar el módulo.** Había un `app = create_app()` de nivel de módulo, así que importar `app.main` —para un test, una herramienta o leer un docstring— exigía un entorno válido. La muerte temprana corresponde al arrancar el **proceso**, no al importar. Se pasó a `uvicorn app.main:create_app --factory`.
+> - **`from __future__ import annotations` rompe los modelos Pydantic locales.** Las anotaciones quedan como cadenas y FastAPI las resuelve con `get_type_hints()` contra los globals del módulo; un modelo definido dentro de una función de test no está ahí. Los modelos de prueba van a nivel de módulo.
 
 ## 6. Alembic — `T-007`
 

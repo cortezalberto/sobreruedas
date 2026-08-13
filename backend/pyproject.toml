@@ -115,3 +115,10 @@ python_version = "3.12"
 strict = true            # regla dura 6 del proyecto
 warn_unreachable = true
 plugins = ["pydantic.mypy"]
+
+# asyncpg no publica stubs ni marcador py.typed. El override es POR MODULO, no
+# global: silenciar los imports sin tipar en todo el proyecto taparia errores
+# reales del codigo propio.
+[[tool.mypy.overrides]]
+module = ["asyncpg.*"]
+ignore_missing_imports = true

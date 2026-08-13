@@ -56,4 +56,6 @@ EXPOSE 8000
 
 # Default de desarrollo. En staging y produccion el comando lo fija el
 # Deployment de Kubernetes, sin --reload y con varios workers (ADR-015).
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# --factory: la app se construye al arrancar el proceso, no al importar el
+# modulo. Ver el comentario al pie de app/main.py.
+CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--reload"]

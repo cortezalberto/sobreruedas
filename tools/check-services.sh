@@ -23,6 +23,20 @@ cd "$(dirname "$0")/.." || exit 1
 FALLAS=0
 PENDIENTES=0
 
+# Los puertos del host son configurables en docker-compose.yml. Este script
+# tiene que leer los MISMOS overrides: si no, verifica una direccion donde
+# puede haber otra aplicacion entera respondiendo, y el resultado es peor que
+# no verificar nada.
+[ -f .env ] && . ./.env 2>/dev/null
+: "${POSTGRES_PORT:=5432}"
+: "${REDIS_PORT:=6379}"
+: "${OPENSEARCH_PORT:=9200}"
+: "${KEYCLOAK_PORT:=8080}"
+: "${MINIO_PORT:=9000}"
+: "${MAILHOG_WEB_PORT:=8025}"
+: "${BACKEND_PORT:=8000}"
+: "${FRONTEND_PORT:=3000}"
+
 ok()        { printf '  [OK]        %-14s %s\n' "$1" "$2"; }
 fallo()     { printf '  [FAIL]      %-14s %s\n' "$1" "$2"; FALLAS=$((FALLAS + 1)); }
 pendiente() { printf '  [PENDIENTE] %-14s %s\n' "$1" "$2"; PENDIENTES=$((PENDIENTES + 1)); }
@@ -69,11 +83,11 @@ echo "Infraestructura"
 check_exec "postgres"  postgres "acepta conexiones" \
            pg_isready -U "${POSTGRES_USER:-deruedas}" -d "${POSTGRES_DB:-deruedas}"
 check_exec "redis"     redis    "responde al ping" redis-cli ping
-check_http "opensearch" "http://localhost:9200/_cluster/health" "cluster respondiendo"
-check_http "keycloak"   "http://localhost:8080/realms/${KEYCLOAK_REALM:-deruedas-dev}/.well-known/openid-configuration" \
+check_http "opensearch" "http://localhost:${OPENSEARCH_PORT}/_cluster/health" "cluster respondiendo"
+check_http "keycloak"   "http://localhost:${KEYCLOAK_PORT}/realms/${KEYCLOAK_REALM:-deruedas-dev}/.well-known/openid-configuration" \
            "realm ${KEYCLOAK_REALM:-deruedas-dev} publicado"
-check_http "minio"      "http://localhost:9000/minio/health/live" "storage vivo"
-check_http "mailhog"    "http://localhost:8025/" "interfaz web arriba"
+check_http "minio"      "http://localhost:${MINIO_PORT}/minio/health/live" "storage vivo"
+check_http "mailhog"    "http://localhost:${MAILHOG_WEB_PORT}/" "interfaz web arriba"
 
 echo
 echo "Criterios de done de T-002"
@@ -99,20 +113,26 @@ fi
 
 echo
 echo "Aplicacion"
-if [ -f backend/pyproject.toml ]; then
-  check_http "backend" "http://localhost:8000/health" "sonda de vida respondiendo"
+if [ -f backend/app/main.py ]; then
+  check_http "backend" "http://localhost:${BACKEND_PORT}/health" "sonda de vida respondiendo"
+else
+  pendiente "backend" "falta backend/app/main.py (lo crea T-005)"
+fi
+
+# El worker de Celery necesita app.core.events, que crea T-016 (C-02 en
+# adelante). Comparte imagen con backend, pero no arranca sin ese modulo.
+if [ -f backend/app/core/events.py ]; then
   if docker compose ps --status running --services 2>/dev/null | grep -qx worker; then
     ok "worker" "contenedor corriendo"
   else
     fallo "worker" "el contenedor no esta corriendo"
   fi
 else
-  pendiente "backend" "falta backend/pyproject.toml (lo crea T-005)"
-  pendiente "worker"  "comparte imagen con backend"
+  pendiente "worker" "falta backend/app/core/events.py (lo crea T-016)"
 fi
 
 if [ -f frontend-web/package.json ]; then
-  check_http "frontend-web" "http://localhost:3000/" "sirviendo"
+  check_http "frontend-web" "http://localhost:${FRONTEND_PORT}/" "sirviendo"
 else
   pendiente "frontend-web" "falta frontend-web/package.json (lo crea T-006)"
 fi

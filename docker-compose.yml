@@ -229,6 +229,9 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
       CDN_BASE_URL: ${CDN_BASE_URL:-http://localhost:9000/deruedas-media}
       SMTP_HOST: mailhog:1025
+      # OBLIGATORIA (ADR-013): cifra los secretos de cada tenant. Sin ella el
+      # proceso muere al arrancar, a proposito.
+      TENANT_SECRETS_MASTER_KEY: ${TENANT_SECRETS_MASTER_KEY:-master-key-solo-para-desarrollo}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1.0}
       SENTRY_DSN: ${SENTRY_DSN:-}
@@ -267,6 +270,8 @@ services:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
       SMTP_HOST: mailhog:1025
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-cambiame}
+      TENANT_SECRETS_MASTER_KEY: ${TENANT_SECRETS_MASTER_KEY:-master-key-solo-para-desarrollo}
     volumes:
       - ./backend:/app
       - /app/.venv
