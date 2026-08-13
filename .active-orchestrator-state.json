@@ -1,0 +1,35 @@
+{
+  "version": 3,
+  "step": "kb",
+  "owner": "active-orchestrator",
+  "kb": {
+    "created_by": "kb-creator",
+    "source": "ingest",
+    "discovery": {
+      "problem": "Las agencias de vehiculos del interior argentino gestionan stock, leads y operaciones con Excel, cuadernos y WhatsApp disperso, sin trazabilidad ni reportes; deRuedas necesita un SaaS de gestion que genere lock-in por datos para defender su base de ~550 agencias frente a MercadoLibre, Kavak y Marketplace de Facebook.",
+      "system_type": "saas_multi_tenant",
+      "domain": "gestion de agencias y concesionarias de vehiculos (automotive retail / usados, mercado argentino)",
+      "scale": "multi_tenant",
+      "stack": "Python 3.12 + FastAPI + PostgreSQL 16 (RLS) + Redis 7 (Streams/Pub-Sub) + Celery + OpenSearch + Next.js 14 (React/TypeScript) + React Native (Expo) + Keycloak (OAuth2/OIDC) + S3-compatible",
+      "needs_infra": true
+    },
+    "files": [
+      "knowledge-base/README.md",
+      "knowledge-base/01_vision_y_objetivos.md",
+      "knowledge-base/02_descripcion_general.md",
+      "knowledge-base/03_actores_y_roles.md",
+      "knowledge-base/04_modelo_de_datos.md",
+      "knowledge-base/05_reglas_de_negocio.md",
+      "knowledge-base/06_funcionalidades.md",
+      "knowledge-base/07_flujos_principales.md",
+      "knowledge-base/08_arquitectura_propuesta.md",
+      "knowledge-base/09_decisiones_y_supuestos.md",
+      "knowledge-base/10_preguntas_abiertas.md",
+      "knowledge-base/11_testing_y_calidad.md",
+      "knowledge-base/12_seguridad_y_compliance.md",
+      "knowledge-base/13_observabilidad_y_sre.md",
+      "knowledge-base/14_pricing_y_gtm.md",
+      "knowledge-base/15_marca_y_ux.md"
+    ]
+  }
+}
