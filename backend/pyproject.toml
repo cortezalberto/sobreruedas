@@ -105,6 +105,12 @@ ignore = [
 # S101: assert. Es el mecanismo de pytest; prohibirlo en tests no tiene sentido.
 "tests/**" = ["S101"]
 
+[tool.ruff.lint.isort]
+# Existe un directorio backend/alembic/, asi que isort infiere que `alembic` es
+# modulo propio del proyecto y lo quiere agrupar con `app`. Es la libreria de
+# terceros: el directorio solo aloja las migraciones.
+known-third-party = ["alembic"]
+
 [tool.black]
 line-length = 100
 target-version = ["py312"]

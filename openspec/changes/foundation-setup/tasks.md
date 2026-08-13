@@ -128,11 +128,36 @@ Cubre la capability `platform/service-health`. Los tests van primero.
 
 ## 6. Alembic — `T-007`
 
-- [ ] 6.1 Escribir `backend/alembic.ini` con `script_location`, `file_template` (`NNN_descripcion.py`) y timezone
-- [ ] 6.2 Escribir `alembic/env.py` leyendo la Base declarativa y la configuración desde `Settings`
-- [ ] 6.3 Crear la migración baseline `000_baseline.py` vacía
-- [ ] 6.4 Agregar los objetivos `make migrate` y `make migrate-down-one`
-- [ ] 6.5 Verificar `upgrade head` sobre base limpia y `downgrade base` en sentido inverso
+- [x] 6.1 Escribir `backend/alembic.ini` con `script_location`, `file_template` (`NNN_descripcion.py`) y timezone
+- [x] 6.2 Escribir `alembic/env.py` leyendo la Base declarativa y la configuración desde `Settings`
+- [x] 6.3 Crear la migración baseline `000_baseline.py` vacía
+- [x] 6.4 Agregar los objetivos `make migrate` y `make migrate-down-one`
+- [x] 6.5 Verificar `upgrade head` sobre base limpia y `downgrade base` en sentido inverso
+  > **Verificado el 13-ago-2026 contra PostgreSQL real**, no en seco:
+  >
+  > ```
+  > alembic upgrade head      Running upgrade -> 000, baseline
+  > alembic current           000 (head)
+  > SELECT version_num        000
+  > alembic downgrade base    Running downgrade 000 -> , baseline
+  > SELECT count(*)           0
+  > make migrate / make migrate-down-one   ambos OK
+  > make migration name=agrega_vehiculos   -> 001_agrega_vehiculos.py, Revises: 000
+  > ```
+
+> **Dos defectos del plan, declarados y no tapados**
+>
+> **`T-007` depende de un artefacto de otro change.** Su especificación pide que `env.py` importe *"la Base declarativa de `db/base.py`"*, pero ese archivo lo crea **`T-010`, que cae en C-02**. `T-007` declara depender de `T-002` y `T-005`, no de `T-010`: es una inversión de dependencia.
+> **Resolución**: `env.py` intenta el import y, si falta, deja `target_metadata = None` con un aviso **ruidoso** por `stderr`. Alcanza para C-01, cuya única migración es la baseline vacía, y el día que `T-010` aterrice `autogenerate` funciona sin tocar el archivo. El aviso es a gritos a propósito: un `autogenerate` silencioso contra `None` produce migraciones vacías sin avisar, y eso se descubre en producción.
+>
+> **`T-007` exige `make migrate` pero el §4.1 no tiene `Makefile`.** No lleva ADR, y la distinción importa: `infra/local/` (ADR-019) era una **elección entre alternativas**; acá el propio plan, en el mismo documento, manda el comando. Es una inconsistencia interna de N2, no un desvío elegido. Es el mismo patrón que `backend/pyproject.toml`, que tampoco lo reclama ninguna tarea.
+
+> **Notas de implementación**
+>
+> - **La URL de la base NO va en `alembic.ini`.** Sale de `Settings`, igual que la aplicación. Escribirla en el `.ini` la versionaría con la contraseña adentro (Art. 3), y además garantiza que migraciones y runtime nunca apunten a bases distintas por descuido.
+> - **Motor asíncrono** con la receta oficial de Alembic (`run_sync` sobre un engine async). La alternativa era agregar un driver sincrónico solo para migrar: una segunda ruta de conexión a la base que nadie ejercita en producción.
+> - **Revisiones correlativas `NNN`, no hashes.** Con una revisión por PR, el orden se lee del `ls` y un conflicto sobre el mismo número salta en el diff en lugar de producir dos cabezas silenciosas. `make migration name=...` calcula el siguiente número solo.
+> - **Gotcha de `ruff`**: existe un directorio `backend/alembic/`, así que isort infería que `alembic` era módulo propio del proyecto y quería agruparlo con `app`. Se declaró `known-third-party` en la config, no con un `noqa`.
 
 ## 7. Bootstrap del frontend web — `T-006`
 
