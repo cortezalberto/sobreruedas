@@ -92,6 +92,59 @@ def test_tipo_invalido_nombra_la_variable(
     assert "DATABASE_POOL_SIZE" in str(capturado.value)
 
 
+@pytest.mark.parametrize(
+    "vacia",
+    sorted(
+        [
+            "DATABASE_URL",
+            "KEYCLOAK_CLIENT_SECRET",
+            "S3_ACCESS_KEY",
+            "S3_SECRET_KEY",
+            "TENANT_SECRETS_MASTER_KEY",
+        ]
+    ),
+)
+def test_obligatoria_vacia_se_rechaza(
+    entorno_valido: dict[str, str], monkeypatch: pytest.MonkeyPatch, vacia: str
+) -> None:
+    """Una obligatoria presente pero VACIA es peor que una ausente.
+
+    La ausente te frena al arrancar. La vacia te deja arrancar y cifrar con
+    nada, conectarte a ninguna base, autenticarte con un secreto de cero bytes.
+    `DATABASE_URL=` en un `.env` mal copiado es un accidente comun.
+    """
+    monkeypatch.setenv(vacia, "")
+    with pytest.raises(ConfigurationError) as capturado:
+        get_settings.cache_clear()
+        get_settings()
+    assert vacia in str(capturado.value)
+
+
+@pytest.mark.parametrize(
+    ("opcional", "acceso"),
+    [
+        ("SENTRY_DSN", lambda s: s.observability.sentry_dsn),
+        ("KMS_KEY_ID", lambda s: s.crypto.kms_key_id),
+        ("WHATSAPP_APP_SECRET", lambda s: s.whatsapp.app_secret),
+        ("SMTP_USER", lambda s: s.mail.user),
+    ],
+)
+def test_opcional_vacia_equivale_a_no_configurada(
+    entorno_valido: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+    opcional: str,
+    acceso,  # noqa: ANN001
+) -> None:
+    """`SENTRY_DSN=` significa "desactivado", no "un secreto de cero bytes".
+
+    Sin esto, `if settings.observability.sentry_dsn:` da falso igual, pero
+    `.get_secret_value()` devuelve `''` y cualquier cliente que lo reciba
+    intenta conectarse a la nada.
+    """
+    monkeypatch.setenv(opcional, "")
+    assert acceso(Settings()) is None
+
+
 def test_el_error_lista_todas_las_faltantes_no_solo_la_primera(
     entorno_valido: dict[str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -45,7 +45,9 @@ RE_ALIAS = re.compile(r'validation_alias="([A-Z][A-Z0-9_]*)"')
 # Fila de tabla del ADR cuya ultima celda es el candado de sensible.
 RE_ADR_SENSIBLE = re.compile(r"^\| `([A-Z][A-Z0-9_]*)` \|.*\| \U0001f512 \|$", re.M)
 # Campo de config.py declarado SecretStr (opcional o no).
-RE_SECRETO = re.compile(r"SecretStr[^=]*=\s*Field\([^)]*validation_alias=\"([A-Z0-9_]+)\"", re.S)
+RE_SECRETO = re.compile(
+    r"(?:SecretStr|SecretoOpcional)[^=]*=\s*Field\([^)]*validation_alias=\"([A-Z0-9_]+)\"", re.S
+)
 
 
 def leer(path: Path) -> str:

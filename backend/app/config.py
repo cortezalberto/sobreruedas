@@ -23,12 +23,30 @@ Tres decisiones que gobiernan este modulo:
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr, ValidationError
+from pydantic import BeforeValidator, Field, SecretStr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Ambiente = Literal["local", "ci", "staging", "production"]
+
+
+def _vacio_es_ausente(valor: object) -> object:
+    """Una variable presente pero vacia equivale a no configurada.
+
+    `SENTRY_DSN=` en un `.env` significa "desactivado", no "un secreto de cero
+    bytes". Sin esta conversion el campo queda como `SecretStr('')`, cualquier
+    chequeo de verdad da falso igual, pero un cliente que reciba el valor
+    intenta conectarse a la nada.
+    """
+    return None if valor == "" else valor
+
+
+# Para las OBLIGATORIAS el criterio es el opuesto: vacia se rechaza. Una
+# obligatoria ausente te frena al arrancar; una vacia te deja arrancar y cifrar
+# con nada. `DATABASE_URL=` en un .env mal copiado es un accidente comun.
+SecretoOpcional = Annotated[SecretStr | None, BeforeValidator(_vacio_es_ausente)]
+TextoOpcional = Annotated[str | None, BeforeValidator(_vacio_es_ausente)]
 
 # `extra="ignore"`: el entorno real trae PATH, HOME y decenas mas. Cada grupo
 # lee lo suyo y no se ofende por el resto.
@@ -62,7 +80,7 @@ class DatabaseSettings(BaseSettings):
     model_config = _CONFIG
 
     # Sensible: lleva usuario y contrasena embebidos en la URL.
-    url: SecretStr = Field(validation_alias="DATABASE_URL")
+    url: SecretStr = Field(min_length=1, validation_alias="DATABASE_URL")
     pool_size: int = Field(default=20, ge=1, validation_alias="DATABASE_POOL_SIZE")
 
 
@@ -82,8 +100,8 @@ class SearchSettings(BaseSettings):
     model_config = _CONFIG
 
     url: str = Field(default="http://opensearch:9200", validation_alias="OPENSEARCH_URL")
-    user: SecretStr | None = Field(default=None, validation_alias="OPENSEARCH_USER")
-    password: SecretStr | None = Field(default=None, validation_alias="OPENSEARCH_PASSWORD")
+    user: SecretoOpcional = Field(default=None, validation_alias="OPENSEARCH_USER")
+    password: SecretoOpcional = Field(default=None, validation_alias="OPENSEARCH_PASSWORD")
 
 
 class KeycloakSettings(BaseSettings):
@@ -92,8 +110,8 @@ class KeycloakSettings(BaseSettings):
     url: str = Field(default="http://keycloak:8080", validation_alias="KEYCLOAK_URL")
     realm: str = Field(default="deruedas-dev", validation_alias="KEYCLOAK_REALM")
     client_id: str = Field(default="backend", validation_alias="KEYCLOAK_CLIENT_ID")
-    client_secret: SecretStr = Field(validation_alias="KEYCLOAK_CLIENT_SECRET")
-    jwks_url: str | None = Field(default=None, validation_alias="KEYCLOAK_JWKS_URL")
+    client_secret: SecretStr = Field(min_length=1, validation_alias="KEYCLOAK_CLIENT_SECRET")
+    jwks_url: TextoOpcional = Field(default=None, validation_alias="KEYCLOAK_JWKS_URL")
 
     @property
     def jwks_endpoint(self) -> str:
@@ -112,9 +130,9 @@ class S3Settings(BaseSettings):
 
     endpoint: str = Field(default="http://minio:9000", validation_alias="S3_ENDPOINT")
     bucket: str = Field(default="deruedas-media", validation_alias="S3_BUCKET")
-    access_key: SecretStr = Field(validation_alias="S3_ACCESS_KEY")
-    secret_key: SecretStr = Field(validation_alias="S3_SECRET_KEY")
-    cdn_base_url: str | None = Field(default=None, validation_alias="CDN_BASE_URL")
+    access_key: SecretStr = Field(min_length=1, validation_alias="S3_ACCESS_KEY")
+    secret_key: SecretStr = Field(min_length=1, validation_alias="S3_SECRET_KEY")
+    cdn_base_url: TextoOpcional = Field(default=None, validation_alias="CDN_BASE_URL")
 
 
 class WhatsAppSettings(BaseSettings):
@@ -123,8 +141,8 @@ class WhatsAppSettings(BaseSettings):
     # Opcionales: la mensajeria entra en C-19, no en la Ola 0. Exigirlas ahora
     # obligaria a inventar valores para arrancar, que es como se normaliza el
     # habito de poner cualquier cosa en una variable de entorno.
-    app_secret: SecretStr | None = Field(default=None, validation_alias="WHATSAPP_APP_SECRET")
-    verify_token: SecretStr | None = Field(default=None, validation_alias="WHATSAPP_VERIFY_TOKEN")
+    app_secret: SecretoOpcional = Field(default=None, validation_alias="WHATSAPP_APP_SECRET")
+    verify_token: SecretoOpcional = Field(default=None, validation_alias="WHATSAPP_VERIFY_TOKEN")
 
 
 class CryptoSettings(BaseSettings):
@@ -132,14 +150,16 @@ class CryptoSettings(BaseSettings):
 
     # Obligatoria: cifra los secretos de cada tenant. Sin esto no hay
     # aislamiento real, y el aislamiento es el Principio 4.
-    tenant_secrets_master_key: SecretStr = Field(validation_alias="TENANT_SECRETS_MASTER_KEY")
-    kms_key_id: SecretStr | None = Field(default=None, validation_alias="KMS_KEY_ID")
+    tenant_secrets_master_key: SecretStr = Field(
+        min_length=1, validation_alias="TENANT_SECRETS_MASTER_KEY"
+    )
+    kms_key_id: SecretoOpcional = Field(default=None, validation_alias="KMS_KEY_ID")
 
 
 class PaymentSettings(BaseSettings):
     model_config = _CONFIG
 
-    mercadopago_access_token: SecretStr | None = Field(
+    mercadopago_access_token: SecretoOpcional = Field(
         default=None, validation_alias="MERCADOPAGO_ACCESS_TOKEN"
     )
 
@@ -147,10 +167,10 @@ class PaymentSettings(BaseSettings):
 class ObservabilitySettings(BaseSettings):
     model_config = _CONFIG
 
-    sentry_dsn: SecretStr | None = Field(default=None, validation_alias="SENTRY_DSN")
+    sentry_dsn: SecretoOpcional = Field(default=None, validation_alias="SENTRY_DSN")
     # Apunta a Tempo, no a Jaeger (ADR-016). El nombre no cambia porque
     # OpenTelemetry es agnostico del backend.
-    otel_exporter_otlp_endpoint: str | None = Field(
+    otel_exporter_otlp_endpoint: TextoOpcional = Field(
         default=None, validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT"
     )
     otel_traces_sampler_arg: float = Field(
@@ -165,8 +185,8 @@ class MailSettings(BaseSettings):
     model_config = _CONFIG
 
     host: str = Field(default="mailhog:1025", validation_alias="SMTP_HOST")
-    user: SecretStr | None = Field(default=None, validation_alias="SMTP_USER")
-    password: SecretStr | None = Field(default=None, validation_alias="SMTP_PASSWORD")
+    user: SecretoOpcional = Field(default=None, validation_alias="SMTP_USER")
+    password: SecretoOpcional = Field(default=None, validation_alias="SMTP_PASSWORD")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
