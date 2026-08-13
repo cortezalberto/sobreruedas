@@ -51,14 +51,30 @@ Precede a todo lo demás: el §4.1 no se puede materializar mientras `docs/` est
 
 Cubre la capability `platform/configuration`. Los tests van primero.
 
-- [ ] 4.1 Escribir los tests de validación de tipos y defaults de `Settings`
-- [ ] 4.2 Escribir los tests de fallo temprano: variable obligatoria ausente y valor con tipo inválido, verificando que el error **nombra la variable**
-- [ ] 4.3 Escribir los tests de enmascarado de secretos en serialización, `repr` y mensajes de error
-- [ ] 4.4 Escribir el test de rechazo de `APP_ENV` fuera de `local | ci | staging | production`
-- [ ] 4.5 Implementar `backend/app/config.py` con Pydantic Settings v2 y los grupos de `design.md` D-2
-- [ ] 4.6 Implementar la validación al arranque con muerte temprana y mensaje que nombra la variable
-- [ ] 4.7 Implementar el enmascarado de campos sensibles y el singleton `get_settings()` cacheado
-- [ ] 4.8 Verificar que `.env.example` y los grupos de `Settings` cubren exactamente el mismo conjunto de variables
+- [x] 4.1 Escribir los tests de validación de tipos y defaults de `Settings`
+- [x] 4.2 Escribir los tests de fallo temprano: variable obligatoria ausente y valor con tipo inválido, verificando que el error **nombra la variable**
+- [x] 4.3 Escribir los tests de enmascarado de secretos en serialización, `repr` y mensajes de error
+- [x] 4.4 Escribir el test de rechazo de `APP_ENV` fuera de `local | ci | staging | production`
+- [x] 4.5 Implementar `backend/app/config.py` con Pydantic Settings v2 y los grupos de `design.md` D-2
+- [x] 4.6 Implementar la validación al arranque con muerte temprana y mensaje que nombra la variable
+- [x] 4.7 Implementar el enmascarado de campos sensibles y el singleton `get_settings()` cacheado
+- [x] 4.8 Verificar que `.env.example` y los grupos de `Settings` cubren exactamente el mismo conjunto de variables
+  > Automatizado en [`tools/check-config-parity.py`](../../../tools/check-config-parity.py), que cruza **tres** fuentes: `ADR-013` (35), `.env.example` (35) y `Settings` (32). La diferencia de 3 es el bloque `Frontend`, excluido de forma explícita porque lo lee Next.js. Además verifica que **toda variable marcada sensible en `ADR-013` sea `SecretStr`** en `Settings`: declararla no alcanza, si no es `SecretStr` se filtra por `repr` y el enmascarado es decorativo. Validado contra divergencias inyectadas a propósito.
+  >
+  > **Nota sobre `pyproject.toml`**: está en el árbol del §4.1 pero ninguna tarea `T-XXX` lo declara — ni `T-004` ni `T-005` lo nombran. Se atribuyó a `T-001`, dueña de la estructura, y se creó acá porque sin él no hay forma de correr un test.
+
+> **Evidencia del ciclo TDD** — `pytest` corre en el contenedor con **Python 3.12.14** (`ADR-003`), no con el 3.14 del host.
+>
+> | Tarea | Archivo de test | Capa | RED | GREEN | TRIANGULACIÓN | REFACTOR |
+> |---|---|---|---|---|---|---|
+> | 4.1 | `tests/unit/test_config.py` | Unit | ✅ `ModuleNotFoundError: app.config` | ✅ | ✅ 5 defaults parametrizados + coerción de tipos | ✅ `black` |
+> | 4.2 | ídem | Unit | ✅ | ✅ | ✅ falta 1 variable, faltan 2, tipo inválido | ✅ |
+> | 4.3 | ídem | Unit | ✅ | ✅ | ✅ `repr`, `str`, `model_dump`, JSON, mensaje de error | ✅ |
+> | 4.4 | ídem | Unit | ✅ | ✅ | ✅ los 4 válidos + 5 inválidos + `is_production` | ✅ |
+>
+> **Resultado: 37 tests, 100 % de líneas y de ramas** sobre `app/config.py` (umbral de `ADR-014`: 80/60). `ruff`, `black --check` y `mypy --strict` en verde.
+>
+> **Un test estaba mal y se corrigió en RED**: comparaba `DATABASE_URL` en claro, pero `ADR-013` la marca sensible — tiene que ser `SecretStr`. El test habría forzado una implementación que filtra la credencial.
 
 ## 5. Bootstrap del backend — `T-005`
 
