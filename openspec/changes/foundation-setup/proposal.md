@@ -19,14 +19,14 @@ Además fija dos cosas que después salen caras de cambiar: el **quality gate de
 
 ### Bloqueantes — ya resueltos, este change los ejecuta
 
-Ambos venían declarados como "a resolver al inicio". [`ADR-000`](../../../decisions/ADR-000-precedencia-documental.md) los cerró antes de empezar:
+Ambos venían declarados como "a resolver al inicio". [`ADR-000`](../../../docs/adr/ADR-000-precedencia-documental.md) los cerró antes de empezar:
 
 - **`IN-22` — umbral de cobertura.** Cuatro valores incompatibles. La jerarquía de `ADR-000` hace ganar a N0: **80 % de líneas, backend, global**. Y la evidencia refuerza la decisión más de lo que suponía `CHANGES.md` — el `plan-implementacion` (N2) también dice *"Mínimo 80 % global"* en el job `test-backend-unit`. El 70/60 sale únicamente del `plan-testing` (N3), que no gana sobre N0. **Se enmienda el plan de testing, no la constitución.**
 - **`IN-29` — numeración de ADRs.** Manda la numeración de `spec-tecnica` (N1 > N2). Este change corrige las anclas divergentes al sembrar `docs/adr/`.
 
 ### Bloqueante resuelto durante la propuesta
 
-- **`IN-16` — sustrato de infraestructura.** Estaba abierto y dejaba a `T-008` sin poder implementarse. Cerrado por [`ADR-015`](../../../decisions/ADR-015-orquestacion-kubernetes-y-gitops.md): **Kubernetes con despliegue GitOps vía ArgoCD**. No se resolvió aplicando `ADR-000` sino llenando un vacío — N1 no menciona orquestación, N2 la deja condicional y el único documento que la nombra es N4, no normativo. **Con esto el change es implementable de punta a punta.**
+- **`IN-16` — sustrato de infraestructura.** Estaba abierto y dejaba a `T-008` sin poder implementarse. Cerrado por [`ADR-015`](../../../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md): **Kubernetes con despliegue GitOps vía ArgoCD**. No se resolvió aplicando `ADR-000` sino llenando un vacío — N1 no menciona orquestación, N2 la deja condicional y el único documento que la nombra es N4, no normativo. **Con esto el change es implementable de punta a punta.**
 
 ### Riesgo que este change tiene que cerrar
 

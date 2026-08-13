@@ -4,7 +4,7 @@
 
 Ver [`proposal.md`](proposal.md) §Why para la motivación. Lo que condiciona el diseño:
 
-- **El §4.1 del plan de implementación es vinculante** (N2 según [`ADR-000`](../../../decisions/ADR-000-precedencia-documental.md)). Define el árbol del monorepo hasta el nivel de archivo. Apartarse exige un ADR.
+- **El §4.1 del plan de implementación es vinculante** (N2 según [`ADR-000`](../../../docs/adr/ADR-000-precedencia-documental.md)). Define el árbol del monorepo hasta el nivel de archivo. Apartarse exige un ADR.
 - **El repositorio ya no está vacío**: tiene `docs/` con los 11 documentos fuente convertidos, `knowledge-base/`, `CHANGES.md`, `decisions/` y `openspec/`. El §4.1 fue escrito asumiendo un repositorio limpio.
 - **No hay tabla canónica de variables de entorno** en ningún documento del corpus (`R-3`). La de `08_arquitectura_propuesta.md` está derivada del stack, no transcripta.
 - **`IN-22` e `IN-29` ya están resueltos** por `ADR-000`. Este change los ejecuta; no los vuelve a discutir.
@@ -135,7 +135,7 @@ Disparadores: propuesta de cambio contra `main` y push a `main`. Caché de depen
 
 ### D-7 — Despliegue a staging: Kubernetes con GitOps
 
-Fijado por [`ADR-015`](../../../decisions/ADR-015-orquestacion-kubernetes-y-gitops.md), que cierra `IN-16`. **Kubernetes** como plataforma de orquestación, **ArgoCD** como mecanismo de despliegue.
+Fijado por [`ADR-015`](../../../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md), que cierra `IN-16`. **Kubernetes** como plataforma de orquestación, **ArgoCD** como mecanismo de despliegue.
 
 Reparto de responsabilidades:
 
@@ -155,7 +155,7 @@ Esto simplifica el requisito de reversión de `platform/delivery-pipeline`: no h
 
 ### D-8 — Trazas distribuidas: Tempo, no Jaeger
 
-Fijado por [`ADR-016`](../../../decisions/ADR-016-trazas-distribuidas-tempo.md), que cierra `IN-15`. **No afecta a C-01** — se registra acá porque apareció al reunir la evidencia de `IN-16` y porque obliga a corregir `T-030`, que cae en C-03.
+Fijado por [`ADR-016`](../../../docs/adr/ADR-016-trazas-distribuidas-tempo.md), que cierra `IN-15`. **No afecta a C-01** — se registra acá porque apareció al reunir la evidencia de `IN-16` y porque obliga a corregir `T-030`, que cae en C-03.
 
 Tres documentos dicen Jaeger (`spec-tecnica` N1, `plan-implementacion` N2, `mejoras-y-saas` N4) y uno dice Tempo (`plan-sre` N3). Gana **Tempo** por competencia de dominio: las trazas son dominio propio de SRE, y `ADR-000` reparte autoridad en vez de contar documentos.
 
@@ -187,7 +187,7 @@ No hay datos ni usuarios: no hay migración de estado. La única mudanza es de a
 
 ## Open Questions
 
-**Ninguna.** `IN-16` era la única, y quedó cerrada por [`ADR-015`](../../../decisions/ADR-015-orquestacion-kubernetes-y-gitops.md) el 13-ago-2026: Kubernetes con ArgoCD. Ver D-7.
+**Ninguna.** `IN-16` era la única, y quedó cerrada por [`ADR-015`](../../../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) el 13-ago-2026: Kubernetes con ArgoCD. Ver D-7.
 
 Se deja registrado, porque forma parte del razonamiento: la recomendación inicial de este documento era la contraria —Terraform sobre contenedores gestionados, sin Kubernetes— por cautela operativa en la Ola 0. El Tech Lead priorizó portabilidad entre proveedores y despliegue declarativo desde el inicio, evitando una migración futura a cambio de complejidad temprana. Es un trade-off legítimo y las contras quedan asumidas explícitamente en `ADR-015` §Consecuencias.
 

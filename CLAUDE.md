@@ -39,7 +39,7 @@ Dos puntos del stack **no están cerrados**: Jaeger vs Tempo (`IN-15`) y el alca
 
 ## Base de Conocimiento
 
-Todo en [`knowledge-base/`](knowledge-base/) está **derivado** de los 11 documentos vinculantes en `docs/`. Nada fue inventado; lo que no se pudo derivar quedó como pregunta abierta.
+Todo en [`knowledge-base/`](knowledge-base/) está **derivado** de los 11 documentos vinculantes en `docs/sdd/`. Nada fue inventado; lo que no se pudo derivar quedó como pregunta abierta.
 
 | Archivo | Cuándo leerlo |
 |---|---|
@@ -61,7 +61,7 @@ Todo en [`knowledge-base/`](knowledge-base/) está **derivado** de los 11 docume
 
 ### Precedencia entre fuentes — vinculante
 
-Fijada por [`ADR-000`](decisions/ADR-000-precedencia-documental.md) (resuelve `PA-01`). **Jerarquía por autoridad, con competencia por dominio:**
+Fijada por [`ADR-000`](docs/adr/ADR-000-precedencia-documental.md) (resuelve `PA-01`). **Jerarquía por autoridad, con competencia por dominio:**
 
 | Nivel | Documentos | Autoridad |
 |---|---|---|
@@ -78,7 +78,7 @@ Cuatro reglas que van con eso:
 3. **Todo desvío de N1 por competencia de dominio se registra como ADR.** Sin ADR es decisión implícita y, por el Principio 5, **no es vinculante**.
 4. **Empate de nivel ⇒ la regla es muda** → escala al decisor humano de `PA-XX`. No se elige por antigüedad ni por especificidad.
 
-Los ADRs nuevos del proyecto viven en [`decisions/`](decisions/) — `docs/` es corpus fuente inmutable y `knowledge-base/` es material derivado.
+Los ADRs nuevos del proyecto viven en [`docs/adr/`](docs/adr/) — `docs/sdd/` es corpus fuente inmutable y `knowledge-base/` es material derivado.
 
 `reference/` contiene material del **método** SDD, no del producto. No es fuente de verdad.
 
@@ -172,4 +172,4 @@ knowledge-base/  →  CHANGES.md  →  /opsx:propose <change>  →  /opsx:apply 
 
 ---
 
-*Generado por `agent-instruction`. Las reglas duras fueron confirmadas por el usuario; las vinculantes derivan de `docs/deRuedas-constitucion.md`.*
+*Generado por `agent-instruction`. Las reglas duras fueron confirmadas por el usuario; las vinculantes derivan de `docs/sdd/deRuedas-constitucion.md`.*

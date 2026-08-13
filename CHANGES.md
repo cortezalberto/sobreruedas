@@ -1,7 +1,7 @@
 # CHANGES — Secuencia de Implementación
 
 > Índice canónico de todos los changes del proyecto **deRuedas Gestión**.
-> Derivado del **plan de implementación vinculante** (`docs/deRuedas-plan-implementacion.md`, 194 tareas atómicas `T-001`…`T-194`), reordenado donde la base de conocimiento revela dependencias reales que el plan no respeta.
+> Derivado del **plan de implementación vinculante** (`docs/sdd/deRuedas-plan-implementacion.md`, 194 tareas atómicas `T-001`…`T-194`), reordenado donde la base de conocimiento revela dependencias reales que el plan no respeta.
 > **Leer este archivo antes de ejecutar cualquier `/opsx:propose`.**
 
 **Cobertura verificada: 194/194 tareas `T-XXX`** distribuidas en **32 changes**, sin huecos ni solapamientos (cada `T-XXX` cae en exactamente un change). El grafo de dependencias derivado del propio plan es acíclico y no tiene violaciones de orden.
@@ -12,7 +12,7 @@
 
 1. **Identificá el change**: buscá el primer `C-NN` con estado `[ ]` cuyas dependencias estén todas en `[x]`.
 2. **Resolvé sus bloqueantes primero**: leé la sección **"Bloqueantes a resolver"** del change. Los `IN-XX` se deciden **al inicio del change, antes de escribir la primera línea de código que dependa de ellos** — nunca a mitad de camino. Si un bloqueante sigue abierto, el change no arranca.
-3. **Leé la KB**: abrí los archivos de **"Leer antes"** y las tareas `T-XXX` del rango en `docs/deRuedas-plan-implementacion.md`. Las fichas de tarea traen criterios de aceptación, archivos a tocar y tests esperados.
+3. **Leé la KB**: abrí los archivos de **"Leer antes"** y las tareas `T-XXX` del rango en `docs/sdd/deRuedas-plan-implementacion.md`. Las fichas de tarea traen criterios de aceptación, archivos a tocar y tests esperados.
 4. **Proponé e implementá**: `/opsx:propose C-NN-<slug>` → `/opsx:apply` → `/opsx:archive`.
 5. **Marcá el checkbox** de este archivo al archivar el change.
 
@@ -22,7 +22,7 @@
 
 ## ✅ PA-01 — RESUELTA (2026-08-13)
 
-> Cerrada por [`ADR-000 · Precedencia documental`](decisions/ADR-000-precedencia-documental.md). Decisores: Tech Lead + Product Manager.
+> Cerrada por [`ADR-000 · Precedencia documental`](docs/adr/ADR-000-precedencia-documental.md). Decisores: Tech Lead + Product Manager.
 
 ### Lo que se decidió
 
@@ -53,13 +53,13 @@ Este roadmap asumía que *"los 11 documentos dicen Versión 1.0 — Mayo de 2026
 | `IN-22` | 80 % vs 70/60 | ✅ **80 %** — N3 no gana sobre N0. Se enmienda el plan de testing. |
 | `IN-29` | Numeración de ADRs en disputa | ✅ **Manda la spec** (N1 > N2). Ejecuta **C-01**. |
 | `IN-31` | 99.9/99.9/99.95 vs 99.0/99.5/99.9 | ✅ **99.0 / 99.5 / 99.9** — competencia de dominio de SRE. Compatible con el SLO de 99.7 %. |
-| `IN-01`, `IN-02` | 3 roles ES vs 4 roles EN; `super_admin` sin representación posible | 🟡 **DECIDIDOS** por [`ADR-017`](decisions/ADR-017-catalogo-de-roles-y-super-admin.md): **4 roles en el sistema, 3 en `user_role_enum`**, `super_admin` en tabla aparte exenta de RLS, `users.tenant_id` **intacto en `NOT NULL`**. ⏳ Condicionados a la enmienda [`E-001`](decisions/E-001-enmienda-glosario-super-admin.md), en discusión hasta el **20-ago-2026**. |
-| `IN-15`, `IN-16` | Jaeger vs Tempo; Kubernetes con o sin ArgoCD | ✅ **RESUELTOS**: **Tempo** ([`ADR-016`](decisions/ADR-016-trazas-distribuidas-tempo.md), competencia de dominio de SRE) y **Kubernetes + ArgoCD** ([`ADR-015`](decisions/ADR-015-orquestacion-kubernetes-y-gitops.md)). `T-030` hay que corregirla: hoy pide Jaeger. |
+| `IN-01`, `IN-02` | 3 roles ES vs 4 roles EN; `super_admin` sin representación posible | 🟡 **DECIDIDOS** por [`ADR-017`](docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md): **4 roles en el sistema, 3 en `user_role_enum`**, `super_admin` en tabla aparte exenta de RLS, `users.tenant_id` **intacto en `NOT NULL`**. ⏳ Condicionados a la enmienda [`E-001`](docs/adr/E-001-enmienda-glosario-super-admin.md), en discusión hasta el **20-ago-2026**. |
+| `IN-15`, `IN-16` | Jaeger vs Tempo; Kubernetes con o sin ArgoCD | ✅ **RESUELTOS**: **Tempo** ([`ADR-016`](docs/adr/ADR-016-trazas-distribuidas-tempo.md), competencia de dominio de SRE) y **Kubernetes + ArgoCD** ([`ADR-015`](docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md)). `T-030` hay que corregirla: hoy pide Jaeger. |
 | `IN-03`, `IN-04` | `mejoras-y-saas` vs `plan-gtm` | ⚠️ **Ambos son N4 — empate de nivel, la regla es muda.** Escala a Dirección. |
 | `IN-07` | `NOT NULL` (N0+N1) vs nullable (N2) | ⚠️ Ganan N0/N1, pero un 0 km no tiene patente ⇒ decisión de negocio + posible enmienda. |
 | `IN-13` | 5 años (N1, invoca ley) vs 24 meses (N3) | ⚠️ La regla no zanja una obligación legal externa. **Legal + Tech Lead**. |
 
-> **Regla operativa vigente**: todo desvío de N1 por competencia de dominio **se registra como ADR** en [`decisions/`](decisions/). Sin ADR es decisión implícita y, por el Principio 5 de la constitución, **no es vinculante**. Nunca resuelvas un `IN-XX` por omisión eligiendo el primer documento que leíste.
+> **Regla operativa vigente**: todo desvío de N1 por competencia de dominio **se registra como ADR** en [`docs/adr/`](docs/adr/). Sin ADR es decisión implícita y, por el Principio 5 de la constitución, **no es vinculante**. Nunca resuelvas un `IN-XX` por omisión eligiendo el primer documento que leíste.
 
 Ver [`knowledge-base/10_preguntas_abiertas.md`](knowledge-base/10_preguntas_abiertas.md) §Parte 3 y `SU-12` (validado) en [`knowledge-base/09_decisiones_y_supuestos.md`](knowledge-base/09_decisiones_y_supuestos.md).
 
@@ -337,7 +337,7 @@ Tres observaciones sobre la cadena:
 - **Estado**: `[ ]` pendiente
 - **Rango**: `T-001` … `T-008` (8 tareas)
 - **Scope**:
-  - Monorepo con la estructura canónica vinculante de §4.1 del plan: `backend/`, `frontend/`, `docs/adr/`, `docs/runbooks/`, `docs/openapi.yaml`, `.github/workflows/`
+  - Monorepo con la estructura canónica vinculante de §4.1 del plan: `backend/`, `frontend-web/`, `frontend-mobile/`, `frontend-admin/`, `docs/adr/`, `docs/runbooks/`, `docs/openapi.yaml`, `.github/workflows/`
   - `docker-compose.yml` con el entorno local completo: PostgreSQL 16, Redis 7, OpenSearch, Keycloak, MinIO (S3-compatible) — más `docker-compose.test.yml` con contenedores efímeros para CI
   - `.env.example` + `config.py` con Pydantic Settings (**ver R-3: no existe tabla canónica de variables de entorno; hay que producirla en este change**)
   - Bootstrap de `backend/app/main.py` (FastAPI) y del frontend Next.js 14 con App Router + Tailwind
@@ -352,7 +352,7 @@ Tres observaciones sobre la cadena:
   - **`IN-29`** — numeración de ADRs. `ADR-002`, `ADR-005` y `ADR-011` significan cosas distintas en la spec y en el plan (ej.: T-098 dice *"anclada en ADR-005"*, que es **OpenSearch** en el plan y **React Native** en la spec). La constitución (Principio 5) exige que los ADRs sean vinculantes y trazables; con dos numeraciones esa trazabilidad no existe para las 194 tareas. Fijar la numeración de la spec como canónica y corregir las anclas antes de sembrar `docs/adr/`.
 - **Riesgos**: **R-3** (tabla de variables de entorno inexistente).
 - **Leer antes**:
-  - `docs/deRuedas-plan-implementacion.md` §4 (estructura canónica del repositorio — vinculante)
+  - `docs/sdd/deRuedas-plan-implementacion.md` §4 (estructura canónica del repositorio — vinculante)
   - `knowledge-base/08_arquitectura_propuesta.md` §Estructura de directorios, §Variables de entorno, §Infraestructura y despliegue
   - `knowledge-base/11_testing_y_calidad.md` §Umbrales de cobertura, §Quality gates del pipeline `pr-validation`
   - `knowledge-base/02_descripcion_general.md` §Stack tecnológico
@@ -391,7 +391,7 @@ Tres observaciones sobre la cadena:
   - Migración `audit_logs` **particionada por mes** — la política de particionado y el volumen a proyectar dependen de `IN-13`
   - Logging estructurado JSON con `trace_id` propagado por request
   - Middleware de métricas Prometheus: `http_requests_total`, `http_request_duration_seconds` (histograma) por endpoint y tenant
-  - Tracing distribuido con OpenTelemetry exportando a **Tempo** — decidido por [`ADR-016`](decisions/ADR-016-trazas-distribuidas-tempo.md), cierra `IN-15`. ⚠️ **`T-030` está mal especificada**: pide levantar el servicio `jaeger` en `docker-compose` con UI en `:16686` y verificar la traza en la Jaeger UI. Pasa a Tempo, y la verificación se hace desde Grafana. Corregir al arrancar el change.
+  - Tracing distribuido con OpenTelemetry exportando a **Tempo** — decidido por [`ADR-016`](docs/adr/ADR-016-trazas-distribuidas-tempo.md), cierra `IN-15`. ⚠️ **`T-030` está mal especificada**: pide levantar el servicio `jaeger` en `docker-compose` con UI en `:16686` y verificar la traza en la Jaeger UI. Pasa a Tempo, y la verificación se hace desde Grafana. Corregir al arrancar el change.
   - Sentry para error tracking, con scrubbing de PII
   - Umbrales de alerta (`APILatencyHigh` y compañía) derivados de la resolución de `IN-23`
   - Tests: que el `trace_id` sobreviva a un salto de evento por Redis Streams; que las métricas expongan la etiqueta de tenant sin filtrar datos entre tenants
@@ -1106,11 +1106,11 @@ Tres observaciones sobre la cadena:
 
 Tres cosas que **no** son código y que conviene arrancar ya, porque bloquean o encarecen el roadmap:
 
-1. 🟡 **Llevar la enmienda [`E-001`](decisions/E-001-enmienda-glosario-super-admin.md) hasta su ratificación.** Abierta el 13-ago-2026; la discusión cierra el **20-ago-2026** (5 días hábiles, Art. 8). Incorpora *"Super Admin"* al glosario canónico. **Mientras no se ratifique, `C-02` no puede escribir la migración de `users` ni `rbac.py`.** El contenido técnico ya está decidido en `ADR-017` — lo que falta es el procedimiento, no la decisión.
+1. 🟡 **Llevar la enmienda [`E-001`](docs/adr/E-001-enmienda-glosario-super-admin.md) hasta su ratificación.** Abierta el 13-ago-2026; la discusión cierra el **20-ago-2026** (5 días hábiles, Art. 8). Incorpora *"Super Admin"* al glosario canónico. **Mientras no se ratifique, `C-02` no puede escribir la migración de `users` ni `rbac.py`.** El contenido técnico ya está decidido en `ADR-017` — lo que falta es el procedimiento, no la decisión.
 2. **Conseguir el contrato de la API del portal deRuedas** (**R-1**). Bloquea 15 tareas y está sobre el camino crítico. Arrancar la conversación con el equipo del portal ahora, no en el paso 8.
 3. **Escribir la matriz RBAC canónica** (**R-2**). C-02 la necesita para `rbac.py` y el plan de testing la convierte en quality gate bloqueante de CI. **Ya se puede escribir**: `ADR-017` fijó el catálogo de roles.
 
-> ✅ Cerrados durante la propuesta de C-01: `PA-01` ([`ADR-000`](decisions/ADR-000-precedencia-documental.md)), `IN-16` ([`ADR-015`](decisions/ADR-015-orquestacion-kubernetes-y-gitops.md)), `IN-15` ([`ADR-016`](decisions/ADR-016-trazas-distribuidas-tempo.md)), `IN-01` e `IN-02` ([`ADR-017`](decisions/ADR-017-catalogo-de-roles-y-super-admin.md), condicionados a `E-001`).
+> ✅ Cerrados durante la propuesta de C-01: `PA-01` ([`ADR-000`](docs/adr/ADR-000-precedencia-documental.md)), `IN-16` ([`ADR-015`](docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md)), `IN-15` ([`ADR-016`](docs/adr/ADR-016-trazas-distribuidas-tempo.md)), `IN-01` e `IN-02` ([`ADR-017`](docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md), condicionados a `E-001`).
 
 **Primer change**: `C-01` (`foundation-setup`) — `IN-22` (80 %) e `IN-29` (manda la spec) ya vienen resueltos por `ADR-000`; C-01 los **ejecuta**, no los decide.
 

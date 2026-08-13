@@ -1,6 +1,6 @@
 # deRuedas Gestión — Base de Conocimiento
 
-Base de conocimiento generada por ingesta silenciosa de los **11 documentos fuente** del proyecto (`docs/`, ~19.900 líneas), leídos íntegramente.
+Base de conocimiento generada por ingesta silenciosa de los **11 documentos fuente** del proyecto (`docs/sdd/`, ~19.900 líneas), leídos íntegramente.
 
 **Todo lo que está acá está derivado de las fuentes.** Nada fue inventado: lo que no se pudo derivar quedó registrado como pregunta abierta en [10_preguntas_abiertas.md](10_preguntas_abiertas.md).
 

@@ -165,12 +165,12 @@ Derivadas de las tecnologías declaradas. El repositorio incluye `.env.example` 
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Exportador de trazas | — | No |
 | `OTEL_TRACES_SAMPLER_ARG` | Ratio de sampling | `0.001` (prod) | No |
 | `SMTP_HOST` / `SMTP_USER` / `SMTP_PASSWORD` | Envío de emails (Mailhog en dev) | — | **Sí** |
-| `ENVIRONMENT` | Ambiente activo | `local \| ci \| staging \| production` | No |
+| `APP_ENV` | Ambiente activo | `local \| ci \| staging \| production` | No |
 | `LOG_LEVEL` | Nivel de log | `INFO` | No |
 | `API_BASE_URL` | Base pública de la API | `https://api.deruedas.com` | No |
 | `NEXTAUTH_SECRET` / `NEXTAUTH_URL` | Sesión del frontend | — | **Sí** |
 
-⚠️ Esta tabla está **derivada** del stack declarado, no transcripta: ningún documento del corpus incluye una tabla canónica de variables de entorno. Ver `PA-06` en [10_preguntas_abiertas.md](10_preguntas_abiertas.md).
+⚠️ Esta tabla nació **derivada** del stack declarado, no transcripta: ningún documento del corpus incluye una tabla canónica de variables de entorno. Desde el 13-ago-2026 la tabla canónica es [`ADR-013`](../docs/adr/ADR-013-variables-de-entorno.md), que cierra `PA-06` / `R-3` — **ante cualquier divergencia, manda el ADR**. La corrección `ENVIRONMENT` → `APP_ENV` ya está aplicada acá. Ver `PA-06` en [10_preguntas_abiertas.md](10_preguntas_abiertas.md).
 
 ## Estrategia de escalado
 

@@ -3,17 +3,30 @@
 > Este archivo es el **resultado del chequeo de consistencia cruzada** sobre los 11 documentos fuente (~19.900 líneas, leídos íntegramente).
 > Se documentaron **54 inconsistencias reales**: **14 bloqueantes** (Parte 1) + **40 no bloqueantes** (Parte 2). Bloqueante significa que no se puede escribir la migración, el enum, el quality gate o el contrato de API correspondiente sin una decisión humana previa.
 >
-> **Bloqueantes (14):** `IN-01`, `IN-02`, `IN-03`, `IN-04`, `IN-05`, `IN-06`, `IN-07`, `IN-10`, `IN-12`, `IN-13`, `IN-22`, `IN-23`, `IN-29`, `IN-31`.
+> **Bloqueantes (14):** ~~`IN-01`~~ ✅, ~~`IN-02`~~ ✅, `IN-03`, `IN-04`, `IN-05`, `IN-06`, `IN-07`, `IN-10`, `IN-12`, `IN-13`, ~~`IN-22`~~ ✅, `IN-23`, `IN-29`, ~~`IN-31`~~ ✅. **Quedan 10 abiertos.**
+>
+> ✅ **Cerrados al 13-ago-2026, con el ADR que los cierra:**
+>
+> | Entrada | ADR |
+> |---|---|
+> | `IN-01` · `IN-02` · `PA-02` | [`ADR-017`](../docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md) + [`E-001`](../docs/adr/E-001-enmienda-glosario-super-admin.md) |
+> | `IN-15` · `PA-20` (trazas) | [`ADR-016`](../docs/adr/ADR-016-trazas-distribuidas-tempo.md) |
+> | `IN-16` · `PA-20` (orquestación) | [`ADR-015`](../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) |
+> | **`IN-22`** · `PA-08` | [`ADR-014`](../docs/adr/ADR-014-umbrales-de-cobertura.md) |
+> | **`PA-06`** · **`R-3`** | [`ADR-013`](../docs/adr/ADR-013-variables-de-entorno.md) |
+> | `PA-01` · `IN-31` · `SU-12` | [`ADR-000`](../docs/adr/ADR-000-precedencia-documental.md) |
+>
+> ⚠️ Las secciones de `IN-01`, `IN-02` e `IN-31` más abajo **todavía no llevan su marca de resuelto** — están cerradas por ADR, pero el texto de la Parte 1 conserva la redacción original. Leer siempre esta tabla primero.
 >
 > ⚠️ **Defectos de este mismo archivo** (registrados para no repetir el patrón que `IN-37` le denuncia al plan de implementación):
-> - `IN-15` (Jaeger vs Tempo) e `IN-16` (Kubernetes con o sin ArgoCD) **se referencian en las Partes 3 y 4 pero nunca se documentan como entradas** en la Parte 2. Eran referencias colgadas. ✅ **Ambas resueltas el 13-ago-2026** — `IN-15` por [`ADR-016`](../decisions/ADR-016-trazas-distribuidas-tempo.md) (gana **Tempo**, competencia de dominio de SRE sobre N1) e `IN-16` por [`ADR-015`](../decisions/ADR-015-orquestacion-kubernetes-y-gitops.md) (**Kubernetes + ArgoCD**, decisión que llena un vacío: N1 no menciona orquestación).
+> - `IN-15` (Jaeger vs Tempo) e `IN-16` (Kubernetes con o sin ArgoCD) **se referencian en las Partes 3 y 4 pero nunca se documentan como entradas** en la Parte 2. Eran referencias colgadas. ✅ **Ambas resueltas el 13-ago-2026** — `IN-15` por [`ADR-016`](../docs/adr/ADR-016-trazas-distribuidas-tempo.md) (gana **Tempo**, competencia de dominio de SRE sobre N1) e `IN-16` por [`ADR-015`](../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) (**Kubernetes + ArgoCD**, decisión que llena un vacío: N1 no menciona orquestación).
 > - Los identificadores `IN-55` e `IN-56` no existen: la serie salta de `IN-54` a `IN-57`. Es un hueco de numeración, no información faltante.
 >
 > Criterio de clasificación:
 > - 🔴 **BLOQUEANTE** — hay que decidir *antes* de escribir código. Dos documentos vinculantes dicen cosas incompatibles sobre el mismo artefacto.
 > - 🟡 **No bloqueante** — se puede avanzar eligiendo una opción y documentándola; el costo de equivocarse es reversible.
 >
-> ✅ **Precedencia — RESUELTA.** `PA-01` quedó cerrada por [`ADR-000`](../decisions/ADR-000-precedencia-documental.md) (2026-08-13): **jerarquía por autoridad con competencia por dominio**.
+> ✅ **Precedencia — RESUELTA.** `PA-01` quedó cerrada por [`ADR-000`](../docs/adr/ADR-000-precedencia-documental.md) (2026-08-13): **jerarquía por autoridad con competencia por dominio**.
 >
 > | Nivel | Documentos | Autoridad |
 > |---|---|---|
@@ -179,7 +192,10 @@ Sin embargo, **`spec-tecnica.md`** §4.2.1 y **`plan-implementacion.md`** define
 
 ---
 
-## 🔴 IN-22 — Umbral de cobertura de tests: cuatro valores distintos
+## ✅ ~~🔴 IN-22~~ — Umbral de cobertura de tests: cuatro valores distintos — **RESUELTA**
+
+> ✅ **Cerrada el 13-ago-2026** por [`ADR-014`](../docs/adr/ADR-014-umbrales-de-cobertura.md): **80 % de líneas y 60 % de ramas**, ambos globales sobre el backend, bloqueantes en CI, más la verificación de que la cobertura no decrece respecto de `main`.
+> Líneas: gana N0 (y N2 coincide). Ramas: N0 guarda silencio, así que gobierna `plan-testing` (N3) por competencia de dominio. Se enmienda el **plan de testing**, no la constitución. Lo que sigue es el registro del conflicto original.
 
 **`constitucion.md`** Artículo 2: *"La cobertura mínima del código backend es **ochenta por ciento** medida sobre líneas."* — vinculante.
 **`spec-tecnica.md`** §7.2: *"mínimo **80 %** para módulos core (auth, stock, crm, communication, finance), **70 %** para los demás."*
@@ -454,12 +470,12 @@ El manual **no cubre permutas** (épica E6, 7 HU) ni **financiación** (épica E
 
 | Prioridad | Pregunta | Bloquea | Decisor |
 |---|---|---|---|
-| ✅ ~~Crítica~~ | ~~`PA-01` — ¿Cuál es el orden de precedencia entre documentos cuando se contradicen?~~ **RESUELTA** por [`ADR-000`](../decisions/ADR-000-precedencia-documental.md) (2026-08-13): jerarquía N0→N4 con competencia por dominio; recencia descartada por evidencia de los metadatos `.docx`. `SU-12` validado. Resuelve mecánicamente `IN-22`, `IN-29` e `IN-31`. | ~~Todo~~ | Tech Lead + Product Manager |
-| 🟡 ~~Crítica~~ | ~~`PA-02` — ¿4 roles o 3? ¿`super_admin` va en `user_role_enum`, en tabla aparte, o solo en Keycloak?~~ **DECIDIDA** por [`ADR-017`](../decisions/ADR-017-catalogo-de-roles-y-super-admin.md): **4 roles en el sistema, 3 en `user_role_enum`**; `super_admin` en **tabla aparte** exenta de RLS, con `users.tenant_id` intacto en `NOT NULL`. ⏳ **Condicionada a la ratificación de la enmienda [`E-001`](../decisions/E-001-enmienda-glosario-super-admin.md)** — discusión abierta hasta el 20-ago-2026. (`IN-01`, `IN-02`) | Migración inicial, RBAC, tests de autorización | Tech Lead |
+| ✅ ~~Crítica~~ | ~~`PA-01` — ¿Cuál es el orden de precedencia entre documentos cuando se contradicen?~~ **RESUELTA** por [`ADR-000`](../docs/adr/ADR-000-precedencia-documental.md) (2026-08-13): jerarquía N0→N4 con competencia por dominio; recencia descartada por evidencia de los metadatos `.docx`. `SU-12` validado. Resuelve mecánicamente `IN-22`, `IN-29` e `IN-31`. | ~~Todo~~ | Tech Lead + Product Manager |
+| 🟡 ~~Crítica~~ | ~~`PA-02` — ¿4 roles o 3? ¿`super_admin` va en `user_role_enum`, en tabla aparte, o solo en Keycloak?~~ **DECIDIDA** por [`ADR-017`](../docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md): **4 roles en el sistema, 3 en `user_role_enum`**; `super_admin` en **tabla aparte** exenta de RLS, con `users.tenant_id` intacto en `NOT NULL`. ⏳ **Condicionada a la ratificación de la enmienda [`E-001`](../docs/adr/E-001-enmienda-glosario-super-admin.md)** — discusión abierta hasta el 20-ago-2026. (`IN-01`, `IN-02`) | Migración inicial, RBAC, tests de autorización | Tech Lead |
 | **Crítica** | `PA-03` — ¿La facturación es en ARS o en USD? (`IN-04`) | Esquema de `plans`/`subscriptions`, integración con Mercado Pago, todo el GTM | Dirección |
 | **Crítica** | `PA-04` — ¿Cuáles son los límites definitivos por plan, y se agrega la cuota de mensajes de WhatsApp al modelo? (`IN-03`, `IN-50`) | `PlanLimitsService`, seed de `plans` | Product Manager + Dirección |
 | **Crítica** | `PA-05` — ¿`audit_logs` se retiene 24 meses o 5 años? ¿Qué obligación legal aplica realmente? (`IN-13`, `IN-35`, `IN-49`) | Particionado, costo de storage, compliance | Legal + Tech Lead |
-| **Alta** | `PA-06` — ¿Existe una tabla canónica de variables de entorno? Ningún documento la tiene; la de [08_arquitectura_propuesta.md](08_arquitectura_propuesta.md) está **derivada del stack**, no transcripta. | Setup de entornos, Terraform | Tech Lead |
+| ✅ ~~Alta~~ | ~~`PA-06` — ¿Existe una tabla canónica de variables de entorno?~~ **RESUELTA** por [`ADR-013`](../docs/adr/ADR-013-variables-de-entorno.md) (2026-08-13): **35 variables en 12 grupos**, 15 sensibles. Dos correcciones sobre la KB (`APP_ENV` en vez de `ENVIRONMENT`, JWKS URL en vez de clave embebida) y un grupo nuevo (`PaymentSettings`). Cierra también `R-3`. | Setup de entornos, Terraform | Tech Lead |
 | **Alta** | `PA-07` — ¿Cuántas etapas trae el pipeline por defecto y cómo se llaman? (`IN-10`) | Seed de onboarding de cada tenant | Product Manager |
 | ✅ ~~Alta~~ | ~~`PA-08` — ¿Cuál es el umbral de cobertura del quality gate?~~ **RESUELTA** por `ADR-000`: **80 %** — N3 (`plan-testing`) no gana sobre N0 ni en su dominio propio. Se enmienda el **plan de testing**, no la constitución. (`IN-22`) | CI (bloquea merges) | Tech Lead |
 | ✅ ~~Alta~~ | ~~`PA-09` — ¿El SLA es 99.0/99.5/99.9 o 99.9/99.9/99.95?~~ **RESUELTA** por `ADR-000`: **99.0 / 99.5 / 99.9** — competencia de dominio, disponibilidad es dominio propio de `plan-sre` (N3 > N1). Compatible con el SLO interno de 99.7 %. (`IN-31`) | Contratos, créditos, alertas | Dirección + SRE |
@@ -473,7 +489,7 @@ El manual **no cubre permutas** (épica E6, 7 HU) ni **financiación** (épica E
 | **Media** | `PA-17` — ¿Se distinguen "lead nuevo sin primer contacto" y "lead sin actividad en su etapa" como dos alertas distintas? (`IN-20`) | Crons de CRM | Product Manager |
 | **Media** | `PA-18` — ¿El trial dura 14 o 30 días? (`IN-21`) | `trial_ends_at`, cadencia comercial | Dirección |
 | **Media** | `PA-19` — ¿Canal en tiempo real: SSE o WebSocket? (`IN-08`) | Módulo `communication`, frontend | Tech Lead |
-| ✅ ~~Media~~ | ~~`PA-20` — ¿Jaeger o Tempo? ¿Kubernetes con o sin ArgoCD?~~ **RESUELTA**: **Tempo** ([`ADR-016`](../decisions/ADR-016-trazas-distribuidas-tempo.md)) y **Kubernetes + ArgoCD** ([`ADR-015`](../decisions/ADR-015-orquestacion-kubernetes-y-gitops.md)). Obliga a corregir `T-030`, que hoy pide levantar Jaeger en `docker-compose`. (`IN-15`, `IN-16`) | Terraform, stack de observabilidad | SRE |
+| ✅ ~~Media~~ | ~~`PA-20` — ¿Jaeger o Tempo? ¿Kubernetes con o sin ArgoCD?~~ **RESUELTA**: **Tempo** ([`ADR-016`](../docs/adr/ADR-016-trazas-distribuidas-tempo.md)) y **Kubernetes + ArgoCD** ([`ADR-015`](../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md)). Obliga a corregir `T-030`, que hoy pide levantar Jaeger en `docker-compose`. (`IN-15`, `IN-16`) | Terraform, stack de observabilidad | SRE |
 | **Media** | `PA-21` — El pipeline configurable en el MVP contradice el Principio 2 de la constitución. ¿Se acepta la excepción o se posterga a F2? (`IN-24`) | Alcance del MVP | Product Manager (requiere justificación documentada) |
 | **Media** | `PA-22` — ¿Se unifican los contratos de API divergentes en un único `openapi.yaml` antes de empezar? (`IN-12`) | Generación de tipos del frontend | Tech Lead |
 | **Media** | `PA-23` — ¿Quién es el proveedor concreto de OCR y de firma electrónica? Los documentos los nombran como categorías, nunca como productos. | Fase 4 (épica E8) | Tech Lead |

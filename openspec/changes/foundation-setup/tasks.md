@@ -8,16 +8,16 @@
 
 Precede a todo lo demás: el §4.1 no se puede materializar mientras `docs/` esté ocupado por el corpus fuente.
 
-- [ ] 1.1 Mover los 11 documentos de `docs/*.md` a `docs/sdd/` con `git mv` (preserva historial)
-- [ ] 1.2 Mover todo el contenido de `decisions/` a `docs/adr/` con `git mv` (`ADR-000`, `ADR-015`, `ADR-016`, `ADR-017` y la enmienda `E-001`) y eliminar el directorio vacío
-- [ ] 1.3 Actualizar los enlaces a `docs/` en los 16 archivos de `knowledge-base/`
-- [ ] 1.4 Actualizar los enlaces a `docs/` y a `decisions/` en `CLAUDE.md`, `AGENTS.md` y `CHANGES.md`
-- [ ] 1.5 Corregir en `CHANGES.md` la referencia a `frontend/`, que en el §4.1 es `frontend-web/`
-- [ ] 1.6 Verificar automáticamente que no queda ningún enlace markdown roto en el repositorio
-- [ ] 1.7 Escribir `docs/adr/ADR-013-variables-de-entorno.md` con la tabla canónica de `design.md` D-2 (cierra `R-3` / `PA-06`)
-- [ ] 1.8 Escribir `docs/adr/ADR-014-umbrales-de-cobertura.md` registrando 80 % líneas / 60 % ramas y la enmienda al plan de testing (cierra `IN-22`)
+- [x] 1.1 Mover los 11 documentos de `docs/*.md` a `docs/sdd/` con `git mv` (preserva historial)
+- [x] 1.2 Mover todo el contenido de `decisions/` a `docs/adr/` con `git mv` (`ADR-000`, `ADR-015`, `ADR-016`, `ADR-017` y la enmienda `E-001`) y eliminar el directorio vacío
+- [x] 1.3 Actualizar los enlaces a `docs/` en los 16 archivos de `knowledge-base/`
+- [x] 1.4 Actualizar los enlaces a `docs/` y a `decisions/` en `CLAUDE.md`, `AGENTS.md` y `CHANGES.md`
+- [x] 1.5 Corregir en `CHANGES.md` la referencia a `frontend/`, que en el §4.1 es `frontend-web/`
+- [x] 1.6 Verificar automáticamente que no queda ningún enlace markdown roto en el repositorio
+- [x] 1.7 Escribir `docs/adr/ADR-013-variables-de-entorno.md` con la tabla canónica de `design.md` D-2 (cierra `R-3` / `PA-06`)
+- [x] 1.8 Escribir `docs/adr/ADR-014-umbrales-de-cobertura.md` registrando 80 % líneas / 60 % ramas y la enmienda al plan de testing (cierra `IN-22`)
 - [ ] 1.9 Corregir en `docs/sdd/deRuedas-plan-implementacion.md` las anclas divergentes de `ADR-002`, `ADR-005` y `ADR-011` según `design.md` D-4 (cierra `IN-29`)
-- [ ] 1.10 Corregir `ENVIRONMENT` → `APP_ENV` en la tabla de `knowledge-base/08_arquitectura_propuesta.md`
+- [x] 1.10 Corregir `ENVIRONMENT` → `APP_ENV` en la tabla de `knowledge-base/08_arquitectura_propuesta.md`
 
 ## 2. Estructura del monorepo — `T-001`
 

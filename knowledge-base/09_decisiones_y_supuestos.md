@@ -219,4 +219,4 @@ Ninguno de estos está escrito como supuesto en las fuentes. Son las condiciones
 
 **Consecuencia (contraintuitiva)**: al estar confirmado el supuesto, **la recencia queda descartada como criterio de desempate**. Los timestamps ordenan por *generación*, no por *deliberación* — y los últimos por fecha (`plan-gtm` 01:18, `manual-usuario` 02:12) son los menos autoritativos por contenido. El escenario de riesgo descrito arriba **no se cumple**: las contradicciones son deriva de generación, no revisiones sin propagar. No hay respuesta oculta que recuperar por arqueología; cada una exige una decisión.
 
-Formalizado en [`ADR-000`](../decisions/ADR-000-precedencia-documental.md), que también cierra `PA-01`.
+Formalizado en [`ADR-000`](../docs/adr/ADR-000-precedencia-documental.md), que también cierra `PA-01`.

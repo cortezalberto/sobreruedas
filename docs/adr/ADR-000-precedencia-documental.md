@@ -14,7 +14,7 @@
 
 ## Contexto
 
-El corpus vinculante son 11 documentos en [`docs/`](../docs/). Al cruzarlos, la base de
+El corpus vinculante son 11 documentos en [`docs/sdd/`](../sdd/). Al cruzarlos, la base de
 conocimiento detectó **54 inconsistencias reales, 14 de ellas bloqueantes**. Ninguna es
 visible leyendo un documento aislado.
 
@@ -68,7 +68,7 @@ de 2026**: una sola sesión de 8 h 41 min.
 ### La constitución ya declara su propia autoridad
 
 El orden de precedencia **es derivable del corpus**; no hace falta inventarlo.
-[`deRuedas-constitucion.md`](../docs/deRuedas-constitucion.md) habla de sí misma en cinco lugares:
+[`deRuedas-constitucion.md`](../sdd/deRuedas-constitucion.md) habla de sí misma en cinco lugares:
 
 | Ubicación | Qué establece |
 |---|---|
@@ -152,12 +152,12 @@ fingir que decide.
 - ✅ Queda un criterio único, escrito y vinculante para leer las 54 inconsistencias.
 - ✅ Se descarta explícitamente la recencia, evitando un error que habría invertido varias
   resoluciones (pricing, SLA, alcance del MVP).
-- ✅ Cada change de [`CHANGES.md`](../CHANGES.md) puede resolver sus `IN-XX` sin reabrir la
+- ✅ Cada change de [`CHANGES.md`](../../CHANGES.md) puede resolver sus `IN-XX` sin reabrir la
   discusión de fondo.
 - ⚠️ **Aparecen enmiendas formales pendientes** (`IN-01`, potencialmente `IN-07`). El
   Artículo 8 exige 5 días hábiles de discusión: hay que **abrirlas ya** para que no bloqueen
   `C-02` y `C-14`.
-- ⚠️ Los ADRs nuevos viven en [`decisions/`](.). La spec técnica es el corpus fuente y no se
+- ⚠️ Los ADRs nuevos viven en [`docs/adr/`](.). La spec técnica es el corpus fuente y no se
   edita. **`C-01` debe formalizar** esta convención junto con la corrección de `IN-29`.
 
 ---
