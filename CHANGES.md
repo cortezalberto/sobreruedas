@@ -53,7 +53,8 @@ Este roadmap asumía que *"los 11 documentos dicen Versión 1.0 — Mayo de 2026
 | `IN-22` | 80 % vs 70/60 | ✅ **80 %** — N3 no gana sobre N0. Se enmienda el plan de testing. |
 | `IN-29` | Numeración de ADRs en disputa | ✅ **Manda la spec** (N1 > N2). Ejecuta **C-01**. |
 | `IN-31` | 99.9/99.9/99.95 vs 99.0/99.5/99.9 | ✅ **99.0 / 99.5 / 99.9** — competencia de dominio de SRE. Compatible con el SLO de 99.7 %. |
-| `IN-01` | 3 roles ES vs 4 roles EN | ⚠️ El glosario N0 es canónico ⇒ requiere **enmienda del Artículo 8**, no una resolución. **Abrir ya** (5 días hábiles) o bloquea **C-02**. |
+| `IN-01`, `IN-02` | 3 roles ES vs 4 roles EN; `super_admin` sin representación posible | 🟡 **DECIDIDOS** por [`ADR-017`](decisions/ADR-017-catalogo-de-roles-y-super-admin.md): **4 roles en el sistema, 3 en `user_role_enum`**, `super_admin` en tabla aparte exenta de RLS, `users.tenant_id` **intacto en `NOT NULL`**. ⏳ Condicionados a la enmienda [`E-001`](decisions/E-001-enmienda-glosario-super-admin.md), en discusión hasta el **20-ago-2026**. |
+| `IN-15`, `IN-16` | Jaeger vs Tempo; Kubernetes con o sin ArgoCD | ✅ **RESUELTOS**: **Tempo** ([`ADR-016`](decisions/ADR-016-trazas-distribuidas-tempo.md), competencia de dominio de SRE) y **Kubernetes + ArgoCD** ([`ADR-015`](decisions/ADR-015-orquestacion-kubernetes-y-gitops.md)). `T-030` hay que corregirla: hoy pide Jaeger. |
 | `IN-03`, `IN-04` | `mejoras-y-saas` vs `plan-gtm` | ⚠️ **Ambos son N4 — empate de nivel, la regla es muda.** Escala a Dirección. |
 | `IN-07` | `NOT NULL` (N0+N1) vs nullable (N2) | ⚠️ Ganan N0/N1, pero un 0 km no tiene patente ⇒ decisión de negocio + posible enmienda. |
 | `IN-13` | 5 años (N1, invoca ley) vs 24 meses (N3) | ⚠️ La regla no zanja una obligación legal externa. **Legal + Tech Lead**. |
@@ -99,8 +100,8 @@ Las 14 inconsistencias bloqueantes **no tienen un change dedicado**. Cada una es
 |---|---|---|---|
 | `IN-22` | Umbral de cobertura del quality gate: 80 % (constitución) vs 70/60 (plan de testing). Bloquea merges. | **C-01** | 0 |
 | `IN-29` | Numeración de ADRs: ADR-002/005/011 significan cosas distintas en la spec y en el plan. Rompe la trazabilidad de las 194 tareas. | **C-01** | 0 |
-| `IN-01` | Catálogo de roles: 3 (constitución, en español) vs 4 (plan, en inglés) vs 5 personas. Bloquea `require_role`. | **C-02** | 0 |
-| `IN-02` | `super_admin`: ¿cuarto valor del enum con `tenant_id` nullable, tabla `super_admins` aparte, o solo rol de Keycloak? Hoy el modelo **no lo puede representar**. | **C-02** | 0 |
+| 🟡 ~~`IN-01`~~ | ~~Catálogo de roles~~ **DECIDIDO** (`ADR-017`): 3 valores en `user_role_enum` — `manager`, `salesperson`, `admin_staff` — con equivalencia al glosario. C-02 **aplica**, no re-decide. Pendiente ratificar `E-001`. | **C-02** | 0 |
+| 🟡 ~~`IN-02`~~ | ~~`super_admin` sin representación~~ **DECIDIDO** (`ADR-017`): tabla `super_admins` aparte, sin `tenant_id`, exenta de RLS. `users.tenant_id` sigue `NOT NULL`. Pendiente ratificar `E-001`. | **C-02** | 0 |
 | `IN-13` | Retención de `audit_logs`: 5 años (spec, con invocación legal) vs 24 meses (seguridad + SRE) vs escalonada por plan (GTM). Define el particionado. | **C-03** | 0 |
 | `IN-23` | Objetivos de latencia p95: listado 200 vs 300 ms, búsqueda 500 vs 2.000 ms. Define los umbrales de alerta de Prometheus. | **C-03** | 0 |
 | `IN-31` | SLA por plan: 99.9/99.9/99.95 (spec) vs 99.0/99.5/99.9 (SRE + GTM). El SLO interno de 99.7 % es **inferior** al SLA que la spec promete — insostenible. | **C-03** | 0 |
@@ -390,7 +391,7 @@ Tres observaciones sobre la cadena:
   - Migración `audit_logs` **particionada por mes** — la política de particionado y el volumen a proyectar dependen de `IN-13`
   - Logging estructurado JSON con `trace_id` propagado por request
   - Middleware de métricas Prometheus: `http_requests_total`, `http_request_duration_seconds` (histograma) por endpoint y tenant
-  - Tracing distribuido con OpenTelemetry (el backend de traces —Jaeger o Tempo— sigue sin decidirse: `IN-15`/`IN-16`, `PA-20`)
+  - Tracing distribuido con OpenTelemetry exportando a **Tempo** — decidido por [`ADR-016`](decisions/ADR-016-trazas-distribuidas-tempo.md), cierra `IN-15`. ⚠️ **`T-030` está mal especificada**: pide levantar el servicio `jaeger` en `docker-compose` con UI en `:16686` y verificar la traza en la Jaeger UI. Pasa a Tempo, y la verificación se hace desde Grafana. Corregir al arrancar el change.
   - Sentry para error tracking, con scrubbing de PII
   - Umbrales de alerta (`APILatencyHigh` y compañía) derivados de la resolución de `IN-23`
   - Tests: que el `trace_id` sobreviva a un salto de evento por Redis Streams; que las métricas expongan la etiqueta de tenant sin filtrar datos entre tenants
@@ -399,7 +400,7 @@ Tres observaciones sobre la cadena:
 - **Bloqueantes a resolver (al inicio del change)**:
   - **`IN-13`** — retención de `audit_logs`: **5 años** (spec §3.9, §6.5 y §8.8, repetido tres veces con justificación contable) vs **24 meses** (plan de seguridad §6.4 y plan de SRE §4) vs **escalonada por plan** (GTM: Starter 30 días / Pro 12 meses / Enterprise 24 meses). Triple impacto: particionado y storage a 5 años; una afirmación de **compliance legal** que el propio documento de compliance contradice; y el GTM convirtiendo la auditoría en feature comercial, incompatible con un mínimo legal uniforme. **Un mínimo legal no puede ser un feature de plan** — lo que sí puede variar por plan es cuánto histórico ve el cliente en la UI. Hay una pregunta legal previa (¿aplica la Resolución 4717/2020 de AFIP a `audit_logs`?).
   - **`IN-23`** — objetivos de latencia p95. Listado: **200 ms** (constitución Art. 4 + spec) vs **300 ms** (SRE + testing). Búsqueda full-text: **500 ms** (constitución + spec) vs **2.000 ms** (SRE + testing) — el plan de SRE es **4× más permisivo que la norma vinculante**. Define los umbrales de Prometheus, los thresholds de k6/Locust y la Definición de Terminado de las historias. La KB sugiere que son dos cosas distintas nunca escritas como tales: **objetivo de ingeniería** (constitución/spec) vs **SLO comprometido con presupuesto de error** (SRE). Decidir y documentar la relación.
-  - **`IN-31`** — SLA de disponibilidad por plan: **99.9 / 99.9 / 99.95** (spec §6.2 y §9.7) vs **99.0 / 99.5 / 99.9** (SRE §3.1 + GTM). Es un compromiso contractual con créditos económicos (5 %, 10 %, 25 % de la suscripción). Para Starter la diferencia es **43 minutos vs 7h12min** de downtime mensual aceptable. Y el **SLO interno del SRE (99.7 %) es inferior al SLA que la spec le promete a Starter y Pro (99.9 %)** — matemáticamente insostenible: nunca se promete un SLA por encima del SLO interno. La escala del SRE/GTM es la única internamente coherente.
+  - ✅ ~~**`IN-31`**~~ — **RESUELTO** por `ADR-000`: **99.0 / 99.5 / 99.9**, por competencia de dominio de SRE. C-03 lo aplica, no lo re-decide. El análisis original se conserva abajo porque explica *por qué* la escala de SRE es la única internamente coherente. SLA de disponibilidad por plan: **99.9 / 99.9 / 99.95** (spec §6.2 y §9.7) vs **99.0 / 99.5 / 99.9** (SRE §3.1 + GTM). Es un compromiso contractual con créditos económicos (5 %, 10 %, 25 % de la suscripción). Para Starter la diferencia es **43 minutos vs 7h12min** de downtime mensual aceptable. Y el **SLO interno del SRE (99.7 %) es inferior al SLA que la spec le promete a Starter y Pro (99.9 %)** — matemáticamente insostenible: nunca se promete un SLA por encima del SLO interno. La escala del SRE/GTM es la única internamente coherente.
 - **Leer antes**:
   - `knowledge-base/13_observabilidad_y_sre.md` §SLAs públicos por plan, §SLOs internos, §Presupuesto de error, §Stack de observabilidad, §Catálogo de alertas
   - `knowledge-base/12_seguridad_y_compliance.md` §Auditoría, §Tabla de retenciones, §Protección de datos personales
@@ -1105,9 +1106,11 @@ Tres observaciones sobre la cadena:
 
 Tres cosas que **no** son código y que conviene arrancar ya, porque bloquean o encarecen el roadmap:
 
-1. ~~**Responder `PA-01`**~~ ✅ **HECHO** — [`ADR-000`](decisions/ADR-000-precedencia-documental.md), 2026-08-13. **Reemplazado por**: abrir la **enmienda del Artículo 8 para `IN-01`** (catálogo de roles). El procedimiento exige 5 días hábiles de discusión, así que empezarla tarde bloquea **C-02**. Decisores: Tech Lead + equipo.
+1. 🟡 **Llevar la enmienda [`E-001`](decisions/E-001-enmienda-glosario-super-admin.md) hasta su ratificación.** Abierta el 13-ago-2026; la discusión cierra el **20-ago-2026** (5 días hábiles, Art. 8). Incorpora *"Super Admin"* al glosario canónico. **Mientras no se ratifique, `C-02` no puede escribir la migración de `users` ni `rbac.py`.** El contenido técnico ya está decidido en `ADR-017` — lo que falta es el procedimiento, no la decisión.
 2. **Conseguir el contrato de la API del portal deRuedas** (**R-1**). Bloquea 15 tareas y está sobre el camino crítico. Arrancar la conversación con el equipo del portal ahora, no en el paso 8.
-3. **Escribir la matriz RBAC canónica** (**R-2**). C-02 la necesita para `rbac.py` y el plan de testing la convierte en quality gate bloqueante de CI. Depende del punto 1.
+3. **Escribir la matriz RBAC canónica** (**R-2**). C-02 la necesita para `rbac.py` y el plan de testing la convierte en quality gate bloqueante de CI. **Ya se puede escribir**: `ADR-017` fijó el catálogo de roles.
+
+> ✅ Cerrados durante la propuesta de C-01: `PA-01` ([`ADR-000`](decisions/ADR-000-precedencia-documental.md)), `IN-16` ([`ADR-015`](decisions/ADR-015-orquestacion-kubernetes-y-gitops.md)), `IN-15` ([`ADR-016`](decisions/ADR-016-trazas-distribuidas-tempo.md)), `IN-01` e `IN-02` ([`ADR-017`](decisions/ADR-017-catalogo-de-roles-y-super-admin.md), condicionados a `E-001`).
 
 **Primer change**: `C-01` (`foundation-setup`) — `IN-22` (80 %) e `IN-29` (manda la spec) ya vienen resueltos por `ADR-000`; C-01 los **ejecuta**, no los decide.
 

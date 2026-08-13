@@ -9,7 +9,7 @@
 Precede a todo lo demás: el §4.1 no se puede materializar mientras `docs/` esté ocupado por el corpus fuente.
 
 - [ ] 1.1 Mover los 11 documentos de `docs/*.md` a `docs/sdd/` con `git mv` (preserva historial)
-- [ ] 1.2 Mover `decisions/ADR-000-precedencia-documental.md` a `docs/adr/` con `git mv` y eliminar el directorio `decisions/` vacío
+- [ ] 1.2 Mover todo el contenido de `decisions/` a `docs/adr/` con `git mv` (`ADR-000`, `ADR-015`, `ADR-016`, `ADR-017` y la enmienda `E-001`) y eliminar el directorio vacío
 - [ ] 1.3 Actualizar los enlaces a `docs/` en los 16 archivos de `knowledge-base/`
 - [ ] 1.4 Actualizar los enlaces a `docs/` y a `decisions/` en `CLAUDE.md`, `AGENTS.md` y `CHANGES.md`
 - [ ] 1.5 Corregir en `CHANGES.md` la referencia a `frontend/`, que en el §4.1 es `frontend-web/`
@@ -98,21 +98,38 @@ Cubre la capability `platform/delivery-pipeline`.
 - [ ] 8.8 Verificar con una propuesta de cambio de prueba: pasa en verde en menos de 15 minutos
 - [ ] 8.9 Verificar que un test que falla y una cobertura insuficiente bloquean efectivamente la integración
 
-## 9. Despliegue a staging — `T-008` ⚠️ BLOQUEADO
+## 9. Despliegue a staging — `T-008` · Kubernetes + ArgoCD
 
-> **No implementar sin resolver antes `IN-16`** — ver `design.md` §Open Questions.
-> El sustrato de infraestructura (Terraform sobre contenedores gestionados contra Kubernetes) no está decidido en ningún documento del corpus. `PA-20` lo asigna a SRE.
-> **Recomendación registrada**: Terraform sin Kubernetes para la Ola 0; adoptarlo después es aditivo.
-> Los grupos 1 a 8 no dependen de esta decisión y pueden completarse enteros.
+> **Desbloqueado.** `IN-16` cerrado por `ADR-015` el 13-ago-2026: Kubernetes con GitOps vía ArgoCD.
+> Frontera de seguridad no negociable: **GitHub Actions no recibe credenciales del cluster.** Su permiso máximo es escribir un tag de imagen en el repositorio de manifests.
 
-- [ ] 9.1 **Resolver `IN-16`** con SRE y registrar la decisión como ADR en `docs/adr/`
-- [ ] 9.2 Escribir `infra/terraform/staging/` según el sustrato decidido en 9.1
-- [ ] 9.3 Escribir `.github/workflows/deploy-staging.yml` disparado por push a `main` tras CI en verde
-- [ ] 9.4 Configurar el build y push de imágenes etiquetadas con el SHA del commit
-- [ ] 9.5 Configurar el despliegue azul-verde al pool de staging
-- [ ] 9.6 Configurar las pruebas de humo posteriores contra las sondas de vida y disponibilidad, durante cinco minutos
-- [ ] 9.7 Configurar la reversión automática al pool anterior si las pruebas de humo fallan, con notificación al equipo
-- [ ] 9.8 Verificar el despliegue automático extremo a extremo y la reversión ante un fallo simulado
+**Infraestructura (Terraform)**
+
+- [ ] 9.1 Escribir `infra/terraform/staging/` provisionando el cluster de Kubernetes con disponibilidad multi-zona
+- [ ] 9.2 Provisionar con Terraform la red, la base gestionada, los buckets, el registry, el DNS y los certificados
+- [ ] 9.3 Instalar ArgoCD en el cluster y configurar su acceso de solo lectura al repositorio de manifests
+
+**Cargas de trabajo (manifests)**
+
+- [ ] 9.4 Escribir en `infra/k8s/` los manifests de `backend`, `worker` y `frontend-web`: `Deployment`, `Service`, `Ingress` y `ConfigMap`
+- [ ] 9.5 Configurar los `Secret` desde el gestor de secretos del proveedor — **nunca en el repositorio** (regla dura 4)
+- [ ] 9.6 Configurar las sondas `readinessProbe` y `livenessProbe` de Kubernetes apuntando a `/ready` y `/health`
+- [ ] 9.7 Configurar la mecánica azul-verde: dos `ReplicaSet` y un `Service` cuyo selector determina el pool activo
+
+**Pipeline (GitHub Actions)**
+
+- [ ] 9.8 Escribir `.github/workflows/deploy-staging.yml` disparado por push a `main` tras CI en verde
+- [ ] 9.9 Configurar el build, la firma y el push de imágenes etiquetadas con el SHA del commit
+- [ ] 9.10 Configurar la actualización del tag en el repositorio de manifests — el pipeline **termina acá**
+- [ ] 9.11 Verificar que el pipeline no tiene ni necesita `kubeconfig` ni credenciales del cluster en sus secretos
+
+**Verificación y reversión**
+
+- [ ] 9.12 Configurar las pruebas de humo contra el pool nuevo **antes** de conmutar el selector, durante cinco minutos
+- [ ] 9.13 Verificar que un fallo en las pruebas de humo deja el selector sin mover y el pool anterior sirviendo
+- [ ] 9.14 Configurar la notificación al equipo ante un despliegue fallido
+- [ ] 9.15 Verificar que ArgoCD detecta y reporta la deriva ante un cambio manual en el cluster
+- [ ] 9.16 Verificar el despliegue automático extremo a extremo y la reversión por `git revert` de los manifests
 
 ## 10. Verificación de cierre
 

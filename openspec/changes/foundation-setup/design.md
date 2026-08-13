@@ -133,11 +133,35 @@ Disparadores: propuesta de cambio contra `main` y push a `main`. Caché de depen
 
 `gitleaks` corre además en pre-commit (regla dura 4), pero se repite en CI: un hook local es una cortesía, no un control.
 
-### D-7 — Despliegue a staging
+### D-7 — Despliegue a staging: Kubernetes con GitOps
 
-Imágenes Docker etiquetadas con el SHA del commit, empujadas a un registry, desplegadas en azul-verde. Pruebas de humo posteriores contra `/health` y `/ready` durante cinco minutos; si fallan, conmutación automática al pool anterior.
+Fijado por [`ADR-015`](../../../decisions/ADR-015-orquestacion-kubernetes-y-gitops.md), que cierra `IN-16`. **Kubernetes** como plataforma de orquestación, **ArgoCD** como mecanismo de despliegue.
 
-**El sustrato de infraestructura queda abierto** — ver Open Questions.
+Reparto de responsabilidades:
+
+| Herramienta | De qué se hace cargo |
+|---|---|
+| **Terraform** | El cluster, la red, la base gestionada, buckets, registry, DNS y certificados. Lo que tiene ciclo de vida propio. |
+| **ArgoCD** | Las cargas de trabajo: `Deployment`, `Service`, `Ingress`, `ConfigMap`. Lo que cambia con cada release. |
+| **GitHub Actions** | Construir, firmar y publicar imágenes, y actualizar el tag en el repositorio de manifests. **Nada más.** |
+
+La frontera es deliberada: **GitHub Actions nunca recibe credenciales del cluster.** Su permiso máximo es escribir un tag en un repositorio git. Comprometer el pipeline de CI no da acceso al cluster.
+
+**Azul-verde en Kubernetes**: dos `ReplicaSet` conviviendo y un `Service` cuyo selector decide cuál recibe tráfico. Las pruebas de humo corren contra el pool nuevo **antes** de conmutar el selector. Si fallan, el selector no se mueve — el pool viejo nunca dejó de servir.
+
+Esto simplifica el requisito de reversión de `platform/delivery-pipeline`: no hay que revertir nada, alcanza con **no conmutar**.
+
+**El entorno local no cambia.** Docker Compose sigue siendo el entorno de desarrollo; Kubernetes empieza en staging. Levantar un cluster local para desarrollar sería complejidad sin contrapartida.
+
+### D-8 — Trazas distribuidas: Tempo, no Jaeger
+
+Fijado por [`ADR-016`](../../../decisions/ADR-016-trazas-distribuidas-tempo.md), que cierra `IN-15`. **No afecta a C-01** — se registra acá porque apareció al reunir la evidencia de `IN-16` y porque obliga a corregir `T-030`, que cae en C-03.
+
+Tres documentos dicen Jaeger (`spec-tecnica` N1, `plan-implementacion` N2, `mejoras-y-saas` N4) y uno dice Tempo (`plan-sre` N3). Gana **Tempo** por competencia de dominio: las trazas son dominio propio de SRE, y `ADR-000` reparte autoridad en vez de contar documentos.
+
+El argumento de fondo: el stack ya tiene Grafana, Prometheus y Loki. Con Tempo, métricas, logs y trazas viven en una sola interfaz. Con Jaeger, las trazas quedan en una UI aparte y la correlación entre señales queda a cargo de quien investiga.
+
+La variable `OTEL_EXPORTER_OTLP_ENDPOINT` de D-2 no cambia de nombre: OpenTelemetry es agnóstico del backend, y eso es justamente lo que mantiene la decisión reversible.
 
 ## Risks / Trade-offs
 
@@ -163,12 +187,10 @@ No hay datos ni usuarios: no hay migración de estado. La única mudanza es de a
 
 ## Open Questions
 
-**`IN-16` — sustrato de infraestructura para el despliegue a staging (afecta solo a T-008).**
+**Ninguna.** `IN-16` era la única, y quedó cerrada por [`ADR-015`](../../../decisions/ADR-015-orquestacion-kubernetes-y-gitops.md) el 13-ago-2026: Kubernetes con ArgoCD. Ver D-7.
 
-T-008 dice *"despliegue azul-verde a staging mediante Terraform o kubectl **según infra elegida**"*. Esa elección no está hecha en ningún documento: `IN-16` (Kubernetes con o sin ArgoCD) figura entre las referencias que el corpus menciona pero nunca documenta, y `PA-20` lo asigna a SRE.
+Se deja registrado, porque forma parte del razonamiento: la recomendación inicial de este documento era la contraria —Terraform sobre contenedores gestionados, sin Kubernetes— por cautela operativa en la Ola 0. El Tech Lead priorizó portabilidad entre proveedores y despliegue declarativo desde el inicio, evitando una migración futura a cambio de complejidad temprana. Es un trade-off legítimo y las contras quedan asumidas explícitamente en `ADR-015` §Consecuencias.
 
-**Recomendación**: para la Ola 0, Terraform sobre contenedores gestionados, **sin Kubernetes**. Adoptar Kubernetes después es aditivo — se cambia el destino del despliegue, no el pipeline — mientras que arrancar con Kubernetes carga complejidad operativa sobre un equipo que todavía no tiene un solo endpoint de dominio en producción.
+`IN-16` no se resolvió aplicando `ADR-000` sino llenando un vacío: N1 guarda silencio sobre orquestación, N2 la deja condicional (*"si aplica"*) y el único documento que nombra Kubernetes es N4, no normativo. Es la regla 4 de `ADR-000` funcionando — un vacío documental es un riesgo abierto, no una licencia para inferir.
 
-**Alcance del impacto**: T-001 a T-007 no dependen de esta decisión y pueden implementarse completos. **T-008 es la única tarea bloqueada**, y queda marcada como tal en `tasks.md`.
-
-Esto no cambia las specs: `platform/delivery-pipeline` describe el despliegue en términos de comportamiento observable —se despliega, se verifica, se revierte si falla— sin comprometerse con el sustrato.
+**Con esto, T-008 queda desbloqueado y el change es implementable de punta a punta.**
