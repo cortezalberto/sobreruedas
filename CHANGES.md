@@ -20,26 +20,47 @@
 
 ---
 
-## ⚠️ PA-01 — La pregunta que gobierna todo el roadmap
+## ✅ PA-01 — RESUELTA (2026-08-13)
 
-> **Esta pregunta la tiene que responder una persona. No la resolvió este roadmap y no la puede resolver un agente.**
+> Cerrada por [`ADR-000 · Precedencia documental`](decisions/ADR-000-precedencia-documental.md). Decisores: Tech Lead + Product Manager.
 
-Los **11 documentos fuente dicen "Versión 1.0 — Mayo de 2026"**. La fecha no desempata ninguna contradicción. Y varias de las 14 inconsistencias bloqueantes tienen la forma exacta de una **decisión revisada que nunca se propagó al resto del corpus**:
+### Lo que se decidió
 
-| Señal | Parece haber cambiado de | a | Documentos que no se enteraron |
-|---|---|---|---|
-| Moneda de facturación (`IN-04`) | ARS 45.000 / 95.000 / 195.000 | USD 49 / 149 / 399 | `spec-tecnica` (`price_ars`, sin columna de moneda), `mejoras-y-saas` |
-| Umbral de cobertura (`IN-22`) | 80 % (constitución, vinculante) | 70 % líneas / 60 % branches | `constitucion` Art. 2, `plan-implementacion` |
-| SLA de disponibilidad (`IN-31`) | 99.9 / 99.9 / 99.95 | 99.0 / 99.5 / 99.9 | `spec-tecnica` §6.2 y §9.7 |
-| Latencia p95 de búsqueda (`IN-23`) | < 500 ms | < 2.000 ms | `constitucion` Art. 4, `spec-tecnica` §6.1 |
+**Jerarquía por autoridad, con competencia por dominio.** La fecha de creación **no se usa como desempate en ningún caso**.
 
-**Lo que hay que decidir**: (a) el **orden de precedencia** entre documentos cuando se contradicen, y (b) **cuál se escribió último**. La convención sugerida —a confirmar— es `constitucion` > `spec-tecnica` > `plan-implementacion` > planes especializados > `manual-usuario` / `plan-gtm` / `brand-book`.
+| Nivel | Documentos | Autoridad |
+|---|---|---|
+| **N0** | `constitucion` | Principios, reglas vinculantes y **glosario canónico**. Gana siempre. Solo cambia por enmienda del Artículo 8. |
+| **N1** | `spec-tecnica` + ADRs | El **"cómo"** técnico. Autoridad delegada explícitamente por N0. |
+| **N2** | `plan-implementacion` | Orden y descomposición en `T-XXX`. **No decide diseño.** |
+| **N3** | `plan-seguridad`, `plan-testing`, `plan-sre` | **Prevalecen sobre N1 dentro de su dominio propio**, nunca sobre N0. Cada aplicación se registra como ADR. |
+| **N4** | `plan-gtm`, `manual-usuario`, `brand-book`, `mejoras-y-saas`, `historias-usuario` | **No normativos.** Insumo e intención. |
 
-**Decisor**: Tech Lead + Product Manager. **Bloquea**: todo. Cada `IN-XX` bloqueante de abajo se resuelve *aplicando* la respuesta a `PA-01`; sin ella, cada resolución individual es una conjetura.
+### Por qué la recencia quedó descartada
 
-> **Regla operativa**: si `PA-01` sigue abierta, resolvé cada `IN-XX` **explícitamente y por escrito** en el `proposal.md` del change que lo posee, y registrá la decisión como ADR. Nunca lo resuelvas por omisión eligiendo el primer documento que leíste.
+Este roadmap asumía que *"los 11 documentos dicen Versión 1.0 — Mayo de 2026, la fecha no desempata"*. Eso es lo que dice el **texto**. Los metadatos internos de los `.docx` (`docProps/core.xml`) **sí discriminan al milisegundo** — y dicen otra cosa:
 
-Ver [`knowledge-base/10_preguntas_abiertas.md`](knowledge-base/10_preguntas_abiertas.md) §Parte 3 y `SU-12` en [`knowledge-base/09_decisiones_y_supuestos.md`](knowledge-base/09_decisiones_y_supuestos.md).
+- Los 11 se generaron en **una sola sesión de 8 h 41 min** (6-may-2026, 14:31 → 23:12 ART).
+- Todos con `cp:revision = 1` y `created == modified`: **nunca editados después de generarse**.
+- El orden es de **generación**, no de deliberación. Aplicarlo haría ganar a `plan-gtm` (01:18) sobre `spec-tecnica` (18:17), y a `manual-usuario` (02:12) sobre la constitución (18:05).
+
+**Corolario que corrige la tabla que estaba acá**: las cuatro "señales de decisión revisada" (`IN-04`, `IN-22`, `IN-31`, `IN-23`) **no son revisiones que no se propagaron**. Son **deriva de generación** — cada documento se produjo sin verificar consistencia contra los anteriores. No hay una versión posterior que recuperar; hay que decidir cada caso.
+
+### Efecto inmediato sobre los bloqueantes
+
+| ID | Antes | Ahora |
+|---|---|---|
+| `IN-22` | 80 % vs 70/60 | ✅ **80 %** — N3 no gana sobre N0. Se enmienda el plan de testing. |
+| `IN-29` | Numeración de ADRs en disputa | ✅ **Manda la spec** (N1 > N2). Ejecuta **C-01**. |
+| `IN-31` | 99.9/99.9/99.95 vs 99.0/99.5/99.9 | ✅ **99.0 / 99.5 / 99.9** — competencia de dominio de SRE. Compatible con el SLO de 99.7 %. |
+| `IN-01` | 3 roles ES vs 4 roles EN | ⚠️ El glosario N0 es canónico ⇒ requiere **enmienda del Artículo 8**, no una resolución. **Abrir ya** (5 días hábiles) o bloquea **C-02**. |
+| `IN-03`, `IN-04` | `mejoras-y-saas` vs `plan-gtm` | ⚠️ **Ambos son N4 — empate de nivel, la regla es muda.** Escala a Dirección. |
+| `IN-07` | `NOT NULL` (N0+N1) vs nullable (N2) | ⚠️ Ganan N0/N1, pero un 0 km no tiene patente ⇒ decisión de negocio + posible enmienda. |
+| `IN-13` | 5 años (N1, invoca ley) vs 24 meses (N3) | ⚠️ La regla no zanja una obligación legal externa. **Legal + Tech Lead**. |
+
+> **Regla operativa vigente**: todo desvío de N1 por competencia de dominio **se registra como ADR** en [`decisions/`](decisions/). Sin ADR es decisión implícita y, por el Principio 5 de la constitución, **no es vinculante**. Nunca resuelvas un `IN-XX` por omisión eligiendo el primer documento que leíste.
+
+Ver [`knowledge-base/10_preguntas_abiertas.md`](knowledge-base/10_preguntas_abiertas.md) §Parte 3 y `SU-12` (validado) en [`knowledge-base/09_decisiones_y_supuestos.md`](knowledge-base/09_decisiones_y_supuestos.md).
 
 ---
 
@@ -300,7 +321,7 @@ Tres observaciones sobre la cadena:
 | 14 | — | — | **C-31** whatsapp-web-inbox-y-templates |
 | 15 | **C-32** whatsapp-crm-integracion-y-cierre | — | — |
 
-**Paso 4 es el cuello de botella** (⚠️): B y C quedan sin trabajo desbloqueado. Aprovechalo para el trabajo humano que el roadmap no puede hacer solo: cerrar `PA-01`, conseguir el contrato del portal (**R-1**), redactar la matriz RBAC (**R-2**) y enumerar los primitivos del design system (**R-4**).
+**Paso 4 es el cuello de botella** (⚠️): B y C quedan sin trabajo desbloqueado. Aprovechalo para el trabajo humano que el roadmap no puede hacer solo: abrir la **enmienda del Art. 8 para `IN-01`** (`PA-01` ya está cerrada por `ADR-000`), conseguir el contrato del portal (**R-1**), redactar la matriz RBAC (**R-2**) y enumerar los primitivos del design system (**R-4**).
 
 **Pasos 9, 10, 12 y 14-15**: los huecos de B y C son el momento de subdividir el change del agente A o de adelantar documentación y runbooks.
 
@@ -1084,11 +1105,11 @@ Tres observaciones sobre la cadena:
 
 Tres cosas que **no** son código y que conviene arrancar ya, porque bloquean o encarecen el roadmap:
 
-1. **Responder `PA-01`** (orden de precedencia entre documentos). Gobierna la resolución de las 14 inconsistencias bloqueantes. Decisores: Tech Lead + Product Manager.
+1. ~~**Responder `PA-01`**~~ ✅ **HECHO** — [`ADR-000`](decisions/ADR-000-precedencia-documental.md), 2026-08-13. **Reemplazado por**: abrir la **enmienda del Artículo 8 para `IN-01`** (catálogo de roles). El procedimiento exige 5 días hábiles de discusión, así que empezarla tarde bloquea **C-02**. Decisores: Tech Lead + equipo.
 2. **Conseguir el contrato de la API del portal deRuedas** (**R-1**). Bloquea 15 tareas y está sobre el camino crítico. Arrancar la conversación con el equipo del portal ahora, no en el paso 8.
-3. **Escribir la matriz RBAC canónica** (**R-2**). C-02 la necesita para `rbac.py` y el plan de testing la convierte en quality gate bloqueante de CI.
+3. **Escribir la matriz RBAC canónica** (**R-2**). C-02 la necesita para `rbac.py` y el plan de testing la convierte en quality gate bloqueante de CI. Depende del punto 1.
 
-**Primer change**: `C-01` (`foundation-setup`) — resolvé antes `IN-22` (umbral de cobertura) e `IN-29` (numeración de ADRs).
+**Primer change**: `C-01` (`foundation-setup`) — `IN-22` (80 %) e `IN-29` (manda la spec) ya vienen resueltos por `ADR-000`; C-01 los **ejecuta**, no los decide.
 
 ```
 /opsx:propose C-01-foundation-setup

@@ -59,7 +59,26 @@ Todo en [`knowledge-base/`](knowledge-base/) está **derivado** de los 11 docume
 | [14_pricing_y_gtm.md](knowledge-base/14_pricing_y_gtm.md) | Los **dos** modelos de pricing incompatibles |
 | [15_marca_y_ux.md](knowledge-base/15_marca_y_ux.md) | Paleta, tipografía, tono de voz, accesibilidad |
 
-**Precedencia entre fuentes** (a confirmar en `PA-01`): `constitucion` > `spec-tecnica` > `plan-implementacion` > planes especializados > `manual-usuario` / `plan-gtm` / `brand-book`.
+### Precedencia entre fuentes — vinculante
+
+Fijada por [`ADR-000`](decisions/ADR-000-precedencia-documental.md) (resuelve `PA-01`). **Jerarquía por autoridad, con competencia por dominio:**
+
+| Nivel | Documentos | Autoridad |
+|---|---|---|
+| **N0** | `constitucion` | Principios, reglas vinculantes y **glosario canónico**. Gana siempre, sobre todos los niveles. |
+| **N1** | `spec-tecnica` + ADRs | El **"cómo"** técnico. Autoridad delegada explícitamente por N0 (Principio 4). |
+| **N2** | `plan-implementacion` | Orden y descomposición en tareas `T-XXX`. **No decide diseño.** |
+| **N3** | `plan-seguridad`, `plan-testing`, `plan-sre` | **Prevalecen sobre N1 dentro de su dominio propio** (seguridad / testing / SLOs-runbooks), nunca sobre N0. |
+| **N4** | `plan-gtm`, `manual-usuario`, `brand-book`, `mejoras-y-saas`, `historias-usuario` | **No normativos.** Insumo e intención comercial. |
+
+Cuatro reglas que van con eso:
+
+1. **La recencia NO desempata.** Los 11 documentos se generaron en una sola sesión de 8 h 41 min; sus timestamps ordenan por generación, no por deliberación. Usarlos invertiría la autoridad real.
+2. **N0 nunca pierde.** Si lo correcto contradice a N0, no se "resuelve": se **enmienda** por el Artículo 8 (5 días hábiles de discusión). Distinto procedimiento, distinto decisor.
+3. **Todo desvío de N1 por competencia de dominio se registra como ADR.** Sin ADR es decisión implícita y, por el Principio 5, **no es vinculante**.
+4. **Empate de nivel ⇒ la regla es muda** → escala al decisor humano de `PA-XX`. No se elige por antigüedad ni por especificidad.
+
+Los ADRs nuevos del proyecto viven en [`decisions/`](decisions/) — `docs/` es corpus fuente inmutable y `knowledge-base/` es material derivado.
 
 `reference/` contiene material del **método** SDD, no del producto. No es fuente de verdad.
 

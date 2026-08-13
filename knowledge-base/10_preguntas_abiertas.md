@@ -13,7 +13,21 @@
 > - 🔴 **BLOQUEANTE** — hay que decidir *antes* de escribir código. Dos documentos vinculantes dicen cosas incompatibles sobre el mismo artefacto.
 > - 🟡 **No bloqueante** — se puede avanzar eligiendo una opción y documentándola; el costo de equivocarse es reversible.
 >
-> Convención de precedencia sugerida (a confirmar, ver `PA-01`): `constitucion` > `spec-tecnica` > `plan-implementacion` > planes especializados > `manual-usuario` / `plan-gtm` / `brand-book`.
+> ✅ **Precedencia — RESUELTA.** `PA-01` quedó cerrada por [`ADR-000`](../decisions/ADR-000-precedencia-documental.md) (2026-08-13): **jerarquía por autoridad con competencia por dominio**.
+>
+> | Nivel | Documentos | Autoridad |
+> |---|---|---|
+> | **N0** | `constitucion` | Principios, reglas vinculantes y **glosario canónico**. Gana siempre. Solo cambia por enmienda del Artículo 8. |
+> | **N1** | `spec-tecnica` + ADRs | El "cómo" técnico. Autoridad delegada explícitamente por N0. |
+> | **N2** | `plan-implementacion` | Orden y descomposición en tareas `T-XXX`. No decide diseño. |
+> | **N3** | `plan-seguridad`, `plan-testing`, `plan-sre` | **Prevalecen sobre N1 dentro de su dominio propio**, nunca sobre N0. Cada aplicación se registra como ADR. |
+> | **N4** | `plan-gtm`, `manual-usuario`, `brand-book`, `mejoras-y-saas`, `historias-usuario` | No normativos. Insumo e intención. |
+>
+> ⚠️ **La recencia NO es criterio de desempate.** Los metadatos de los `.docx` originales muestran que los 11 documentos se generaron en una sola sesión de 8 h 41 min (6-may-2026, 14:31→23:12 ART), con `revision=1` y sin edición posterior. El orden de los timestamps es de **generación**, no de deliberación: aplicarlo haría ganar a `plan-gtm` sobre `spec-tecnica`. Ver `ADR-000` §Contexto.
+>
+> **Corolario**: las 54 inconsistencias **no son decisiones revisadas que no se propagaron** — son deriva de generación. No hay respuesta correcta oculta que recuperar; hay que decidir.
+>
+> **Empate de nivel ⇒ la regla es muda** y la contradicción escala al decisor humano de la Parte 3.
 
 ---
 
@@ -440,20 +454,20 @@ El manual **no cubre permutas** (épica E6, 7 HU) ni **financiación** (épica E
 
 | Prioridad | Pregunta | Bloquea | Decisor |
 |---|---|---|---|
-| **Crítica** | `PA-01` — ¿Cuál es el orden de precedencia entre documentos cuando se contradicen? ¿Y cuál se escribió último? Todos dicen "Versión 1.0 — Mayo de 2026", así que la fecha no desempata. **Esta pregunta gobierna la resolución de todas las demás** (ver `SU-12`). | Todo | Tech Lead + Product Manager |
+| ✅ ~~Crítica~~ | ~~`PA-01` — ¿Cuál es el orden de precedencia entre documentos cuando se contradicen?~~ **RESUELTA** por [`ADR-000`](../decisions/ADR-000-precedencia-documental.md) (2026-08-13): jerarquía N0→N4 con competencia por dominio; recencia descartada por evidencia de los metadatos `.docx`. `SU-12` validado. Resuelve mecánicamente `IN-22`, `IN-29` e `IN-31`. | ~~Todo~~ | Tech Lead + Product Manager |
 | **Crítica** | `PA-02` — ¿4 roles o 3? ¿`super_admin` va en `user_role_enum`, en tabla aparte, o solo en Keycloak? (`IN-01`, `IN-02`) | Migración inicial, RBAC, tests de autorización | Tech Lead |
 | **Crítica** | `PA-03` — ¿La facturación es en ARS o en USD? (`IN-04`) | Esquema de `plans`/`subscriptions`, integración con Mercado Pago, todo el GTM | Dirección |
 | **Crítica** | `PA-04` — ¿Cuáles son los límites definitivos por plan, y se agrega la cuota de mensajes de WhatsApp al modelo? (`IN-03`, `IN-50`) | `PlanLimitsService`, seed de `plans` | Product Manager + Dirección |
 | **Crítica** | `PA-05` — ¿`audit_logs` se retiene 24 meses o 5 años? ¿Qué obligación legal aplica realmente? (`IN-13`, `IN-35`, `IN-49`) | Particionado, costo de storage, compliance | Legal + Tech Lead |
 | **Alta** | `PA-06` — ¿Existe una tabla canónica de variables de entorno? Ningún documento la tiene; la de [08_arquitectura_propuesta.md](08_arquitectura_propuesta.md) está **derivada del stack**, no transcripta. | Setup de entornos, Terraform | Tech Lead |
 | **Alta** | `PA-07` — ¿Cuántas etapas trae el pipeline por defecto y cómo se llaman? (`IN-10`) | Seed de onboarding de cada tenant | Product Manager |
-| **Alta** | `PA-08` — ¿Cuál es el umbral de cobertura del quality gate, y se enmienda la constitución o el plan de testing? (`IN-22`) | CI (bloquea merges) | Tech Lead (requiere enmienda formal) |
-| **Alta** | `PA-09` — ¿El SLA es 99.0/99.5/99.9 o 99.9/99.9/99.95? El SLO interno (99.7 %) es incompatible con la segunda opción. (`IN-31`) | Contratos, créditos, alertas | Dirección + SRE |
+| ✅ ~~Alta~~ | ~~`PA-08` — ¿Cuál es el umbral de cobertura del quality gate?~~ **RESUELTA** por `ADR-000`: **80 %** — N3 (`plan-testing`) no gana sobre N0 ni en su dominio propio. Se enmienda el **plan de testing**, no la constitución. (`IN-22`) | CI (bloquea merges) | Tech Lead |
+| ✅ ~~Alta~~ | ~~`PA-09` — ¿El SLA es 99.0/99.5/99.9 o 99.9/99.9/99.95?~~ **RESUELTA** por `ADR-000`: **99.0 / 99.5 / 99.9** — competencia de dominio, disponibilidad es dominio propio de `plan-sre` (N3 > N1). Compatible con el SLO interno de 99.7 %. (`IN-31`) | Contratos, créditos, alertas | Dirección + SRE |
 | **Alta** | `PA-10` — ¿Los objetivos de latencia de la constitución son SLOs o son objetivos de ingeniería con margen? (`IN-23`) | Alertas, tests de carga, Definición de Terminado | Tech Lead + SRE |
 | **Alta** | `PA-11` — ¿Fases o Olas? Falta la tabla de equivalencia y las fechas de calendario del plan de implementación. (`IN-05`, `IN-38`) | Roadmap, compromisos comerciales | Product Manager |
 | **Alta** | `PA-12` — ¿Existe signup público self-service en el MVP? El GTM lo vende; los planes técnicos lo postergan. (`IN-14`) | Funnel comercial, alcance del MVP | Product Manager |
 | **Alta** | `PA-13` — ¿`domain_plate` es obligatorio? ¿Qué pasa con un 0 km o un usado recién recibido en permuta? (`IN-07`) | Migración de `vehicles` | Product Manager + Tech Lead |
-| **Alta** | `PA-14` — ¿Se corrige la numeración de ADRs del plan de implementación? (`IN-29`) | Trazabilidad de las 194 tareas | Tech Lead |
+| ✅ ~~Alta~~ | ~~`PA-14` — ¿Se corrige la numeración de ADRs del plan de implementación?~~ **RESUELTA** por `ADR-000`: **sí** — manda la numeración de `spec-tecnica` (N1 > N2). El plan solo referencia; la spec contiene. Ejecuta **C-01**. (`IN-29`) | Trazabilidad de las 194 tareas | Tech Lead |
 | **Media** | `PA-15` — ¿Cuál es el ICP real: 1-4 vendedores o 3-15? (`IN-36`) | Diseño de UI, pricing, mensaje comercial | Product Manager + Marketing |
 | **Media** | `PA-16` — ¿Cuál es el límite duro de fotos por vehículo, separado de la recomendación de buena práctica? (`IN-09`) | Validación en `stock`, costo de storage | Product Manager |
 | **Media** | `PA-17` — ¿Se distinguen "lead nuevo sin primer contacto" y "lead sin actividad en su etapa" como dos alertas distintas? (`IN-20`) | Crons de CRM | Product Manager |

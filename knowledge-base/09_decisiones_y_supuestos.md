@@ -209,8 +209,14 @@ Ninguno de estos está escrito como supuesto en las fuentes. Son las condiciones
 **Riesgo si es falso**: erosión del ARPU real, o migración forzada a USD — que es justamente lo que hace el plan GTM, generando la contradicción `IN-04`.
 **Cómo validar**: la contradicción entre ARS y USD en los dos documentos comerciales **sugiere que este supuesto ya fue revisado sin actualizar toda la documentación**. Requiere confirmación explícita.
 
-### SU-12 — El corpus documental está en el mismo momento de madurez
+### SU-12 — El corpus documental está en el mismo momento de madurez ✅ *[VALIDADO — 2026-08-13]*
 **Supuesto** (metadocumental): los 11 documentos, todos fechados "Versión 1.0 — Mayo de 2026", describen el mismo producto en el mismo estado.
 **Origen**: las fechas de versión idénticas en todos los documentos.
 **Riesgo si es falso**: las contradicciones catalogadas en [10_preguntas_abiertas.md](10_preguntas_abiertas.md) no son errores sino **versiones sucesivas del mismo diseño que no se sincronizaron**. En ese caso, resolverlas requiere saber cuál documento se escribió último, no cuál está "bien".
 **Cómo validar**: revisar el historial de los `.docx` originales o preguntar a los autores. **Esta validación debería hacerse antes de resolver cualquier otra inconsistencia**, porque cambia el criterio de desempate.
+
+**✅ Resultado de la validación** — se extrajo `docProps/core.xml` de los 13 `.docx` originales. El supuesto **queda CONFIRMADO**: los 11 documentos vinculantes se generaron en una única sesión de 8 h 41 min (6-may-2026, 14:31 → 23:12 ART), todos con `cp:revision = 1` y `created == modified`, es decir, **nunca editados después de generarse**. El único `.docx` con edición humana real es `justificacion.docx`, que no es vinculante.
+
+**Consecuencia (contraintuitiva)**: al estar confirmado el supuesto, **la recencia queda descartada como criterio de desempate**. Los timestamps ordenan por *generación*, no por *deliberación* — y los últimos por fecha (`plan-gtm` 01:18, `manual-usuario` 02:12) son los menos autoritativos por contenido. El escenario de riesgo descrito arriba **no se cumple**: las contradicciones son deriva de generación, no revisiones sin propagar. No hay respuesta oculta que recuperar por arqueología; cada una exige una decisión.
+
+Formalizado en [`ADR-000`](../decisions/ADR-000-precedencia-documental.md), que también cierra `PA-01`.
