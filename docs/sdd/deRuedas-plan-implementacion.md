@@ -8745,6 +8745,25 @@ Las tareas referencian las secciones de la Especificación Técnica de Diseño c
 | ADR-008 Storage | T-034, T-089 |
 | ADR-009 Event bus | T-016 |
 
+<!-- ══════════════ ANOTACIÓN DEL PROYECTO — NO FORMA PARTE DEL DOCUMENTO ORIGINAL ══════════════ -->
+
+> ⚠️ **Anotación editorial (2026-08-13, change `C-01`).** El texto de arriba es el original y **no fue modificado** — `docs/sdd/` es corpus fuente inmutable. Esta nota se agrega para que la corrección sea visible desde acá.
+>
+> **Dos anclas de este índice apuntan al ADR equivocado.** La numeración canónica es la de `deRuedas-spec-tecnica.md` §1146–1386, que es quien **contiene** los ADRs; este plan solo los referencia. Manda la spec ([`ADR-000`](../adr/ADR-000-precedencia-documental.md), N1 > N2).
+>
+> | Dice acá | Es en realidad | Corrección |
+> |---|---|---|
+> | `ADR-002 Migrations` | `ADR-002` es **PostgreSQL** como base principal | Etiqueta equivocada; el mapeo a `T-007` y migraciones se mantiene |
+> | `ADR-005 OpenSearch` | `ADR-005` es **React Native con Expo**; OpenSearch es `ADR-011` | `T-098` y `T-099` anclan a **`ADR-011`** |
+>
+> Alcanza además a los cuerpos de `T-098` (*"SDD ADR-005"*) y `T-099` (*"anchor a ADR-005"*): en ambos, léase **`ADR-011`**.
+>
+> Este índice es **parcial**: cubre 7 de los 12 ADRs. `ADR-001`, `ADR-003`, `ADR-010`, `ADR-011` y `ADR-012` no se referencian en ninguna parte del plan.
+>
+> 📄 Inventario completo, evidencia y fundamento: [`ADR-018 — Anclas de ADR del plan de implementación`](../adr/ADR-018-anclas-de-adr-del-plan-de-implementacion.md). Cierra `IN-29` / `PA-14`.
+
+<!-- ══════════════════════════════ FIN DE LA ANOTACIÓN ══════════════════════════════ -->
+
 **7.3 Trazabilidad tareas ↔ Constitución**
 
 Los principios y artículos de la Constitución se aplican transversalmente; algunos se materializan en tareas específicas que actúan como guardarraíl o verificación. La siguiente tabla destaca esas tareas.

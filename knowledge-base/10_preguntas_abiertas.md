@@ -3,7 +3,7 @@
 > Este archivo es el **resultado del chequeo de consistencia cruzada** sobre los 11 documentos fuente (~19.900 líneas, leídos íntegramente).
 > Se documentaron **54 inconsistencias reales**: **14 bloqueantes** (Parte 1) + **40 no bloqueantes** (Parte 2). Bloqueante significa que no se puede escribir la migración, el enum, el quality gate o el contrato de API correspondiente sin una decisión humana previa.
 >
-> **Bloqueantes (14):** ~~`IN-01`~~ ✅, ~~`IN-02`~~ ✅, `IN-03`, `IN-04`, `IN-05`, `IN-06`, `IN-07`, `IN-10`, `IN-12`, `IN-13`, ~~`IN-22`~~ ✅, `IN-23`, `IN-29`, ~~`IN-31`~~ ✅. **Quedan 10 abiertos.**
+> **Bloqueantes (14):** ~~`IN-01`~~ ✅, ~~`IN-02`~~ ✅, `IN-03`, `IN-04`, `IN-05`, `IN-06`, `IN-07`, `IN-10`, `IN-12`, `IN-13`, ~~`IN-22`~~ ✅, `IN-23`, ~~`IN-29`~~ ✅, ~~`IN-31`~~ ✅. **Quedan 9 abiertos.**
 >
 > ✅ **Cerrados al 13-ago-2026, con el ADR que los cierra:**
 >
@@ -14,6 +14,7 @@
 > | `IN-16` · `PA-20` (orquestación) | [`ADR-015`](../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) |
 > | **`IN-22`** · `PA-08` | [`ADR-014`](../docs/adr/ADR-014-umbrales-de-cobertura.md) |
 > | **`PA-06`** · **`R-3`** | [`ADR-013`](../docs/adr/ADR-013-variables-de-entorno.md) |
+> | **`IN-29`** · `PA-14` | [`ADR-018`](../docs/adr/ADR-018-anclas-de-adr-del-plan-de-implementacion.md) |
 > | `PA-01` · `IN-31` · `SU-12` | [`ADR-000`](../docs/adr/ADR-000-precedencia-documental.md) |
 >
 > ⚠️ Las secciones de `IN-01`, `IN-02` e `IN-31` más abajo **todavía no llevan su marca de resuelto** — están cerradas por ADR, pero el texto de la Parte 1 conserva la redacción original. Leer siempre esta tabla primero.
@@ -225,7 +226,9 @@ Notablemente, el plan de implementación fija objetivos *aún más estrictos* qu
 
 ---
 
-## 🔴 IN-29 — La numeración de ADRs no coincide entre la spec y el plan de implementación
+## ✅ ~~🔴 IN-29~~ — La numeración de ADRs no coincide entre la spec y el plan de implementación — **RESUELTA**
+
+> ✅ **Cerrada el 13-ago-2026** por [`ADR-018`](../docs/adr/ADR-018-anclas-de-adr-del-plan-de-implementacion.md): manda la numeración de `spec-tecnica` (N1 > N2). Dos anclas mal apuntadas — `ADR-002` está etiquetado "Migrations" cuando es **PostgreSQL**, y `ADR-005` está usado como "OpenSearch" cuando es **React Native con Expo** (OpenSearch es `ADR-011`). El plan **no se edita**: lleva una anotación delimitada que remite al ADR. Lo que sigue es el registro del conflicto original.
 
 | ADR | `spec-tecnica.md` §5 | `plan-implementacion.md` (anclas de tareas) |
 |---|---|---|
@@ -483,7 +486,7 @@ El manual **no cubre permutas** (épica E6, 7 HU) ni **financiación** (épica E
 | **Alta** | `PA-11` — ¿Fases o Olas? Falta la tabla de equivalencia y las fechas de calendario del plan de implementación. (`IN-05`, `IN-38`) | Roadmap, compromisos comerciales | Product Manager |
 | **Alta** | `PA-12` — ¿Existe signup público self-service en el MVP? El GTM lo vende; los planes técnicos lo postergan. (`IN-14`) | Funnel comercial, alcance del MVP | Product Manager |
 | **Alta** | `PA-13` — ¿`domain_plate` es obligatorio? ¿Qué pasa con un 0 km o un usado recién recibido en permuta? (`IN-07`) | Migración de `vehicles` | Product Manager + Tech Lead |
-| ✅ ~~Alta~~ | ~~`PA-14` — ¿Se corrige la numeración de ADRs del plan de implementación?~~ **RESUELTA** por `ADR-000`: **sí** — manda la numeración de `spec-tecnica` (N1 > N2). El plan solo referencia; la spec contiene. Ejecuta **C-01**. (`IN-29`) | Trazabilidad de las 194 tareas | Tech Lead |
+| ✅ ~~Alta~~ | ~~`PA-14` — ¿Se corrige la numeración de ADRs del plan de implementación?~~ **RESUELTA** por `ADR-000` y **ejecutada** por [`ADR-018`](../docs/adr/ADR-018-anclas-de-adr-del-plan-de-implementacion.md) (2026-08-13): manda la numeración de `spec-tecnica` (N1 > N2). El plan solo referencia; la spec contiene. Las dos anclas divergentes quedan inventariadas con archivo y línea. (`IN-29`) | Trazabilidad de las 194 tareas | Tech Lead |
 | **Media** | `PA-15` — ¿Cuál es el ICP real: 1-4 vendedores o 3-15? (`IN-36`) | Diseño de UI, pricing, mensaje comercial | Product Manager + Marketing |
 | **Media** | `PA-16` — ¿Cuál es el límite duro de fotos por vehículo, separado de la recomendación de buena práctica? (`IN-09`) | Validación en `stock`, costo de storage | Product Manager |
 | **Media** | `PA-17` — ¿Se distinguen "lead nuevo sin primer contacto" y "lead sin actividad en su etapa" como dos alertas distintas? (`IN-20`) | Crons de CRM | Product Manager |

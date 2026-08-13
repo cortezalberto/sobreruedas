@@ -16,7 +16,8 @@ Precede a todo lo demás: el §4.1 no se puede materializar mientras `docs/` est
 - [x] 1.6 Verificar automáticamente que no queda ningún enlace markdown roto en el repositorio
 - [x] 1.7 Escribir `docs/adr/ADR-013-variables-de-entorno.md` con la tabla canónica de `design.md` D-2 (cierra `R-3` / `PA-06`)
 - [x] 1.8 Escribir `docs/adr/ADR-014-umbrales-de-cobertura.md` registrando 80 % líneas / 60 % ramas y la enmienda al plan de testing (cierra `IN-22`)
-- [ ] 1.9 Corregir en `docs/sdd/deRuedas-plan-implementacion.md` las anclas divergentes de `ADR-002`, `ADR-005` y `ADR-011` según `design.md` D-4 (cierra `IN-29`)
+- [x] 1.9 Corregir las anclas divergentes de `ADR-002`, `ADR-005` y `ADR-011` según `design.md` D-4 (cierra `IN-29`)
+  > **Desvío deliberado.** La tarea pedía editar `docs/sdd/deRuedas-plan-implementacion.md`, pero eso rompe la inmutabilidad del corpus fuente (`CLAUDE.md`) y el precedente de `ADR-016`. Se resolvió con [`ADR-018`](../../../docs/adr/ADR-018-anclas-de-adr-del-plan-de-implementacion.md) como registro normativo **más** una anotación delimitada al pie del índice §7.2 del plan, que no altera ni una palabra del texto original. Aprobado por el Tech Lead el 13-ago-2026.
 - [x] 1.10 Corregir `ENVIRONMENT` → `APP_ENV` en la tabla de `knowledge-base/08_arquitectura_propuesta.md`
 
 ## 2. Estructura del monorepo — `T-001`
