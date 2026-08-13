@@ -25,20 +25,27 @@ Precede a todo lo demás: el §4.1 no se puede materializar mientras `docs/` est
 - [x] 2.1 Crear el árbol completo del §4.1 con `.gitkeep` en los directorios vacíos
 - [x] 2.2 Escribir el `README.md` raíz: descripción, enlaces al cuerpo SDD y cómo levantar el entorno
 - [x] 2.3 Extender el `.gitignore` para Python (`__pycache__`, `.venv`, `.pytest_cache`), Node (`node_modules`, `.next`), entornos (`.env`, `.env.local`) e IDEs
-- [ ] 2.4 Escribir `.env.example` con las ~34 variables de `ADR-013`, valores ficticios y comentarios — sin un solo valor real
+- [x] 2.4 Escribir `.env.example` con las ~34 variables de `ADR-013`, valores ficticios y comentarios — sin un solo valor real
 - [x] 2.5 Verificar el árbol con `tree -L 3` contra el §4.1, entrada por entrada
 
 ## 3. Entorno local — `T-002`
 
-- [ ] 3.1 Escribir `docker-compose.yml` con `postgres`, `redis`, `opensearch`, `keycloak`, `minio`, `mailhog`, `backend`, `worker` y `frontend-web`
-- [ ] 3.2 Configurar el init de PostgreSQL 16 habilitando `pgcrypto`, `pg_trgm`, `postgis` y `uuid-ossp`
-- [ ] 3.3 Versionar el archivo de importación del realm `deruedas-dev` de Keycloak
-- [ ] 3.4 Configurar la creación automática del bucket `deruedas-media` en MinIO al arrancar
-- [ ] 3.5 Definir volúmenes nombrados (`pg_data`, `redis_data`, `minio_data`) y las redes `default` y `observability`
-- [ ] 3.6 Escribir `backend/Dockerfile` y `frontend-web/Dockerfile` con hot-reload por volume mount
-- [ ] 3.7 Escribir `docker-compose.test.yml` con servicios efímeros, sin volúmenes persistentes
-- [ ] 3.8 Escribir `tools/check-services.sh` que pingea cada servicio y reporta OK/FAIL
-- [ ] 3.9 Verificar que `docker compose up -d` deja todos los servicios `healthy` en menos de tres minutos
+- [x] 3.1 Escribir `docker-compose.yml` con `postgres`, `redis`, `opensearch`, `keycloak`, `minio`, `mailhog`, `backend`, `worker` y `frontend-web`
+- [x] 3.2 Configurar el init de PostgreSQL 16 habilitando `pgcrypto`, `pg_trgm`, `postgis` y `uuid-ossp`
+- [x] 3.3 Versionar el archivo de importación del realm `deruedas-dev` de Keycloak
+- [x] 3.4 Configurar la creación automática del bucket `deruedas-media` en MinIO al arrancar
+- [x] 3.5 Definir volúmenes nombrados (`pg_data`, `redis_data`, `minio_data`) y las redes `default` y `observability`
+- [x] 3.6 Escribir `backend/Dockerfile` y `frontend-web/Dockerfile` con hot-reload por volume mount
+- [x] 3.7 Escribir `docker-compose.test.yml` con servicios efímeros, sin volúmenes persistentes
+- [x] 3.8 Escribir `tools/check-services.sh` que pingea cada servicio y reporta OK/FAIL
+- [x] 3.9 Verificar que `docker compose up -d` deja todos los servicios `healthy` en menos de tres minutos
+  > **Verificado el 13-ago-2026 con Docker 29.4.0.** Arranque en frío hasta los 6 servicios `healthy` más el bucket creado: **99 s** contra un presupuesto de 180 s. Los criterios de done de `T-002` se comprobaron uno por uno: extensiones `pgcrypto` 1.3, `pg_trgm` 1.6, `postgis` 3.4.3 y `uuid-ossp` 1.1 presentes; realm `deruedas-dev` publicando su configuración OIDC; bucket `deruedas-media` creado al arrancar. `tools/check-services.sh` da 0 fallas, y se validó contra servicios caídos a propósito: reporta `[FAIL]` con detalle y sale con código 1.
+  >
+  > **Alcance de lo verificado**: los **6 servicios de infraestructura**. `backend`, `worker` y `frontend-web` no se pueden construir todavía —les falta `pyproject.toml` (`T-005`) y `package.json` (`T-006`)— así que el criterio *"todos los servicios"* de `T-002` no es alcanzable en el orden en que el plan ordena las tareas. Se completa al cerrar los bloques 5 y 7.
+  >
+  > **Dos defectos reales encontrados y corregidos al levantarlo**, ninguno visible por inspección: `postgres:16-alpine` **no trae PostGIS** (se pasó a `postgis/postgis:16-3.4-alpine`), y Keycloak **rechaza campos desconocidos** en el JSON del realm, así que la clave `_comentario` hacía fallar el arranque entero (la documentación se movió a `infra/local/keycloak/README.md`).
+  >
+  > **Puertos del host configurables**: `5432` estaba ocupado por un contenedor de otro proyecto en esta máquina. Los mapeos pasaron a `${VAR:-default}`, manteniendo los defaults que pide `T-002`. La verificación corrió con `POSTGRES_PORT=5442`, así que el criterio literal *"Postgres accesible en localhost:5432"* no se pudo comprobar en esta máquina — lo impide un factor externo, no el compose.
 
 ## 4. Contrato de configuración — `T-004`
 

@@ -1,0 +1,312 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# deRuedas Gestion — entorno de desarrollo local completo (T-002)
+#
+#   docker compose up -d        levanta todo
+#   tools/check-services.sh     verifica que cada servicio responda
+#   docker compose down         apaga, CONSERVANDO los datos
+#   docker compose down -v      apaga y DESTRUYE los volumenes
+#
+# Kubernetes empieza en staging; en local es Docker Compose y nada mas
+# (design.md D-7). Levantar un cluster para desarrollar seria complejidad sin
+# contrapartida.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# SOBRE LAS DIRECCIONES Y EL .env
+#
+# .env.example usa `localhost` porque es lo que sirve cuando corres el backend
+# DIRECTO EN TU MAQUINA contra estos contenedores.
+#
+# Adentro de la red de compose, `localhost` es el propio contenedor. Por eso los
+# servicios de aca reciben las direcciones por NOMBRE DE SERVICIO (postgres,
+# redis, minio...), fijadas explicitamente mas abajo. No es que se ignore tu
+# .env: son datos internos de la red, no configuracion tuya.
+#
+# Lo que SI sale de .env son los secretos, con defaults de desarrollo para que
+# el entorno arranque recien clonado. Ninguno de esos defaults sirve fuera de
+# tu maquina (Constitucion Art. 3).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PUERTOS DEL HOST — configurables
+#
+# Los defaults son los que pide T-002 (5432, 6379, 9200, 8080, 9000/9001,
+# 1025/8025). Si ya tenes algo ocupando uno, override en tu .env sin tocar este
+# archivo:
+#
+#   POSTGRES_PORT=5442
+#
+# Variables disponibles: POSTGRES_PORT, REDIS_PORT, OPENSEARCH_PORT,
+# KEYCLOAK_PORT, KEYCLOAK_MGMT_PORT, MINIO_PORT, MINIO_CONSOLE_PORT,
+# MAILHOG_SMTP_PORT, MAILHOG_WEB_PORT, BACKEND_PORT, FRONTEND_PORT.
+#
+# NO van en .env.example: son ergonomia de tu maquina, no configuracion de la
+# aplicacion. .env.example refleja ADR-013 y solo eso (tarea 4.8).
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: deruedas
+
+services:
+
+  # ── Base de datos ──────────────────────────────────────────────────────────
+  postgres:
+    # postgis/postgis = PostgreSQL 16 + PostGIS 3.4 ya compilado.
+    # NO sirve postgres:16-alpine: no trae PostGIS y el init falla con
+    # 'extension "postgis" is not available'. Verificado el 13-ago-2026.
+    image: postgis/postgis:16-3.4-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-deruedas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-deruedas}
+      POSTGRES_DB: ${POSTGRES_DB:-deruedas}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      # Las extensiones se habilitan al CREAR el volumen, una sola vez.
+      # Ubicacion fijada por ADR-019.
+      - ./infra/local/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-deruedas} -d ${POSTGRES_DB:-deruedas}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks: [default]
+
+  # ── Cache, Streams y broker de Celery ──────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    # appendonly: la cola de Celery sobrevive a un reinicio del contenedor.
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    networks: [default]
+
+  # ── Busqueda full-text ─────────────────────────────────────────────────────
+  opensearch:
+    image: opensearchproject/opensearch:2
+    environment:
+      discovery.type: single-node
+      bootstrap.memory_lock: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+      # Seguridad DESACTIVADA solo en local: evita generar certificados para
+      # desarrollar. Desde staging va con TLS y las credenciales de ADR-013
+      # (OPENSEARCH_USER / OPENSEARCH_PASSWORD).
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65536, hard: 65536 }
+    ports:
+      - "${OPENSEARCH_PORT:-9200}:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    networks: [default]
+
+  # ── Identidad ──────────────────────────────────────────────────────────────
+  # La autenticacion se delega ENTERAMENTE aca (ADR-007, Art. 3).
+  # La aplicacion nunca recibe, hashea ni verifica una contrasena.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HTTP_PORT: 8080
+    ports:
+      - "${KEYCLOAK_PORT:-8080}:8080"
+      - "${KEYCLOAK_MGMT_PORT:-9010}:9000"   # management: /health/ready
+    volumes:
+      # Realm deruedas-dev versionado (ADR-019). C-05 lo va a modificar, y ese
+      # cambio se revisa en un diff, no en clicks de una consola web.
+      - ./infra/local/keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      # La imagen de Keycloak no trae curl ni wget. /dev/tcp es un builtin de
+      # bash, que si esta.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
+    networks: [default]
+
+  # ── Object storage ─────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"   # API S3
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"   # consola web
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks: [default]
+
+  # Servicio EFIMERO: crea el bucket y termina. Por eso no lleva healthcheck ni
+  # aparece en `docker compose ps` una vez que hizo su trabajo.
+  # ADR-019: el bucket no necesita archivo versionado, se resuelve con `mc`.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${S3_ACCESS_KEY:-minioadmin} ${S3_SECRET_KEY:-minioadmin} &&
+      mc mb --ignore-existing local/${S3_BUCKET:-deruedas-media} &&
+      echo 'bucket ${S3_BUCKET:-deruedas-media} listo'
+      "
+    networks: [default]
+    restart: "no"
+
+  # ── Correo de prueba ───────────────────────────────────────────────────────
+  # Captura todo lo que la app envie; nada sale a internet.
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"   # SMTP
+      - "${MAILHOG_WEB_PORT:-8025}:8025"   # interfaz web
+    healthcheck:
+      # Imagen minima sin curl: wget de BusyBox es lo que hay.
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8025/ > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks: [default]
+
+  # ── Aplicacion ─────────────────────────────────────────────────────────────
+  # ⚠️ `backend` y `worker` necesitan backend/pyproject.toml (T-005, bloque 5) y
+  #    `frontend-web` necesita frontend-web/package.json (T-006, bloque 7).
+  #    Hasta que existan, estos tres servicios NO construyen. Los seis de arriba
+  #    si levantan solos:
+  #      docker compose up -d postgres redis opensearch keycloak minio mailhog
+  backend:
+    build:
+      context: ./backend
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      keycloak: { condition: service_started }
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      API_BASE_URL: http://localhost:8000
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      # Direcciones por nombre de servicio — ver la nota del encabezado.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-deruedas}:${POSTGRES_PASSWORD:-deruedas}@postgres:5432/${POSTGRES_DB:-deruedas}
+      DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-20}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      OPENSEARCH_URL: http://opensearch:9200
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-deruedas-dev}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-backend}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-cambiame}
+      KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/${KEYCLOAK_REALM:-deruedas-dev}/protocol/openid-connect/certs
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-deruedas-media}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+      CDN_BASE_URL: ${CDN_BASE_URL:-http://localhost:9000/deruedas-media}
+      SMTP_HOST: mailhog:1025
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1.0}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      # Hot reload: el codigo del host tapa al de la imagen.
+      - ./backend:/app
+      # Volumen anonimo para que el editable install de la imagen no quede
+      # tapado por el montaje de arriba.
+      - /app/.venv
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks: [default, observability]
+
+  # Comparte imagen y codigo con `backend`: mismo build, distinto comando.
+  worker:
+    build:
+      context: ./backend
+    command: ["celery", "-A", "app.core.events", "worker", "--loglevel=INFO"]
+    depends_on:
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-deruedas}:${POSTGRES_PASSWORD:-deruedas}@postgres:5432/${POSTGRES_DB:-deruedas}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-deruedas-media}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+      SMTP_HOST: mailhog:1025
+    volumes:
+      - ./backend:/app
+      - /app/.venv
+    networks: [default, observability]
+
+  frontend-web:
+    build:
+      context: ./frontend-web
+    depends_on:
+      backend: { condition: service_started }
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-cambiame}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./frontend-web:/app
+      # node_modules vive en la imagen: montar el arbol del host lo taparia y
+      # ademas romperia los binarios compilados para otra plataforma.
+      - /app/node_modules
+      - /app/.next
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/ > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    networks: [default]
+
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  pg_data:
+  redis_data:
+  minio_data:
+
+networks:
+  default:
+    name: deruedas_default
+  # Prevista para cuando entren Prometheus, Grafana, Loki y Tempo en C-03.
+  # Separarla desde ahora evita tener que reconectar servicios despues.
+  observability:
+    name: deruedas_observability

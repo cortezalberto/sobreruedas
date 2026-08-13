@@ -1,0 +1,117 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# deRuedas Gestion — servicios efimeros para tests de integracion (T-002)
+#
+#   docker compose -f docker-compose.test.yml up -d --wait
+#   pytest -m integration
+#   docker compose -f docker-compose.test.yml down -v
+#
+# ⚠️ SIN VOLUMENES PERSISTENTES. Los datos viven en tmpfs, o sea en RAM: mueren
+#    con el contenedor y ademas corren mas rapido que contra disco.
+#
+#    Es deliberado y es la mitad del punto de este archivo. Mezclar la
+#    definicion persistente con la efimera es la causa clasica de "pasa en local
+#    y falla en CI": estado remanente de una corrida anterior que nadie limpio.
+#
+# PUERTOS DESPLAZADOS respecto de docker-compose.yml (5433, 6380, 9201, 9002)
+# para poder tener el entorno de desarrollo levantado y correr los tests de
+# integracion al mismo tiempo, sin que se peleen por el puerto.
+#
+# No estan ni `keycloak` ni `mailhog`: los tests de integracion no los tocan.
+# Lo que se prueba de autenticacion se hace con tokens firmados por una clave de
+# prueba, sin levantar un servidor de identidad entero.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: deruedas-test
+
+services:
+
+  postgres:
+    # postgis/postgis = PostgreSQL 16 + PostGIS 3.4 ya compilado.
+    # NO sirve postgres:16-alpine: no trae PostGIS y el init falla con
+    # 'extension "postgis" is not available'. Verificado el 13-ago-2026.
+    image: postgis/postgis:16-3.4-alpine
+    environment:
+      POSTGRES_USER: deruedas_test
+      POSTGRES_PASSWORD: deruedas_test
+      POSTGRES_DB: deruedas_test
+      # fsync off: se puede perder todo ante una caida, y no importa — esta
+      # base no sobrevive a la corrida. A cambio, las migraciones vuelan.
+      POSTGRES_INITDB_ARGS: "--nosync"
+    command: >
+      postgres
+      -c fsync=off
+      -c full_page_writes=off
+      -c synchronous_commit=off
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      # Las mismas extensiones que en desarrollo: si un test de integracion
+      # corre contra un PostgreSQL sin pg_trgm, prueba algo que no existe.
+      - ./infra/local/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deruedas_test -d deruedas_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    # Sin appendonly: no hay nada que persistir entre corridas.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
+
+  opensearch:
+    image: opensearchproject/opensearch:2
+    environment:
+      discovery.type: single-node
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+    ports:
+      - "9201:9200"
+    tmpfs:
+      - /usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  minio:
+    image: minio/minio:latest
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9002:9000"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set test http://minio:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing test/deruedas-media
+      "
+    restart: "no"

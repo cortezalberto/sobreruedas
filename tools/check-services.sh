@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# Smoke test del entorno local — tarea 3.8 de C-01 (T-002).
+#
+#   tools/check-services.sh
+#
+# Pingea cada servicio de docker-compose.yml y reporta OK/FAIL. Sale con codigo
+# 1 si algo falla, para que sirva tanto a mano como dentro de un pipeline.
+#
+# Los tres servicios de aplicacion (backend, worker, frontend-web) se reportan
+# como PENDIENTE mientras no exista su codigo: T-005 crea backend/pyproject.toml
+# y T-006 crea frontend-web/package.json. Un servicio que todavia no se puede
+# construir NO es una falla del entorno, y contarlo como error entrenaria a
+# ignorar el rojo — que es la peor cosa que le podes hacer a un chequeo.
+#
+# Marcadores ASCII a proposito: la consola de Windows es cp1252 y revienta con
+# simbolos Unicode.
+# ─────────────────────────────────────────────────────────────────────────────
+set -uo pipefail
+
+cd "$(dirname "$0")/.." || exit 1
+
+FALLAS=0
+PENDIENTES=0
+
+ok()        { printf '  [OK]        %-14s %s\n' "$1" "$2"; }
+fallo()     { printf '  [FAIL]      %-14s %s\n' "$1" "$2"; FALLAS=$((FALLAS + 1)); }
+pendiente() { printf '  [PENDIENTE] %-14s %s\n' "$1" "$2"; PENDIENTES=$((PENDIENTES + 1)); }
+
+# Responde 2xx/3xx en la URL indicada.
+check_http() {
+  local nombre="$1" url="$2" detalle="$3"
+  if curl -fsS --max-time 5 "$url" > /dev/null 2>&1; then
+    ok "$nombre" "$detalle"
+  else
+    fallo "$nombre" "sin respuesta en $url"
+  fi
+}
+
+# Ejecuta un comando adentro de un contenedor del compose.
+check_exec() {
+  local nombre="$1" servicio="$2" detalle="$3"; shift 3
+  if docker compose exec -T "$servicio" "$@" > /dev/null 2>&1; then
+    ok "$nombre" "$detalle"
+  else
+    fallo "$nombre" "el contenedor no respondio"
+  fi
+}
+
+echo
+echo "Entorno local de deRuedas Gestion"
+echo "─────────────────────────────────────────────────────────────────"
+
+if ! docker compose version > /dev/null 2>&1; then
+  echo "  [FAIL]      docker         'docker compose' no esta disponible"
+  echo
+  exit 1
+fi
+
+if ! docker info > /dev/null 2>&1; then
+  echo "  [FAIL]      docker         el daemon no esta corriendo"
+  echo "                             arranca Docker Desktop y volve a intentar"
+  echo
+  exit 1
+fi
+
+echo
+echo "Infraestructura"
+check_exec "postgres"  postgres "acepta conexiones" \
+           pg_isready -U "${POSTGRES_USER:-deruedas}" -d "${POSTGRES_DB:-deruedas}"
+check_exec "redis"     redis    "responde al ping" redis-cli ping
+check_http "opensearch" "http://localhost:9200/_cluster/health" "cluster respondiendo"
+check_http "keycloak"   "http://localhost:8080/realms/${KEYCLOAK_REALM:-deruedas-dev}/.well-known/openid-configuration" \
+           "realm ${KEYCLOAK_REALM:-deruedas-dev} publicado"
+check_http "minio"      "http://localhost:9000/minio/health/live" "storage vivo"
+check_http "mailhog"    "http://localhost:8025/" "interfaz web arriba"
+
+echo
+echo "Criterios de done de T-002"
+
+# Extensiones de PostgreSQL. Se piden las tres que el plan nombra explicitamente.
+EXT_SQL="SELECT count(*) FROM pg_extension WHERE extname IN ('pgcrypto','pg_trgm','postgis');"
+EXT=$(docker compose exec -T postgres \
+        psql -tAU "${POSTGRES_USER:-deruedas}" -d "${POSTGRES_DB:-deruedas}" -c "$EXT_SQL" 2>/dev/null | tr -d '[:space:]')
+if [ "$EXT" = "3" ]; then
+  ok "extensiones" "pgcrypto, pg_trgm y postgis presentes"
+else
+  fallo "extensiones" "se esperaban 3, hay '${EXT:-ninguna}' — recrea el volumen con 'docker compose down -v'"
+fi
+
+# Bucket de MinIO, creado por el servicio efimero minio-init.
+if docker compose run --rm --entrypoint sh minio-init -c \
+     "mc alias set c http://minio:9000 ${S3_ACCESS_KEY:-minioadmin} ${S3_SECRET_KEY:-minioadmin} > /dev/null && mc ls c/${S3_BUCKET:-deruedas-media}" \
+     > /dev/null 2>&1; then
+  ok "bucket" "${S3_BUCKET:-deruedas-media} existe"
+else
+  fallo "bucket" "${S3_BUCKET:-deruedas-media} no existe"
+fi
+
+echo
+echo "Aplicacion"
+if [ -f backend/pyproject.toml ]; then
+  check_http "backend" "http://localhost:8000/health" "sonda de vida respondiendo"
+  if docker compose ps --status running --services 2>/dev/null | grep -qx worker; then
+    ok "worker" "contenedor corriendo"
+  else
+    fallo "worker" "el contenedor no esta corriendo"
+  fi
+else
+  pendiente "backend" "falta backend/pyproject.toml (lo crea T-005)"
+  pendiente "worker"  "comparte imagen con backend"
+fi
+
+if [ -f frontend-web/package.json ]; then
+  check_http "frontend-web" "http://localhost:3000/" "sirviendo"
+else
+  pendiente "frontend-web" "falta frontend-web/package.json (lo crea T-006)"
+fi
+
+echo
+echo "─────────────────────────────────────────────────────────────────"
+if [ "$FALLAS" -eq 0 ]; then
+  echo "  Fallas: 0  [OK]${PENDIENTES:+   Pendientes: $PENDIENTES}"
+  echo
+  exit 0
+fi
+echo "  Fallas: $FALLAS  [FAIL]${PENDIENTES:+   Pendientes: $PENDIENTES}"
+echo
+exit 1

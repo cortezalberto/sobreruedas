@@ -12,15 +12,29 @@ Compite contra Excel, cuadernos y WhatsApp — no contra CRMs enterprise. Eso co
 
 ## Levantar el entorno local
 
-> ⏳ Disponible al cerrar el bloque 3 de `C-01` (`T-002`). Hasta entonces, `docker-compose.yml` no existe.
-
 ```bash
 cp .env.example .env      # completá los valores reales — .env nunca se versiona
 docker compose up -d      # postgres, redis, opensearch, keycloak, minio, mailhog, backend, worker, frontend-web
 tools/check-services.sh   # verifica que cada servicio responda
 ```
 
-El entorno completo debe quedar `healthy` en menos de tres minutos, sin pasos manuales.
+Arranque en frío medido: **99 s** hasta los seis servicios de infraestructura `healthy`, contra un presupuesto de 180 s.
+
+> ⏳ `backend`, `worker` y `frontend-web` todavía no construyen: les falta `backend/pyproject.toml` (`T-005`) y `frontend-web/package.json` (`T-006`). Mientras tanto:
+>
+> ```bash
+> docker compose up -d postgres redis opensearch keycloak minio mailhog
+> ```
+>
+> `check-services.sh` los reporta como `PENDIENTE`, no como `FAIL`.
+
+**¿Un puerto ocupado?** Los mapeos del host son configurables sin tocar el compose — poné el override en tu `.env`:
+
+```bash
+POSTGRES_PORT=5442
+```
+
+Disponibles: `POSTGRES_PORT`, `REDIS_PORT`, `OPENSEARCH_PORT`, `KEYCLOAK_PORT`, `KEYCLOAK_MGMT_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `MAILHOG_SMTP_PORT`, `MAILHOG_WEB_PORT`, `BACKEND_PORT`, `FRONTEND_PORT`.
 
 | Servicio | Local |
 |---|---|

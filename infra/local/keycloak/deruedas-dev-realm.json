@@ -1,0 +1,103 @@
+{
+  "realm": "deruedas-dev",
+  "enabled": true,
+  "displayName": "deRuedas Gestion (desarrollo)",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "defaultSignatureAlgorithm": "RS256",
+  "roles": {
+    "realm": [
+      {
+        "name": "manager",
+        "description": "Gerente — rol de tenant. Equivale a Gerente del glosario (ADR-017)."
+      },
+      {
+        "name": "salesperson",
+        "description": "Vendedor — rol de tenant. Equivale a Vendedor del glosario (ADR-017)."
+      },
+      {
+        "name": "admin_staff",
+        "description": "Administrativo — rol de tenant. Equivale a Administrativo del glosario (ADR-017)."
+      },
+      {
+        "name": "super_admin",
+        "description": "Rol de PLATAFORMA de deRuedas, no de tenant. No pertenece a user_role_enum: el actor vive en la tabla super_admins, exenta de RLS (ADR-017)."
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "backend",
+      "name": "API backend (confidential)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "secret": "cambiame",
+      "attributes": {
+        "access.token.signed.response.alg": "RS256"
+      }
+    },
+    {
+      "clientId": "frontend-web",
+      "name": "Frontend web — Next.js (public + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "frontend-mobile",
+      "name": "Frontend movil — React Native + Expo (public + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "deruedas://auth/*",
+        "exp://127.0.0.1:19000/*"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "frontend-admin",
+      "name": "Backoffice deRuedas (public + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3001/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3001"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    }
+  ]
+}
