@@ -22,11 +22,11 @@ Precede a todo lo demás: el §4.1 no se puede materializar mientras `docs/` est
 
 ## 2. Estructura del monorepo — `T-001`
 
-- [ ] 2.1 Crear el árbol completo del §4.1 con `.gitkeep` en los directorios vacíos
-- [ ] 2.2 Escribir el `README.md` raíz: descripción, enlaces al cuerpo SDD y cómo levantar el entorno
-- [ ] 2.3 Extender el `.gitignore` para Python (`__pycache__`, `.venv`, `.pytest_cache`), Node (`node_modules`, `.next`), entornos (`.env`, `.env.local`) e IDEs
+- [x] 2.1 Crear el árbol completo del §4.1 con `.gitkeep` en los directorios vacíos
+- [x] 2.2 Escribir el `README.md` raíz: descripción, enlaces al cuerpo SDD y cómo levantar el entorno
+- [x] 2.3 Extender el `.gitignore` para Python (`__pycache__`, `.venv`, `.pytest_cache`), Node (`node_modules`, `.next`), entornos (`.env`, `.env.local`) e IDEs
 - [ ] 2.4 Escribir `.env.example` con las ~34 variables de `ADR-013`, valores ficticios y comentarios — sin un solo valor real
-- [ ] 2.5 Verificar el árbol con `tree -L 3` contra el §4.1, entrada por entrada
+- [x] 2.5 Verificar el árbol con `tree -L 3` contra el §4.1, entrada por entrada
 
 ## 3. Entorno local — `T-002`
 

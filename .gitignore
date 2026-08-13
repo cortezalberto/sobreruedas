@@ -10,12 +10,34 @@ htmlcov/
 .coverage
 coverage.xml
 
+celerybeat-schedule
+.tox/
+
 # Node
 node_modules/
 .next/
 out/
 dist/
 *.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+.eslintcache
+# Cobertura y reportes del frontend
+coverage/
+playwright-report/
+test-results/
+# Expo (frontend-mobile)
+.expo/
+
+# Infraestructura — estado de Terraform: contiene valores sensibles en claro
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+# Kubeconfig: el pipeline no debe tener credenciales del cluster (ADR-015)
+kubeconfig
+*.kubeconfig
 
 # Entornos y secretos (Constitucion Art. 3 — los secretos NO viven en el repo)
 .env
