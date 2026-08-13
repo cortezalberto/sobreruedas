@@ -1,7 +1,13 @@
 # Preguntas Abiertas e Inconsistencias
 
 > Este archivo es el **resultado del chequeo de consistencia cruzada** sobre los 11 documentos fuente (~19.900 líneas, leídos íntegramente).
-> Se detectaron **41 inconsistencias reales**, de las cuales **13 son bloqueantes**: no se puede escribir la migración, el enum, el quality gate o el contrato de API correspondiente sin una decisión humana previa.
+> Se documentaron **54 inconsistencias reales**: **14 bloqueantes** (Parte 1) + **40 no bloqueantes** (Parte 2). Bloqueante significa que no se puede escribir la migración, el enum, el quality gate o el contrato de API correspondiente sin una decisión humana previa.
+>
+> **Bloqueantes (14):** `IN-01`, `IN-02`, `IN-03`, `IN-04`, `IN-05`, `IN-06`, `IN-07`, `IN-10`, `IN-12`, `IN-13`, `IN-22`, `IN-23`, `IN-29`, `IN-31`.
+>
+> ⚠️ **Defectos de este mismo archivo** (registrados para no repetir el patrón que `IN-37` le denuncia al plan de implementación):
+> - `IN-15` (Jaeger vs Tempo) e `IN-16` (Kubernetes con o sin ArgoCD) **se referencian en las Partes 3 y 4 pero nunca se documentan como entradas** en la Parte 2. Son referencias colgadas.
+> - Los identificadores `IN-55` e `IN-56` no existen: la serie salta de `IN-54` a `IN-57`. Es un hueco de numeración, no información faltante.
 >
 > Criterio de clasificación:
 > - 🔴 **BLOQUEANTE** — hay que decidir *antes* de escribir código. Dos documentos vinculantes dicen cosas incompatibles sobre el mismo artefacto.
@@ -11,7 +17,7 @@
 
 ---
 
-# Parte 1 — Inconsistencias BLOQUEANTES (13)
+# Parte 1 — Inconsistencias BLOQUEANTES (14)
 
 ## 🔴 IN-01 — El catálogo de roles no coincide entre cinco documentos
 
@@ -218,7 +224,7 @@ Los ADR-004, 006, 007, 008 y 009 **sí coinciden**. Los ADR-001, 003, 010 y 012 
 
 ---
 
-# Parte 2 — Inconsistencias no bloqueantes (28)
+# Parte 2 — Inconsistencias no bloqueantes (40)
 
 ## Modelo de datos y dominio
 

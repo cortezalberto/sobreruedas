@@ -8,7 +8,7 @@ Base de conocimiento generada por ingesta silenciosa de los **11 documentos fuen
 
 ## ⚠️ Leé esto antes de escribir una línea de código
 
-El chequeo de consistencia cruzada detectó **41 inconsistencias reales entre documentos, 13 de ellas bloqueantes**. No son detalles de redacción: hay contradicciones sobre el catálogo de roles, la moneda de facturación, los límites de los planes, la retención de auditoría, el umbral de cobertura del CI y el SLA contractual.
+El chequeo de consistencia cruzada detectó **54 inconsistencias reales entre documentos, 14 de ellas bloqueantes**. No son detalles de redacción: hay contradicciones sobre el catálogo de roles, la moneda de facturación, los límites de los planes, la retención de auditoría, el umbral de cobertura del CI y el SLA contractual.
 
 **Empezá por [10_preguntas_abiertas.md](10_preguntas_abiertas.md).** Hasta resolver `PA-01` a `PA-05`, la migración inicial y el quality gate del CI no se pueden escribir de forma defendible.
 
@@ -27,7 +27,7 @@ El chequeo de consistencia cruzada detectó **41 inconsistencias reales entre do
 | [07_flujos_principales.md](07_flujos_principales.md) | 13 flujos extremo a extremo: auth, onboarding, alta y publicación de vehículo, importación, ciclo del lead, WhatsApp, permuta, financiación, cierre de operación, documentos, cuenta corriente, derechos del titular, deploy |
 | [08_arquitectura_propuesta.md](08_arquitectura_propuesta.md) | Patrones aplicados, estructura de directorios, regla de frontera entre módulos, seguridad, observabilidad, infraestructura, variables de entorno, estrategia de escalado |
 | [09_decisiones_y_supuestos.md](09_decisiones_y_supuestos.md) | 7 principios constitucionales, 12 ADRs con alternativas y trade-offs, 5 trade-offs resueltos, **12 supuestos inferidos** con su forma de validación |
-| [10_preguntas_abiertas.md](10_preguntas_abiertas.md) | **41 inconsistencias cruzadas** (13 bloqueantes) + 30 preguntas abiertas priorizadas con decisor asignado |
+| [10_preguntas_abiertas.md](10_preguntas_abiertas.md) | **54 inconsistencias cruzadas** (14 bloqueantes) + 30 preguntas abiertas priorizadas con decisor asignado |
 | **Extras** | |
 | [11_testing_y_calidad.md](11_testing_y_calidad.md) | Pirámide, umbrales de cobertura, herramientas por nivel, tests de aislamiento multi-tenant, datos sintéticos, quality gates, gestión de flakiness |
 | [12_seguridad_y_compliance.md](12_seguridad_y_compliance.md) | STRIDE, autenticación, autorización, aislamiento, cifrado, Ley 25.326, retenciones, auditoría, SSDLC, respuesta a incidentes |
