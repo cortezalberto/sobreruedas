@@ -29,6 +29,12 @@ RUN npm install
 
 COPY . .
 
+# Los directorios que el compose monta como VOLUMEN ANONIMO tienen que existir
+# en la imagen y pertenecer a `node`. Docker inicializa el volumen con el dueno
+# que ese directorio tenga aca; si no existe, lo crea de root y el proceso —que
+# corre sin privilegios— falla con EACCES al primer mkdir.
+RUN mkdir -p /app/.next /app/node_modules
+
 # La imagen de node ya trae el usuario `node` (uid 1000), sin privilegios.
 RUN chown -R node:node /app
 USER node

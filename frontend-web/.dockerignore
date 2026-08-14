@@ -1,0 +1,21 @@
+# Sin esto, `COPY . .` intenta copiar node_modules y el build falla con
+# "invalid file request node_modules/.bin/acorn": son symlinks que el
+# contexto de build no puede resolver desde un montaje de Windows.
+#
+# Y aunque funcionara estaria mal: los binarios de node_modules se compilan
+# para la plataforma del host. El Dockerfile corre su propio npm install.
+node_modules
+.next
+out
+
+# Artefactos locales que no aportan nada a la imagen y la invalidan en cada
+# cambio, tirando abajo la cache de capas.
+.env
+.env.local
+*.log
+.eslintcache
+coverage
+playwright-report
+test-results
+Dockerfile
+.dockerignore

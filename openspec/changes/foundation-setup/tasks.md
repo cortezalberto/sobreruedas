@@ -161,13 +161,36 @@ Cubre la capability `platform/service-health`. Los tests van primero.
 
 ## 7. Bootstrap del frontend web — `T-006`
 
-- [ ] 7.1 Inicializar `frontend-web/` con Next.js 14+ y App Router
-- [ ] 7.2 Configurar TypeScript con `strict`, `noImplicitAny` y `noUncheckedIndexedAccess`
-- [ ] 7.3 Configurar Tailwind con la paleta por defecto y el punto de extensión marcado `TODO(C-07)`
-- [ ] 7.4 Configurar los alias de rutas `@/components`, `@/lib` y `@/hooks`
-- [ ] 7.5 Configurar ESLint con `next/core-web-vitals` más `jsx-a11y`, y Prettier compartido
-- [ ] 7.6 Escribir el layout raíz con metadatos y la página home placeholder
-- [ ] 7.7 Verificar `npm run dev`, `npm run build` y `tsc --noEmit` sin errores
+- [x] 7.1 Inicializar `frontend-web/` con Next.js 14+ y App Router
+- [x] 7.2 Configurar TypeScript con `strict`, `noImplicitAny` y `noUncheckedIndexedAccess`
+- [x] 7.3 Configurar Tailwind con la paleta por defecto y el punto de extensión marcado `TODO(C-07)`
+- [x] 7.4 Configurar los alias de rutas `@/components`, `@/lib` y `@/hooks`
+- [x] 7.5 Configurar ESLint con `next/core-web-vitals` más `jsx-a11y`, y Prettier compartido
+- [x] 7.6 Escribir el layout raíz con metadatos y la página home placeholder
+- [x] 7.7 Verificar `npm run dev`, `npm run build` y `tsc --noEmit` sin errores
+  > **Verificado el 14-ago-2026.** `tsc --noEmit` sin errores · `eslint .` 0 errores y 0 warnings · `prettier --check` limpio · `npm run build` produce build de producción (123 s, rutas `/` y `/_not-found` estáticas) · `npm run dev` sirviendo **HTTP 200 en 67 ms** desde el contenedor, `healthy`. Página verificada: `lang="es-AR"`, `robots: noindex, nofollow`, `og:locale: es_AR`.
+  >
+  > Los alias `@/lib`, `@/hooks` y `@/components` se comprobaron con módulos de prueba temporales que `tsc` resolvió; se eliminaron después. Configurar un alias no es lo mismo que probar que resuelve.
+
+> **Subida de Next 14 a 16.3.1 — forzada por seguridad**
+>
+> Con `next@14.2.5`, `npm audit` reportaba **5 vulnerabilidades altas** con **21 advisories** contra Next: SSRF, XSS en App Router, cache poisoning, HTTP request smuggling y varios DoS. La tarea 8.5 hace que `npm audit` **bloquee el merge** en severidad alta, así que quedarse en 14 era arrancar con el pipeline en rojo por diseño.
+>
+> El rango vulnerable llega hasta `16.3.0-preview.10`; **`16.3.1` es la versión que lo cierra**. No es un desvío: el stack declara *"Next.js **14+**"* y 16 está dentro. Arrastra `react` 19, `eslint` 9 y la migración de `.eslintrc.json` a **flat config**.
+>
+> Resultado: `npm audit` → **0 vulnerabilidades**.
+
+> **Tres defectos de los Dockerfiles del bloque 3, encontrados al construir**
+>
+> 1. **Faltaban los `.dockerignore`.** `COPY . .` intentaba copiar `node_modules` y el build moría con `invalid file request node_modules/.bin/acorn` — symlinks que el contexto de build no resuelve desde un montaje de Windows. Y aunque funcionara estaría mal: esos binarios se compilan para la plataforma del host. Se agregaron para `frontend-web/` y `backend/`.
+> 2. **Volumen anónimo con dueño equivocado.** El compose monta `/app/.next`, y Docker inicializa el volumen con el dueño que ese directorio tenga **en la imagen**. Como no existía al construir, nacía de root y el proceso —que corre como `node`— moría con `EACCES` al primer `mkdir`. Se crean los directorios en la imagen antes del `chown`.
+> 3. **Archivos root dentro del bind mount.** Correr un contenedor descartable como root contra el montaje deja archivos `root:root 644` que el usuario `node` después no puede escribir (`next-env.d.ts`, `package-lock.json`). Los que vienen del host Windows aparecen `777`; los que crea root adentro, no. **Los contenedores descartables sobre el bind mount deben correr con `--user 1000:1000`.**
+
+> **Fuera de alcance, declarado**
+>
+> `T-006` pide además que la home *"redirija a `/login` si no hay sesión"*. **No se implementa**: no existe ni el mecanismo de sesión ni la ruta `/login`. La autenticación se delega enteramente a Keycloak (`ADR-007`) y su integración con NextAuth es **C-05**. La tarea 7.6 de este change ya lo había dejado afuera. Un redirect a una ruta inexistente es un 404 disfrazado de feature.
+>
+> La paleta de Tailwind queda en la de por defecto con el punto de extensión marcado `TODO(C-07)`: los primitivos del design system no están en ninguno de los 11 documentos fuente (riesgo `R-4`).
 
 ## 8. Pipeline de integración — `T-003`
 

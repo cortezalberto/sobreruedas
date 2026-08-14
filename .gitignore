@@ -26,6 +26,11 @@ yarn-error.log*
 coverage/
 playwright-report/
 test-results/
+# Autogenerado por Next en cada build y atado a su version. El propio template
+# de create-next-app lo ignora: versionarlo produce diffs de ruido cada vez que
+# alguien sube Next.
+next-env.d.ts
+
 # Expo (frontend-mobile)
 .expo/
 

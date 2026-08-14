@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * TODO(C-07): tokens del design system (T-036). Hasta entonces no se define
+ * ninguna variable de color propia: ver el comentario de tailwind.config.ts.
+ */
