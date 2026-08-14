@@ -1,0 +1,304 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# deRuedas Gestion — pipeline de integracion continua (T-003, bloque 8 de C-01)
+#
+# Los seis jobs de design.md D-6. Corren TODOS EN PARALELO, sin `needs` entre
+# ellos: encadenarlos solo sumaria espera sin agregar informacion. Quien abre
+# una propuesta de cambio quiere enterarse de los seis resultados de una vez,
+# no del primero que falle.
+#
+# Presupuesto: 15 minutos de punta a punta (D-6). Como los jobs son paralelos,
+# el total es el del job mas lento, no la suma.
+#
+# LO QUE ESTE PIPELINE **NO** HACE: no despliega, no construye imagenes de
+# produccion y no toca el cluster. La frontera de ADR-015 es no negociable —
+# GitHub Actions nunca recibe credenciales de Kubernetes. Eso llega en el
+# bloque 9 y su permiso maximo sera escribir un tag en el repo de manifests.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Solo lectura. Ningun job de este pipeline necesita escribir en el repositorio;
+# el default de la organizacion puede ser mas amplio y acá se acota a proposito.
+permissions:
+  contents: read
+
+# Un push nuevo sobre la misma rama cancela la corrida anterior: sostiene el
+# presupuesto de 15 min cuando alguien empuja tres veces seguidas.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12" # exacta, ADR-003
+  NODE_VERSION: "22" # Next 16 exige Node >= 20
+
+jobs:
+  # ── 1. Calidad del backend ─────────────────────────────────────────────────
+  lint-backend:
+    name: lint-backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Instalar dependencias
+        run: pip install --editable ".[dev]"
+
+      - name: ruff
+        run: ruff check app tests alembic
+
+      - name: black --check
+        run: black --check app tests alembic
+
+      # `mypy app`, no `mypy .`: el strict de la regla dura 6 aplica al codigo
+      # de aplicacion. Las migraciones de alembic son generadas y su plantilla
+      # no tipa.
+      - name: mypy --strict
+        run: mypy app
+
+  # ── 2. Calidad del frontend ────────────────────────────────────────────────
+  lint-frontend:
+    name: lint-frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend-web/package-lock.json
+
+      # `npm ci`, no `npm install`: instala exactamente lo del lockfile y falla
+      # si package.json y package-lock.json divergen. En CI eso es lo que se
+      # quiere — que la corrida sea reproducible, no que se auto-arregle.
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: eslint
+        run: npm run lint
+
+      - name: prettier --check
+        run: npm run format:check
+
+      - name: tsc --noEmit
+        run: npm run typecheck
+
+  # ── 3. Tests unitarios del backend + gate de cobertura ─────────────────────
+  test-backend-unit:
+    name: test-backend-unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Historia completa: el chequeo de no decrecimiento necesita el commit
+          # base de la propuesta de cambio, y el checkout por defecto es shallow.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Instalar dependencias
+        working-directory: backend
+        run: pip install --editable ".[dev]"
+
+      # El verificador se verifica ANTES de usarlo. Un gate de cobertura roto
+      # que devuelve 0 siempre es peor que no tener gate: da falsa confianza.
+      - name: Tests del verificador de cobertura
+        run: python -m pytest tools/tests -q
+
+      - name: pytest unitario con cobertura
+        working-directory: backend
+        run: |
+          python -m pytest -m 'not integration' -q \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=json:coverage.json
+
+      # ── No decrecimiento (Art. 2 · tarea 8.4) ───────────────────────────────
+      # Se mide la base en un worktree aparte. Los tests de la base corren con
+      # las dependencias YA instaladas de esta rama: reinstalar el entorno de
+      # main duplicaria el tiempo del job para una diferencia que casi nunca
+      # existe. Si la base no se puede medir, el paso no rompe y el verificador
+      # lo reporta como "sin base" — ausencia de base no es retroceso.
+      - name: Medir la cobertura de la base
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          git worktree add /tmp/base ${{ github.event.pull_request.base.sha }}
+          cd /tmp/base/backend
+          python -m pytest -m 'not integration' -q \
+            --cov=app \
+            --cov-report=json:"$GITHUB_WORKSPACE/backend/coverage-base.json" \
+            || echo "::warning::no se pudo medir la cobertura de la base; se sigue sin comparar"
+
+      # El gate de verdad. `fail_under` de coverage.py mezcla lineas y ramas en
+      # un solo numero y ADR-014 las pide por separado — ver el encabezado de
+      # tools/check-coverage.py.
+      - name: Gate de cobertura — 80 % lineas / 60 % ramas / no decrece
+        run: |
+          python tools/check-coverage.py \
+            --coverage-json backend/coverage.json \
+            --min-lineas 80 \
+            --min-ramas 60 \
+            --base backend/coverage-base.json
+
+  # ── 4. Tests de integracion contra servicios reales ────────────────────────
+  #
+  # Sin mocks de base de datos (regla dura 8). Los servicios los levanta
+  # docker-compose.test.yml: PostgreSQL con PostGIS, Redis, OpenSearch y MinIO,
+  # todos sobre tmpfs y sin volumenes persistentes.
+  #
+  # No se usan `services:` de GitHub Actions a proposito: el compose de tests ya
+  # existe, se usa igual en local, y duplicar la definicion en el workflow es la
+  # forma clasica de que local y CI se desincronicen.
+  test-backend-integration:
+    name: test-backend-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Instalar dependencias
+        working-directory: backend
+        run: pip install --editable ".[dev]"
+
+      # `--wait` bloquea hasta que los healthcheck den sano. Sin esto el pytest
+      # arranca contra un PostgreSQL que todavia esta inicializando y el fallo
+      # se lee como un bug del codigo.
+      - name: Levantar los servicios efimeros
+        run: docker compose -f docker-compose.test.yml up -d --wait
+
+      # El pytest corre en el runner, no adentro del compose, asi que los
+      # servicios se alcanzan por los puertos publicados (desplazados a 5433 y
+      # 6380 para no chocar con el compose de desarrollo).
+      - name: pytest de integracion
+        working-directory: backend
+        env:
+          TEST_DATABASE_URL: postgresql+asyncpg://deruedas_test:deruedas_test@localhost:5433/deruedas_test
+          TEST_REDIS_URL: redis://localhost:6380/0
+        run: python -m pytest -m integration -q
+
+      - name: Logs de los servicios si algo fallo
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs --tail 100
+
+      - name: Apagar y borrar los volumenes
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+  # ── 5. Tests del frontend ──────────────────────────────────────────────────
+  #
+  # Con cobertura pero SIN gate numerico: ADR-014 fija umbrales para el backend
+  # y dice expresamente que no inventa uno para el frontend. Ninguna de las
+  # cuatro fuentes lo define. Queda como pregunta abierta para C-07.
+  test-frontend:
+    name: test-frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend-web/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: vitest con cobertura
+        run: npm run test -- --coverage
+
+      # El build es parte de la verificacion, no del despliegue: `next build`
+      # prerenderiza y ahi aparecen errores que los tests no ven — el de
+      # NODE_ENV del bloque 7 fue exactamente eso.
+      - name: next build
+        run: npm run build
+
+  # ── 6. Seguridad ───────────────────────────────────────────────────────────
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks escanea la HISTORIA, no el arbol de trabajo. Un secreto
+          # commiteado y borrado despues sigue estando en el repositorio, y es
+          # justamente el caso que hay que detectar.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend-web/package-lock.json
+
+      # pip-audit no expone la severidad de cada hallazgo, asi que bloquea ante
+      # CUALQUIER vulnerabilidad. Es MAS ESTRICTO que el "alta o critica" de
+      # D-6, y se deja asi a proposito: filtrar por severidad que la herramienta
+      # no reporta obligaria a mantener una lista a mano.
+      - name: pip-audit
+        working-directory: backend
+        run: |
+          pip install pip-audit
+          pip install --editable ".[dev]"
+          pip-audit --desc
+
+      # `--audit-level=high` sí distingue severidad: bloquea en alta y critica,
+      # informa el resto. Esto es literalmente lo que pide D-6.
+      - name: npm audit
+        working-directory: frontend-web
+        run: npm audit --audit-level=high
+
+      # gitleaks corre tambien en pre-commit (regla dura 4). Se repite aca
+      # porque un hook local es una cortesia: se saltea con --no-verify y no
+      # existe en la maquina de quien clona por primera vez.
+      #
+      # Version fijada, no `latest`: un escaner que cambia de reglas solo hace
+      # que el mismo commit pase hoy y falle mañana sin que nadie toque nada.
+      #
+      # `--redact` para que un hallazgo no imprima el secreto en un log que
+      # queda guardado. Sin eso, detectar la fuga la empeora.
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 \
+            detect --source /repo --redact --no-banner --verbose

@@ -17,7 +17,7 @@ COMPOSE := docker compose
 BACKEND := $(COMPOSE) run --rm --no-deps backend
 
 .DEFAULT_GOAL := help
-.PHONY: help up down logs migrate migrate-down-one migration test test-integration lint format check
+.PHONY: help up down logs migrate migrate-down-one migration test test-integration coverage test-tools lint format check
 
 help:  ## Muestra esta ayuda
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /  ->  /'
@@ -53,12 +53,22 @@ test:  ## Tests unitarios con cobertura
 test-integration:  ## Tests contra servicios reales
 	$(COMPOSE) run --rm backend pytest tests/integration -m integration
 
+# El mismo gate que corre el pipeline, para no enterarse recien en el PR.
+# `fail_under` de coverage.py NO alcanza: mezcla lineas y ramas en un numero
+# solo y ADR-014 las exige por separado. Ver tools/check-coverage.py.
+coverage:  ## Cobertura con el gate de ADR-014: 80 % lineas Y 60 % ramas
+	$(BACKEND) pytest -m 'not integration' --cov=app --cov-report=json:coverage.json
+	@python tools/check-coverage.py --coverage-json backend/coverage.json
+
+test-tools:  ## Tests de los verificadores de tools/ (corren en el host)
+	@python -m pytest tools/tests -q
+
 lint:  ## ruff + black --check + mypy --strict
 	$(BACKEND) sh -c "ruff check app tests alembic && black --check app tests alembic && mypy app"
 
 format:  ## Aplica black y arregla lo que ruff pueda
 	$(BACKEND) sh -c "ruff check --fix app tests alembic && black app tests alembic"
 
-check: lint test  ## Todo lo que el pipeline va a exigir
+check: lint test-tools coverage  ## Todo lo que el pipeline va a exigir
 	@python tools/check-md-links.py
 	@python tools/check-config-parity.py

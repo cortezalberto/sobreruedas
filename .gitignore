@@ -9,6 +9,10 @@ venv/
 htmlcov/
 .coverage
 coverage.xml
+# Los emite el gate del pipeline (tools/check-coverage.py). Son mediciones de
+# una corrida, no fuente: versionarlas genera conflictos en cada PR.
+coverage.json
+coverage-base.json
 
 celerybeat-schedule
 .tox/

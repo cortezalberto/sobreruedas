@@ -196,15 +196,82 @@ Cubre la capability `platform/service-health`. Los tests van primero.
 
 Cubre la capability `platform/delivery-pipeline`.
 
-- [ ] 8.1 Escribir `.github/workflows/ci.yml` con los seis jobs de `design.md` D-6
-- [ ] 8.2 Configurar el gate de cobertura al **80 % de líneas y 60 % de ramas**, con fallo bloqueante
-- [ ] 8.3 Configurar las exclusiones de cobertura para archivos de scaffolding sin lógica, de forma explícita y auditable
-- [ ] 8.4 Configurar la comprobación de que la cobertura no decrece respecto de `main`
-- [ ] 8.5 Configurar el job de seguridad: `pip-audit`, `npm audit` y `gitleaks`, bloqueante en alta o crítica y ante cualquier secreto
-- [ ] 8.6 Configurar el job de integración levantando `docker-compose.test.yml`
-- [ ] 8.7 Configurar la caché de dependencias de `pip` y `npm`
+- [x] 8.1 Escribir `.github/workflows/ci.yml` con los seis jobs de `design.md` D-6
+- [x] 8.2 Configurar el gate de cobertura al **80 % de líneas y 60 % de ramas**, con fallo bloqueante
+- [x] 8.3 Configurar las exclusiones de cobertura para archivos de scaffolding sin lógica, de forma explícita y auditable
+- [x] 8.4 Configurar la comprobación de que la cobertura no decrece respecto de `main`
+- [x] 8.5 Configurar el job de seguridad: `pip-audit`, `npm audit` y `gitleaks`, bloqueante en alta o crítica y ante cualquier secreto
+- [x] 8.6 Configurar el job de integración levantando `docker-compose.test.yml`
+- [x] 8.7 Configurar la caché de dependencias de `pip` y `npm`
 - [ ] 8.8 Verificar con una propuesta de cambio de prueba: pasa en verde en menos de 15 minutos
 - [ ] 8.9 Verificar que un test que falla y una cobertura insuficiente bloquean efectivamente la integración
+
+> **`fail_under` no implementaba el umbral de ADR-014, y esa es la razón de ser de este bloque.**
+>
+> Con `branch = true`, el número que compara `fail_under` es
+> `(líneas cubiertas + ramas cubiertas) / (sentencias + ramas)` — un promedio
+> ponderado. ADR-014 pide **80 % de líneas Y 60 % de ramas, cada uno por su
+> lado**. Un módulo con 95 % de líneas y 20 % de ramas da 82,14 % combinado y
+> pasaba el `fail_under = 80` sin que nadie se enterara: exactamente la forma en
+> que la lógica condicional entra sin tests.
+>
+> El gate real es `tools/check-coverage.py`, con **19 tests en TDD estricto**
+> (`tools/tests/test_check_coverage.py`). `fail_under = 80` queda en
+> `pyproject.toml` como red de contención para quien corra `pytest --cov` a mano.
+>
+> Distingue código 1 (umbral incumplido → faltan tests) de código 2 (no se pudo
+> medir → pipeline roto). Confundirlos manda a buscar tests que no faltan.
+
+> **Verificado contra una salida genuina de `coverage json`**, no solo con los
+> JSON sintéticos de los tests: las claves `covered_lines`, `num_statements`,
+> `num_branches` y `covered_branches` existen y tienen la forma asumida
+> (coverage 7.14.1). Era el riesgo real de un verificador probado solo con
+> diccionarios escritos a mano.
+
+> **Tarea 8.4 — el costo del no decrecimiento, dicho de frente.** La base se
+> mide en un `git worktree` del commit base, reusando las dependencias ya
+> instaladas de la rama en vez de reinstalar el entorno de `main`. Duplicar el
+> job por una diferencia de dependencias que casi nunca existe no se paga. Si la
+> base no se puede medir, **no bloquea**: se reporta "sin base". Ausencia de
+> base no es evidencia de retroceso, y la primera corrida nunca tiene contra qué
+> comparar.
+
+> **Tarea 8.5 — dos desvíos deliberados de D-6.** `pip-audit` **no expone la
+> severidad** de cada hallazgo, así que bloquea ante *cualquier* vulnerabilidad:
+> es más estricto que el "alta o crítica" que pide D-6. Filtrar por una
+> severidad que la herramienta no reporta exigiría mantener una lista a mano.
+> `npm audit --audit-level=high` sí distingue y hace literalmente lo pedido.
+> `gitleaks` va con versión fijada (`v8.28.0`) y `--redact`: un escáner en
+> `latest` hace que el mismo commit pase hoy y falle mañana, y un hallazgo sin
+> redactar imprime el secreto en un log que queda guardado — detectar la fuga la
+> empeoraría.
+
+> **Tarea 8.6 — la tensión testcontainers vs compose, resuelta.** La regla dura 8
+> del proyecto manda testcontainers; la tarea 8.6 pide `docker-compose.test.yml`.
+> No hay conflicto real: lo que la regla prohíbe son los **mocks de base de
+> datos**, y el compose de tests levanta PostgreSQL con PostGIS, Redis,
+> OpenSearch y MinIO de verdad. Se usa el compose porque **ya existe desde
+> `T-002` y es el mismo que se usa en local**; duplicar la definición de
+> servicios adentro del workflow es la forma clásica de que CI y local se
+> desincronicen. Los tests ya leían las direcciones de
+> `TEST_DATABASE_URL`/`TEST_REDIS_URL`, así que corren en el runner contra los
+> puertos publicados (5433 y 6380) sin tocar una línea.
+
+> **Fuera de alcance, declarado**
+>
+> Las tareas **8.8 y 8.9 no son verificables todavía**: piden una propuesta de
+> cambio corriendo en GitHub Actions y midiendo el presupuesto de 15 minutos.
+> Lo que sí se verificó de forma local:
+>
+> - `ci.yml` **parsea como YAML válido**, con los 6 jobs y los 2 disparadores.
+> - El gate bloquea de verdad: 19 tests cubren umbral incumplido, ramas por
+>   debajo con líneas de sobra, decrecimiento, base ausente, base corrupta,
+>   JSON sin medición de ramas y división por cero con 0 ramas.
+> - Quedan sin verificar **en el pipeline real**: el presupuesto de 15 minutos,
+>   la efectividad de la caché y que el job de integración levante el compose en
+>   el runner de GitHub.
+>
+> No se marca 8.8 ni 8.9 como hechas. El estado no miente.
 
 ## 9. Despliegue a staging — `T-008` · Kubernetes + ArgoCD
 
