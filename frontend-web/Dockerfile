@@ -11,8 +11,13 @@
 
 FROM node:20-slim
 
-ENV NODE_ENV=development \
-    NEXT_TELEMETRY_DISABLED=1
+# NO se fija NODE_ENV. Cada comando de Next elige el suyo: `next dev` corre en
+# development y `next build` en production.
+#
+# Fijarlo en development ROMPE `next build`: falla al prerenderizar
+# /_global-error con "Cannot read properties of null (reading 'useContext')".
+# Verificado el 14-ago-2026 — el mismo build pasa con NODE_ENV=production.
+ENV NEXT_TELEMETRY_DISABLED=1
 
 # curl para el healthcheck del compose.
 RUN apt-get update \
