@@ -311,5 +311,66 @@ Cubre la capability `platform/delivery-pipeline`.
 - [ ] 10.1 Verificar que el pipeline corre verde de punta a punta sobre el repositorio completo
 - [ ] 10.2 Verificar que ningún valor sensible real quedó versionado (`gitleaks` sobre todo el historial del change)
 - [ ] 10.3 Verificar que las tres capabilities tienen sus escenarios cubiertos por tests ejecutables
-- [ ] 10.4 Verificar que `IN-22`, `IN-29` y `R-3` quedaron cerrados con su ADR correspondiente
-- [ ] 10.5 Actualizar el estado de C-01 en `CHANGES.md`
+- [x] 10.4 Verificar que `IN-22`, `IN-29` y `R-3` quedaron cerrados con su ADR correspondiente
+- [x] 10.5 Actualizar el estado de C-01 en `CHANGES.md`
+
+> **Tarea 10.4 — los tres cerrados, verificado archivo por archivo.**
+>
+> | Bloqueante | ADR que lo cierra | Estado |
+> |---|---|---|
+> | `IN-22` umbral de cobertura del CI | [`ADR-014`](../../../docs/adr/ADR-014-umbrales-de-cobertura.md) | ✅ 80 % líneas / 60 % ramas, y el gate existe y bloquea |
+> | `IN-29` numeración de ADRs del plan | [`ADR-018`](../../../docs/adr/ADR-018-anclas-de-adr-del-plan-de-implementacion.md) | ✅ corpus inmutable con anotación al pie |
+> | `R-3` no existe tabla canónica de variables | [`ADR-013`](../../../docs/adr/ADR-013-variables-de-entorno.md) | ✅ 35 variables en 12 grupos, sostenido por `tools/check-config-parity.py` con **0 divergencias** entre ADR, `.env.example` y `Settings` |
+
+> ### ⚠️ Tarea 10.3 — auditoría hecha, y **no da para tildar**
+>
+> Se cruzaron los **35 escenarios** de las tres delta specs contra los tests que
+> existen de verdad. Resultado:
+>
+> | Capability | Escenarios | Con test ejecutable | Estado |
+> |---|---|---|---|
+> | `platform/service-health` | 10 | **10** | ✅ completa |
+> | `platform/configuration` | 10 | **8** | ⚠️ faltan 2 |
+> | `platform/delivery-pipeline` | 15 | **4** | ❌ faltan 11 |
+>
+> **`service-health` está entera**: los 10 escenarios tienen test, y 6 de ellos
+> además corren contra servicios reales en `tests/integration/`.
+>
+> **`configuration` — los 2 que faltan:**
+> - *"Fallo de arranque por credencial inválida"*: `test_obligatoria_vacia_se_rechaza`
+>   cubre el valor vacío, no una credencial **presente pero rechazada** por el
+>   servicio al conectar. Es un escenario de integración y no está escrito.
+> - *"Registro de la configuración al arrancar"*: ningún test verifica que la
+>   configuración se registre en el log al iniciar, ni que ese registro no filtre
+>   los 15 campos sensibles. Es exactamente el punto donde un secreto se escapa.
+>
+> **`delivery-pipeline` — 11 de 15 sin cubrir**, y hay que separar dos causas
+> distintas porque no se arreglan igual:
+>
+> - **7 escenarios describen comportamiento del workflow** (linting que bloquea,
+>   error de tipado que bloquea, código conforme que pasa, vulnerabilidad crítica
+>   que bloquea, secreto filtrado que bloquea, vulnerabilidad baja que solo
+>   reporta, propuesta de cambio que dispara el pipeline, duración < 15 min).
+>   **Solo se verifican corriendo el pipeline de verdad** — son las tareas 8.8 y
+>   8.9, que siguen abiertas.
+> - **3 escenarios son del bloque 9** (despliegue a staging, reversión por fallo
+>   de pruebas de humo, trazabilidad del commit desplegado). No implementados.
+> - Los **4 cubiertos** son los del gate de cobertura, y lo están por los 19
+>   tests de `tools/tests/test_check_coverage.py`.
+>
+> **Consecuencia: C-01 no se puede archivar.** No es una formalidad de proceso —
+> `openspec archive` sincroniza las delta specs contra `openspec/specs/`, y
+> promover a spec vigente un contrato del que dos tercios de un capability no
+> tienen verificación es declarar cubierto lo que no lo está.
+
+> **Tareas 10.1 y 10.2 — bloqueadas, con motivos distintos.**
+>
+> - **10.1** exige el pipeline verde de punta a punta. Depende de 8.8 y 8.9:
+>   hace falta una corrida real en GitHub Actions.
+> - **10.2** exige `gitleaks` sobre todo el historial. La herramienta no está
+>   instalada en la máquina y Docker Desktop estaba apagado, así que **no se
+>   corrió**. Lo que sí se verificó a mano: `.env` está ignorado
+>   (`.gitignore:48`), `.env.example` tiene los 35 valores en `cambiame` o
+>   ficticios, y no hay otro archivo de entorno trackeado. Eso **no reemplaza**
+>   el escaneo del historial: un secreto commiteado y borrado después sigue
+>   estando en los objetos de git, y es justo el caso que gitleaks busca.

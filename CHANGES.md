@@ -334,7 +334,12 @@ Tres observaciones sobre la cadena:
 > C-02, C-04 y C-05 son la cadena de auth y tenancy que §3.3 del plan declara crítica: *"toda tarea posterior asume que esto funciona"*.
 
 ### [C-01] `foundation-setup`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[~]` **en curso — 60 de 83 tareas** (actualizado 14-ago-2026, tarea 10.5)
+  - ✅ **Bloques 1-8**: reubicación documental, monorepo §4.1, Docker Compose, contrato de configuración, bootstrap de FastAPI, Alembic, frontend Next.js y pipeline de CI. `T-001`, `T-002`, `T-004`, `T-005`, `T-006`, `T-007` cerradas; `T-003` en 7 de 9.
+  - ⛔ **Bloque 9 (`T-008`, 16 tareas) — bloqueado.** `ADR-015` fijó Kubernetes + ArgoCD pero **no el proveedor cloud**: dice *"AWS o GCP"*. El Terraform de uno y del otro no comparten casi nada, así que `infra/terraform/staging/` no se puede escribir sin esa decisión. **Decisión pendiente de Dirección.**
+  - 🔲 **Bloque 10 (cierre)**: `10.4` y `10.5` hechas. `10.1`, `10.2` y `10.3` abiertas.
+  - **C-01 no se puede archivar todavía**: la auditoría de la tarea 10.3 encontró que `platform/delivery-pipeline` tiene **4 de 15 escenarios** con test ejecutable y `platform/configuration` **8 de 10**. Solo `platform/service-health` está entera (10/10). Archivar promovería a spec vigente un contrato sin verificación.
+  - Detalle y evidencia por tarea en [`openspec/changes/foundation-setup/tasks.md`](openspec/changes/foundation-setup/tasks.md).
 - **Rango**: `T-001` … `T-008` (8 tareas)
 - **Scope**:
   - Monorepo con la estructura canónica vinculante de §4.1 del plan: `backend/`, `frontend-web/`, `frontend-mobile/`, `frontend-admin/`, `docs/adr/`, `docs/runbooks/`, `docs/openapi.yaml`, `.github/workflows/`
@@ -347,10 +352,10 @@ Tres observaciones sobre la cadena:
   - Tests: smoke de arranque de ambos servicios; el pipeline debe correr verde end-to-end
 - **Dependencias**: ninguna
 - **Governance**: **ALTO** — fija el quality gate que bloquea todos los merges del proyecto y la estructura de repositorio que §4.1 declara vinculante (cambiarla después exige un ADR). Proponer y esperar revisión antes de escribir.
-- **Bloqueantes a resolver (al inicio del change)**:
+- **Bloqueantes a resolver (al inicio del change)**: ✅ **los dos cerrados** — `IN-22` por [`ADR-014`](docs/adr/ADR-014-umbrales-de-cobertura.md), `IN-29` por [`ADR-018`](docs/adr/ADR-018-anclas-de-adr-del-plan-de-implementacion.md). Texto original abajo, como registro de qué se decidió y contra qué.
   - **`IN-22`** — umbral de cobertura. La constitución (Art. 2, vinculante) exige **80 % de líneas**; el plan de testing fija **70 % líneas / 60 % branches**; la spec técnica dice 80 % core / 70 % resto. **Hoy el CI está especificado en violación de la norma vinculante del proyecto.** O se enmienda formalmente la constitución (Art. 8) o el plan de testing sube a 80. No se puede escribir `ci.yml` sin este número.
   - **`IN-29`** — numeración de ADRs. `ADR-002`, `ADR-005` y `ADR-011` significan cosas distintas en la spec y en el plan (ej.: T-098 dice *"anclada en ADR-005"*, que es **OpenSearch** en el plan y **React Native** en la spec). La constitución (Principio 5) exige que los ADRs sean vinculantes y trazables; con dos numeraciones esa trazabilidad no existe para las 194 tareas. Fijar la numeración de la spec como canónica y corregir las anclas antes de sembrar `docs/adr/`.
-- **Riesgos**: **R-3** (tabla de variables de entorno inexistente).
+- **Riesgos**: ~~**R-3**~~ (tabla de variables de entorno inexistente) — ✅ **cerrado** por [`ADR-013`](docs/adr/ADR-013-variables-de-entorno.md): 35 variables en 12 grupos, sostenidas por `tools/check-config-parity.py` con 0 divergencias entre el ADR, `.env.example` y `Settings`.
 - **Leer antes**:
   - `docs/sdd/deRuedas-plan-implementacion.md` §4 (estructura canónica del repositorio — vinculante)
   - `knowledge-base/08_arquitectura_propuesta.md` §Estructura de directorios, §Variables de entorno, §Infraestructura y despliegue
