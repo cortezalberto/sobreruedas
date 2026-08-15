@@ -366,17 +366,65 @@ Cubre la capability `platform/delivery-pipeline`.
 > un gate que funciona en sus tests unitarios pero no está cableado al workflow
 > se ve idéntico desde afuera.
 >
-> `platform/delivery-pipeline` sigue en **8 de 15**. Los 7 que faltan:
+> `platform/delivery-pipeline` no se mueve por 8.9: sigue en **8 de 15** por esa
+> tarea. Lo que sí lo mueve son las dos sondas de calidad estática de abajo.
+
+> ### ✅ Los dos escenarios de calidad estática, con evidencia
 >
-> | Escenario | Por qué sigue sin evidencia |
+> *"Violación de reglas de linting"* y *"Error de tipado estático"* seguían sin
+> verificar después del PR #1. Lo único demostrado era su complementario,
+> *"Código conforme"*: que el código limpio pasa. **Que lo sucio se frene es una
+> afirmación distinta**, y no estaba probada. Mismo método que 8.9: rama
+> descartable con borrador propio (PR #3, cerrado y rama borrada).
+>
+> **Sonda de linting** — corrida `31913272452`, un `import json` sin usar:
+>
+> ```
+> F401 [*] `json` imported but unused
+>   --> app/sonda_lint.py:16:8
+> ```
+>
+> **Sonda de tipado** — corrida `31913363813`, función anotada `-> int` que
+> devuelve `str`:
+>
+> ```
+> app/sonda_tipado.py:21: error: Incompatible return value type (got "str", expected "int")  [return-value]
+> ```
+>
+> | Step de `lint-backend` | Sonda de linting | Sonda de tipado |
+> |---|---|---|
+> | `ruff` | ❌ **failure** | ✅ success |
+> | `black --check` | ⊘ skipped | ✅ success |
+> | `mypy --strict` | ⊘ skipped | ❌ **failure** |
+>
+> **Los dos controles viven en el mismo job y corren en cadena, así que el
+> primero que falla corta el resto.** Por eso hicieron falta dos corridas: una
+> sola con las dos violaciones habría dejado un escenario sin evidencia
+> *aparentando tenerla*. Los steps saltados de la primera columna son la prueba.
+>
+> Cada sonda se verificó en local antes de gastar una corrida, para que el rojo
+> cayera en el control correcto: un rojo en el step equivocado no prueba el
+> escenario.
+
+> ### Estado de `platform/delivery-pipeline`: **10 de 15**
+>
+> | Escenario | Evidencia o motivo |
 > |---|---|
-> | Violación de reglas de linting | Hay que provocar el fallo; sonda barata, no se hizo |
-> | Error de tipado estático | Ídem |
-> | Secreto filtrado en el cambio | Plantar un secreto falso en un repo **público** puede activar la protección de push de GitHub. Necesita pensarse aparte |
-> | Vulnerabilidad de severidad baja (solo reporta) | Hay que encontrar un paquete con vulnerabilidad baja y **solo** baja |
-> | Integración exitosa a la rama principal | Bloque 9 |
-> | Fallo de las pruebas de humo | Bloque 9 |
-> | Trazabilidad del despliegue | Bloque 9 |
+> | Cobertura bajo el umbral de líneas | 19 tests de `check-coverage.py` |
+> | Cobertura bajo el umbral de ramas | Ídem, **y** corrida `31912401468` en el pipeline real |
+> | Cobertura que decrece | 19 tests de `check-coverage.py` |
+> | Cambio que cumple los umbrales | Corrida verde `31902935253` |
+> | Violación de reglas de linting | Corrida `31913272452` |
+> | Error de tipado estático | Corrida `31913363813` |
+> | Código conforme | Corrida verde `31902935253` |
+> | Dependencia con vulnerabilidad crítica | Corrida `31901096819`, `pip-audit` |
+> | Propuesta de cambio abierta | PR #1 disparó las corridas |
+> | Duración de la ejecución | 1 m 04 s contra un presupuesto de 15 min |
+> | **Secreto filtrado en el cambio** | ⛔ Plantar un secreto falso en un repo **público** puede activar la protección de push de GitHub. Necesita pensarse aparte |
+> | **Vulnerabilidad de severidad baja (solo reporta)** | ⛔ Hay que hallar un paquete con vulnerabilidad baja y **solo** baja |
+> | **Integración exitosa a la rama principal** | ⛔ Bloque 9 |
+> | **Fallo de las pruebas de humo** | ⛔ Bloque 9 |
+> | **Trazabilidad del despliegue** | ⛔ Bloque 9 |
 
 ## 9. Despliegue a staging — `T-008` · Kubernetes + ArgoCD
 
@@ -436,7 +484,7 @@ Cubre la capability `platform/delivery-pipeline`.
 > |---|---|---|---|
 > | `platform/service-health` | 10 | **10** | ✅ completa |
 > | `platform/configuration` | 10 | **8** | ⚠️ faltan 2 |
-> | `platform/delivery-pipeline` | 15 | **8** | ⚠️ faltan 7 |
+> | `platform/delivery-pipeline` | 15 | **10** | ⚠️ faltan 5 |
 >
 > **`service-health` está entera**: los 10 escenarios tienen test, y 6 de ellos
 > además corren contra servicios reales en `tests/integration/`.
@@ -449,19 +497,22 @@ Cubre la capability `platform/delivery-pipeline`.
 >   configuración se registre en el log al iniciar, ni que ese registro no filtre
 >   los 15 campos sensibles. Es exactamente el punto donde un secreto se escapa.
 >
-> **`delivery-pipeline` — 7 de 15 sin cubrir.** Los 8 cubiertos se reparten en
-> dos grupos: los **4 del gate de cobertura**, por los 19 tests de
-> `tools/tests/test_check_coverage.py`, y **4 que la corrida verde del PR #1
+> **`delivery-pipeline` — 5 de 15 sin cubrir.** Los 10 cubiertos se reparten en
+> tres grupos: los **4 del gate de cobertura**, por los 19 tests de
+> `tools/tests/test_check_coverage.py`; **4 que la corrida verde del PR #1
 > demostró en el pipeline real** (una propuesta de cambio lo dispara, termina
 > bajo el presupuesto de 15 minutos, el código conforme atraviesa los controles
 > de estilo, y una vulnerabilidad bloquea la integración — esto último lo probó
-> `pip-audit` frenando la primera corrida). Ver la auditoría de 8.8.
+> `pip-audit` frenando la primera corrida); y **2 de las sondas de calidad
+> estática** (linting que bloquea, tipado que bloquea). El desglose escenario
+> por escenario está en la tabla del bloque 8.
 >
-> Los 7 que faltan se separan en dos causas, porque no se arreglan igual:
+> Los 5 que faltan se separan en dos causas, porque no se arreglan igual:
 >
-> - **4 exigen provocar el fallo a propósito**: linting que bloquea, error de
->   tipado que bloquea, secreto filtrado que bloquea, y vulnerabilidad baja que
->   solo reporta. Una corrida verde no puede demostrar ninguno. Es la tarea 8.9.
+> - **2 exigen provocar un fallo que no es trivial de provocar**: un secreto
+>   filtrado —plantar uno falso en un repo público puede activar la protección
+>   de push de GitHub— y una vulnerabilidad de severidad baja, que exige hallar
+>   un paquete con vulnerabilidad baja y **solo** baja.
 > - **3 son del bloque 9** (despliegue a staging, reversión por fallo de pruebas
 >   de humo, trazabilidad del commit desplegado). No implementados, y bloqueados
 >   por el proveedor cloud sin decidir.
