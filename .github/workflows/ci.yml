@@ -195,8 +195,22 @@ jobs:
       # `--wait` bloquea hasta que los healthcheck den sano. Sin esto el pytest
       # arranca contra un PostgreSQL que todavia esta inicializando y el fallo
       # se lee como un bug del codigo.
+      #
+      # Los servicios van NOMBRADOS uno por uno a proposito. `--wait` espera que
+      # cada servicio quede running o healthy, y `minio-init` es un contenedor
+      # de un solo uso: crea el bucket y termina. Un contenedor que salio no
+      # esta ni running ni healthy, asi que `--wait` sin lista fallaba con
+      # codigo 1 aunque los cinco servicios estuvieran sanos y minio-init
+      # hubiera salido con 0. Paso en la corrida 31902572855.
       - name: Levantar los servicios efimeros
-        run: docker compose -f docker-compose.test.yml up -d --wait
+        run: docker compose -f docker-compose.test.yml up -d --wait postgres redis opensearch minio
+
+      # `run --rm` en vez de dejarlo colgado del `up`: corre attached y
+      # propaga el codigo de salida, asi un fallo creando el bucket rompe el
+      # job en vez de aparecer despues como un test de MinIO que falla sin
+      # motivo aparente.
+      - name: Crear el bucket de MinIO
+        run: docker compose -f docker-compose.test.yml run --rm minio-init
 
       # El pytest corre en el runner, no adentro del compose, asi que los
       # servicios se alcanzan por los puertos publicados (desplazados a 5433 y
