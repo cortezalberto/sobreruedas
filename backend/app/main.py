@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
-from app.config import Settings, get_settings
+from app.config import Settings, describir_configuracion, get_settings
 from app.core.errors import TIPO_CONTENIDO, register_exception_handlers
 from app.core.observability import (
     CorrelationIdMiddleware,
@@ -96,6 +96,12 @@ def create_app() -> FastAPI:
             settings.redis.url, socket_connect_timeout=3, socket_timeout=3
         )
         app.state.readiness_checks = _crear_sondas(app, settings)
+        # Con que configuracion arranco el proceso, enmascarada. Sin esto,
+        # diagnosticar "en staging anda distinto" empieza por adivinar que
+        # variables tenia el proceso, que es donde se va la primera hora.
+        # Los secretos salen como `***` porque son SecretStr; el enmascarado
+        # no depende de que nadie se acuerde de excluirlos.
+        _logger.info("configuracion efectiva:\n%s", "\n".join(describir_configuracion(settings)))
         _logger.info("aplicacion iniciada (env=%s)", settings.app.env)
         try:
             yield

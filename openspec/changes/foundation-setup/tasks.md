@@ -483,19 +483,36 @@ Cubre la capability `platform/delivery-pipeline`.
 > | Capability | Escenarios | Con test ejecutable | Estado |
 > |---|---|---|---|
 > | `platform/service-health` | 10 | **10** | ✅ completa |
-> | `platform/configuration` | 10 | **8** | ⚠️ faltan 2 |
+> | `platform/configuration` | 10 | **10** | ✅ completa |
 > | `platform/delivery-pipeline` | 15 | **10** | ⚠️ faltan 5 |
 >
 > **`service-health` está entera**: los 10 escenarios tienen test, y 6 de ellos
 > además corren contra servicios reales en `tests/integration/`.
 >
-> **`configuration` — los 2 que faltan:**
-> - *"Fallo de arranque por credencial inválida"*: `test_obligatoria_vacia_se_rechaza`
->   cubre el valor vacío, no una credencial **presente pero rechazada** por el
->   servicio al conectar. Es un escenario de integración y no está escrito.
-> - *"Registro de la configuración al arrancar"*: ningún test verifica que la
->   configuración se registre en el log al iniciar, ni que ese registro no filtre
->   los 15 campos sensibles. Es exactamente el punto donde un secreto se escapa.
+> **`configuration` quedó entera, y los 2 que faltaban no eran un olvido de
+> tests: la conducta que tenían que verificar no existía.** Están en
+> `tests/unit/test_secretos_no_se_exponen.py`, con la implementación que
+> necesitaban:
+>
+> - *"Fallo de arranque por credencial inválida"*: `DATABASE_URL` solo rechazaba
+>   el valor **vacío**, y con un valor vacío la aserción *"el mensaje no filtra
+>   el valor"* es **vacua** — no hay valor que filtrar. Hacía falta que una
+>   credencial *presente y mal formada* también matara el arranque. Se agregó la
+>   validación de forma del DSN (esquema, host y nombre de base) con un mensaje
+>   que nombra la variable y nunca su valor. Cierra además un agujero de fallo
+>   tardío: un DSN con un typo arrancaba sano y recién aparecía como sonda de
+>   disponibilidad en rojo, lejos de su causa.
+> - *"Registro de la configuración al arrancar"*: **nadie registraba la
+>   configuración**, así que no había registro que auditar. Se agregó al
+>   `lifespan`, con los secretos enmascarados por recorrido del modelo — un
+>   campo `SecretStr` nuevo queda enmascarado sin que nadie tenga que acordarse
+>   de sumarlo a una lista.
+>
+> > **Corrección: son 14 campos sensibles, no 15.** La auditoría anterior decía
+> > 15. El número correcto sale del modelo — y el test lo **deriva del modelo**
+> > en vez de fijar la lista, justamente para que no vuelva a desincronizarse:
+> > una lista escrita a mano se queda corta en silencio en cuanto alguien agrega
+> > un secreto, y el test seguiría pasando sin cubrirlo.
 >
 > **`delivery-pipeline` — 5 de 15 sin cubrir.** Los 10 cubiertos se reparten en
 > tres grupos: los **4 del gate de cobertura**, por los 19 tests de
@@ -521,10 +538,16 @@ Cubre la capability `platform/delivery-pipeline`.
 > > comportamiento del workflow" pero enumeraba **8**, y de ahí salía un total
 > > de 14 sobre 15. Los grupos correctos son 4 + 8 + 3 = 15.
 >
-> **Consecuencia: C-01 no se puede archivar.** No es una formalidad de proceso —
-> `openspec archive` sincroniza las delta specs contra `openspec/specs/`, y
-> promover a spec vigente un contrato del que dos tercios de un capability no
-> tienen verificación es declarar cubierto lo que no lo está.
+> **Consecuencia: C-01 sigue sin poder archivarse — 30 de 35.** No es una
+> formalidad de proceso: `openspec archive` sincroniza las delta specs contra
+> `openspec/specs/`, y promover a spec vigente un contrato con escenarios sin
+> verificación es declarar cubierto lo que no lo está.
+>
+> Dos de los tres capabilities ya están enteros. **Lo único que falta son 5
+> escenarios de `delivery-pipeline`, y ninguno depende de escribir un test**:
+> 3 esperan el bloque 9 —o sea la decisión de proveedor cloud— y los otros 2
+> exigen provocar fallos que no son triviales de provocar. Es un límite
+> distinto al de ayer, cuando lo que faltaba era trabajo de tests.
 
 > ### ✅ Tarea 10.2 — historial escaneado y limpio, con un punto ciego cerrado a mano
 >

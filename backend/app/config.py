@@ -24,8 +24,9 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Annotated, Literal
+from urllib.parse import urlparse
 
-from pydantic import BeforeValidator, Field, SecretStr, ValidationError
+from pydantic import BeforeValidator, Field, SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Ambiente = Literal["local", "ci", "staging", "production"]
@@ -82,6 +83,30 @@ class DatabaseSettings(BaseSettings):
     # Sensible: lleva usuario y contrasena embebidos en la URL.
     url: SecretStr = Field(min_length=1, validation_alias="DATABASE_URL")
     pool_size: int = Field(default=20, ge=1, validation_alias="DATABASE_POOL_SIZE")
+
+    @field_validator("url")
+    @classmethod
+    def _dsn_bien_formado(cls, valor: SecretStr) -> SecretStr:
+        """Rechaza un DSN mal formado al arrancar, no al primer query.
+
+        `min_length=1` solo atrapa el valor vacio. Una URL con un typo pasaba la
+        validacion, el proceso arrancaba sano y el problema recien aparecia como
+        una sonda de disponibilidad en rojo, lejos de su causa.
+
+        Se valida la FORMA --esquema, host y nombre de base-- y no el driver: el
+        objetivo es cazar el typo, no imponer politica de motor, que ya la fija
+        ADR-002.
+
+        El mensaje describe que se esperaba y **nunca incluye el valor**: es una
+        credencial, y este error va a parar a los logs de arranque.
+        """
+        partes = urlparse(valor.get_secret_value())
+        if not partes.scheme or not partes.hostname or partes.path.strip("/") == "":
+            raise ValueError(
+                "no es un DSN valido; se espera "
+                "esquema://[usuario:clave@]host[:puerto]/nombre_de_base"
+            )
+        return valor
 
 
 class RedisSettings(BaseSettings):
@@ -225,6 +250,39 @@ _GRUPOS: tuple[type[BaseSettings], ...] = (
     ObservabilitySettings,
     MailSettings,
 )
+
+
+ENMASCARADO = "***"
+SIN_CONFIGURAR = "(sin configurar)"
+
+
+def describir_configuracion(settings: Settings) -> list[str]:
+    """La configuracion efectiva como lineas `VARIABLE=valor`, sin secretos.
+
+    Se recorre el modelo, no una lista escrita a mano: un secreto nuevo queda
+    enmascarado por ser `SecretStr`, sin que nadie tenga que acordarse de
+    agregarlo a ningun lado. Una lista paralela es justo lo que se desactualiza
+    en silencio, y acá el costo de olvidarse es publicar una credencial.
+
+    Se emiten los nombres de las VARIABLES DE ENTORNO y no los de los campos
+    Python: quien lee esto en un incidente va a ir a cambiar una variable.
+    """
+    lineas: list[str] = []
+    for nombre_grupo in Settings.model_fields:
+        grupo = getattr(settings, nombre_grupo)
+        for campo, info in type(grupo).model_fields.items():
+            alias = info.validation_alias
+            if not isinstance(alias, str):
+                continue
+            valor = getattr(grupo, campo)
+            if isinstance(valor, SecretStr):
+                rendido = ENMASCARADO
+            elif valor is None:
+                rendido = SIN_CONFIGURAR
+            else:
+                rendido = str(valor)
+            lineas.append(f"{alias}={rendido}")
+    return sorted(lineas)
 
 
 class ConfigurationError(RuntimeError):
