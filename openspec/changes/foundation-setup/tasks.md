@@ -309,7 +309,7 @@ Cubre la capability `platform/delivery-pipeline`.
 ## 10. Verificación de cierre
 
 - [ ] 10.1 Verificar que el pipeline corre verde de punta a punta sobre el repositorio completo
-- [ ] 10.2 Verificar que ningún valor sensible real quedó versionado (`gitleaks` sobre todo el historial del change)
+- [x] 10.2 Verificar que ningún valor sensible real quedó versionado (`gitleaks` sobre todo el historial del change)
 - [ ] 10.3 Verificar que las tres capabilities tienen sus escenarios cubiertos por tests ejecutables
 - [x] 10.4 Verificar que `IN-22`, `IN-29` y `R-3` quedaron cerrados con su ADR correspondiente
 - [x] 10.5 Actualizar el estado de C-01 en `CHANGES.md`
@@ -363,14 +363,68 @@ Cubre la capability `platform/delivery-pipeline`.
 > promover a spec vigente un contrato del que dos tercios de un capability no
 > tienen verificación es declarar cubierto lo que no lo está.
 
-> **Tareas 10.1 y 10.2 — bloqueadas, con motivos distintos.**
+> ### ✅ Tarea 10.2 — historial escaneado y limpio, con un punto ciego cerrado a mano
 >
-> - **10.1** exige el pipeline verde de punta a punta. Depende de 8.8 y 8.9:
->   hace falta una corrida real en GitHub Actions.
-> - **10.2** exige `gitleaks` sobre todo el historial. La herramienta no está
->   instalada en la máquina y Docker Desktop estaba apagado, así que **no se
->   corrió**. Lo que sí se verificó a mano: `.env` está ignorado
->   (`.gitignore:48`), `.env.example` tiene los 35 valores en `cambiame` o
->   ficticios, y no hay otro archivo de entorno trackeado. Eso **no reemplaza**
->   el escaneo del historial: un secreto commiteado y borrado después sigue
->   estando en los objetos de git, y es justo el caso que gitleaks busca.
+> `gitleaks` **v8.28.0** instalado en la máquina — la **misma versión** que fija
+> el job de seguridad de `ci.yml:303`. Escanear con una versión distinta de la
+> del pipeline mediría otra cosa.
+>
+> ```
+> gitleaks detect --source . --redact --no-banner --verbose
+> → 17 commits scanned · ~3.32 MB · no leaks found · exit 0
+> ```
+>
+> **El 17 de 18 no es un hueco.** `gitleaks` solo escanea **líneas agregadas**;
+> el commit que falta es `0059fe9` (*elimina .gitkeep de alembic/versions*), que
+> tiene **+0 líneas**. No hay nada que escanear ahí.
+>
+> #### El punto ciego: 13 `.docx` que gitleaks nunca vio
+>
+> `detect` recorre la historia con `git log -p`. Un `.docx` es binario, así que
+> git emite `Binary files differ` y **su contenido jamás llega al escáner**. En
+> este repo eso son los **13 documentos fuente** de `autos/*.docx` — 1,52 MB de
+> texto, incluida la constitución y los planes de seguridad. Nunca se escanearon.
+>
+> **El mismo agujero existe en el CI**, y ahí es peor: el job corre gitleaks en
+> un contenedor Linux, donde no aparece ni el error de `astextplain` que lo
+> delató en local. Falla en silencio.
+>
+> Cerrado a mano: se extrajeron los **13 blobs `.docx` de toda la historia**
+> (`git rev-list --objects --all`, no solo el árbol de trabajo), se convirtieron
+> a texto todas sus partes XML — documento, headers, footers, notas, comentarios,
+> propiedades y `.rels`, donde suele esconderse una URL con credencial — y se
+> escanearon con `gitleaks dir`:
+>
+> ```
+> → 13 blobs · ~1.52 MB · no leaks found · exit 0
+> ```
+>
+> #### El escáner se verificó, no se asumió
+>
+> Un `exit 0` solo vale si la herramienta detecta cuando hay algo. Se plantó un
+> token de alta entropía con forma de GitHub PAT en cuatro repositorios sonda:
+>
+> | Sonda | Dónde está el secreto | Resultado |
+> |---|---|---|
+> | B | commit **raíz**, nunca borrado | ✅ detecta · exit 1 |
+> | C | commit 2, nunca borrado | ✅ detecta · exit 1 |
+> | D | commit 2, **borrado** en el commit 3 | ✅ detecta · exit 1 |
+> | E | commit **raíz**, **borrado** después | ✅ detecta · exit 1 |
+>
+> Las cuatro salen con **código 1**. Queda probado lo que importaba: el commit
+> raíz **sí** se escanea, y borrar el archivo después **no** esconde el secreto.
+>
+> > **Una sonda descartada, por si alguien la repite.** El primer intento usó
+> > `AKIAIOSFODNN7EXAMPLE` y gitleaks devolvió *"no leaks found"*. No es un fallo
+> > del escáner: ese valor es el ejemplo de la documentación de AWS y está en la
+> > **allowlist** por defecto. Una sonda con un secreto allowlisteado prueba lo
+> > contrario de lo que parece — habría hecho declarar roto un gate que funciona.
+>
+> #### Complementos ya verificados
+>
+> `.env` ignorado (`.gitignore:48`), los 35 valores de `.env.example` en
+> `cambiame` o ficticios, y ningún otro archivo de entorno trackeado.
+
+> **Tarea 10.1 — sigue bloqueada.** Exige el pipeline verde de punta a punta, y
+> eso depende de 8.8 y 8.9: hace falta una corrida real en GitHub Actions sobre
+> una propuesta de cambio. No se puede sustituir con verificación local.
