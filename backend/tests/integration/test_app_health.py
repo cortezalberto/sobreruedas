@@ -42,6 +42,34 @@ URL_REDIS = os.getenv("TEST_REDIS_URL", "redis://redis:6379/0")
 # o al puerto equivocado a proposito.
 HOST_POSTGRES = urlparse(DSN_POSTGRES).hostname or "postgres"
 HOST_REDIS = urlparse(URL_REDIS).hostname or "redis"
+PUERTO_REDIS = urlparse(URL_REDIS).port or 6379
+
+# Alto en el rango efimero y sin asignar por IANA: nada deberia estar
+# escuchando ahi. Es el puerto que se usa para provocar una conexion rechazada
+# de verdad, en vez de simular la excepcion.
+PUERTO_CERRADO = 59999
+
+
+def dsn_postgres_apuntando_a(host: str, puerto: int) -> str:
+    """Reapunta el DSN de PostgreSQL a otra direccion, conservando el resto.
+
+    Existe porque el `str.replace` que habia antes no servia, y de dos formas
+    distintas segun el entorno:
+
+    - En CI, PostgreSQL y Redis viven los dos en `localhost` y solo difieren en
+      el puerto, asi que reemplazar el host por el otro host no cambiaba nada.
+      El DSN seguia apuntando a la base real y sana.
+    - Con los defaults del compose (`postgres` y `redis`), reemplazar la cadena
+      "postgres" tambien pisaba el ESQUEMA: `postgresql+asyncpg://` quedaba
+      `redisql+asyncpg://`. El DSN malformado fallaba al parsearse y devolvia
+      503, asi que la asercion pasaba sin haber probado nunca que la sonda
+      abriera una conexion.
+
+    Construir el DSN por partes en vez de parchear texto cierra las dos.
+    """
+    partes = urlparse(DSN_POSTGRES)
+    credenciales = f"{partes.username}:{partes.password}@" if partes.username else ""
+    return f"{partes.scheme}://{credenciales}{host}:{puerto}{partes.path}"
 
 
 @pytest.fixture
@@ -79,7 +107,7 @@ def test_la_sonda_hace_mas_que_abrir_el_socket(
     sirve para atender trafico, y una sonda que solo mira el puerto lo declara
     listo igual — que es la forma mas comun de que una sonda mienta.
     """
-    monkeypatch.setenv("DATABASE_URL", DSN_POSTGRES.replace(HOST_POSTGRES, HOST_REDIS))
+    monkeypatch.setenv("DATABASE_URL", dsn_postgres_apuntando_a(HOST_REDIS, PUERTO_REDIS))
     get_settings.cache_clear()
     with TestClient(create_app()) as cliente:
         respuesta = cliente.get("/ready")
@@ -91,9 +119,7 @@ def test_base_de_datos_inalcanzable_da_no_disponible(
     monkeypatch: pytest.MonkeyPatch, entorno_real: None
 ) -> None:
     """Puerto cerrado de verdad, no una excepcion simulada."""
-    monkeypatch.setenv(
-        "DATABASE_URL", f"postgresql+asyncpg://deruedas:deruedas@{HOST_POSTGRES}:59999/deruedas"
-    )
+    monkeypatch.setenv("DATABASE_URL", dsn_postgres_apuntando_a(HOST_POSTGRES, PUERTO_CERRADO))
     get_settings.cache_clear()
     with TestClient(create_app()) as cliente:
         respuesta = cliente.get("/ready")
@@ -104,7 +130,7 @@ def test_base_de_datos_inalcanzable_da_no_disponible(
 def test_redis_inalcanzable_da_no_disponible(
     monkeypatch: pytest.MonkeyPatch, entorno_real: None
 ) -> None:
-    monkeypatch.setenv("REDIS_URL", f"redis://{HOST_REDIS}:59999/0")
+    monkeypatch.setenv("REDIS_URL", f"redis://{HOST_REDIS}:{PUERTO_CERRADO}/0")
     get_settings.cache_clear()
     with TestClient(create_app()) as cliente:
         respuesta = cliente.get("/ready")
@@ -118,7 +144,7 @@ def test_el_503_no_filtra_la_cadena_de_conexion(
     """La excepcion de asyncpg suele traer la URL completa con la contrasena."""
     monkeypatch.setenv(
         "DATABASE_URL",
-        f"postgresql+asyncpg://usuario_secreto:clave_secreta@{HOST_POSTGRES}:59999/deruedas",
+        f"postgresql+asyncpg://usuario_secreto:clave_secreta@{HOST_POSTGRES}:{PUERTO_CERRADO}/deruedas",
     )
     get_settings.cache_clear()
     with TestClient(create_app()) as cliente:
@@ -134,10 +160,8 @@ def test_health_responde_aunque_las_dependencias_esten_caidas(
     """La sonda de VIDA no mira dependencias. Si lo hiciera, una caida de
     PostgreSQL haria que Kubernetes reinicie el pod en loop sin arreglar nada.
     """
-    monkeypatch.setenv(
-        "DATABASE_URL", f"postgresql+asyncpg://deruedas:deruedas@{HOST_POSTGRES}:59999/deruedas"
-    )
-    monkeypatch.setenv("REDIS_URL", f"redis://{HOST_REDIS}:59999/0")
+    monkeypatch.setenv("DATABASE_URL", dsn_postgres_apuntando_a(HOST_POSTGRES, PUERTO_CERRADO))
+    monkeypatch.setenv("REDIS_URL", f"redis://{HOST_REDIS}:{PUERTO_CERRADO}/0")
     get_settings.cache_clear()
     with TestClient(create_app()) as cliente:
         assert cliente.get("/ready").status_code == 503
