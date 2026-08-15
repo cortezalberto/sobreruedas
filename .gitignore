@@ -1,6 +1,10 @@
 # Python
 __pycache__/
 *.py[cod]
+# Metadata que setuptools regenera en cada `pip install -e`. No es fuente, y sin
+# esta linea cualquier `git add -A` la arrastra al commit: paso al preparar las
+# sondas de 8.9.
+*.egg-info/
 .venv/
 venv/
 .pytest_cache/

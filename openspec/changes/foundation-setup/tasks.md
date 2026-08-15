@@ -204,7 +204,7 @@ Cubre la capability `platform/delivery-pipeline`.
 - [x] 8.6 Configurar el job de integración levantando `docker-compose.test.yml`
 - [x] 8.7 Configurar la caché de dependencias de `pip` y `npm`
 - [x] 8.8 Verificar con una propuesta de cambio de prueba: pasa en verde en menos de 15 minutos
-- [ ] 8.9 Verificar que un test que falla y una cobertura insuficiente bloquean efectivamente la integración
+- [x] 8.9 Verificar que un test que falla y una cobertura insuficiente bloquean efectivamente la integración
 
 > **`fail_under` no implementaba el umbral de ADR-014, y esa es la razón de ser de este bloque.**
 >
@@ -309,14 +309,74 @@ Cubre la capability `platform/delivery-pipeline`.
 > vulnerabilidad baja que solo reporta. Los cuatro exigen provocar el fallo a
 > propósito — es la tarea 8.9.
 
-> **Tarea 8.9 — abierta, y necesita lo contrario que 8.8.** Pide comprobar que
-> un test que falla y una cobertura insuficiente **bloquean** la integración.
-> Una corrida verde no lo demuestra: hace falta romper algo deliberadamente y
-> ver el rojo. Lo verificado hasta acá sigue siendo local — los 19 tests de
-> `tools/tests/test_check_coverage.py` cubren umbral incumplido, ramas por
-> debajo con líneas de sobra, decrecimiento, base ausente, base corrupta, JSON
-> sin medición de ramas y división por cero. Que el gate bloquee **en el
-> pipeline** es lo que falta.
+> ### ✅ Tarea 8.9 — el pipeline bloquea, probado rompiéndolo a propósito
+>
+> 8.8 demuestra que el pipeline deja pasar lo bueno; **no dice nada sobre si
+> frena lo malo**. Para eso hace falta el rojo. Se hizo en una rama descartable
+> con su propio borrador (PR #2, cerrado y rama borrada al terminar) para no
+> dejar commits deliberadamente rotos en la historia del PR #1.
+>
+> **Sonda A — un test que falla bloquea.** Corrida `31912256633`:
+>
+> ```
+> FAILED tests/unit/test_sonda_8_9_test_que_falla.py::test_sonda_este_test_falla_a_proposito
+> 1 failed, 69 passed, 6 deselected
+> ```
+>
+> `test-backend-unit` en rojo, los otros cinco jobs en verde, conclusión global
+> *failure*.
+>
+> **Sonda B — la cobertura insuficiente bloquea, y la bloquea el gate.** Acá el
+> diseño de la sonda importa más que el resultado.
+>
+> `fail_under = 80` corre dentro de `pytest`, **antes** que
+> `tools/check-coverage.py`. Una sonda que bajara la cobertura de líneas habría
+> muerto en `fail_under`, y la evidencia habría demostrado la red de contención
+> en lugar del gate. Así que la sonda provoca exactamente el caso que este
+> bloque documenta como el agujero de `fail_under`: un módulo con 60
+> condicionales que el test ejecuta enteros —líneas altas— recorriendo una sola
+> rama de cada uno —ramas por el piso.
+>
+> Corrida `31912401468`, los dos steps del job cuentan la historia entera:
+>
+> | Step | Resultado | Salida |
+> |---|---|---|
+> | `pytest unitario con cobertura` | ✅ | `Required test coverage of 80.0% reached. Total coverage: 86.45%` · 70 passed |
+> | `Gate de cobertura` | ❌ | `[FAIL] cobertura de ramas 55.88 % por debajo del piso 60.00 % (ADR-014)` |
+>
+> | Métrica | Medido | Piso | |
+> |---|---|---|---|
+> | Líneas | 97.81 % | 80 % | pasa |
+> | Ramas | **55.88 %** | 60 % | **bloquea** |
+> | `fail_under` combinado | 86.45 % | 80 % | pasa |
+>
+> **`fail_under` dejó pasar el archivo.** Lo frenó `check-coverage.py`, y por
+> ramas. Es la prueba directa del argumento con el que se justificó todo este
+> bloque: sin ese gate, un módulo con la mitad de sus ramas sin ejercitar entra
+> sin que nadie se entere.
+
+> ### ⚠️ 8.9 no mueve el conteo de escenarios, y conviene decirlo
+>
+> La tarea queda cumplida: sus dos mitades tienen evidencia de corridas reales.
+> Pero los dos escenarios que las sondas ejercitan —*"Cobertura por debajo del
+> umbral de ramas"* y el bloqueo por tests— **ya estaban contados** entre los 4
+> del quality gate, cubiertos por los 19 tests de
+> `tools/tests/test_check_coverage.py`. Lo que agrega 8.9 es **confirmarlos en
+> el pipeline real** en vez de solo en el verificador aislado, que no es poco:
+> un gate que funciona en sus tests unitarios pero no está cableado al workflow
+> se ve idéntico desde afuera.
+>
+> `platform/delivery-pipeline` sigue en **8 de 15**. Los 7 que faltan:
+>
+> | Escenario | Por qué sigue sin evidencia |
+> |---|---|
+> | Violación de reglas de linting | Hay que provocar el fallo; sonda barata, no se hizo |
+> | Error de tipado estático | Ídem |
+> | Secreto filtrado en el cambio | Plantar un secreto falso en un repo **público** puede activar la protección de push de GitHub. Necesita pensarse aparte |
+> | Vulnerabilidad de severidad baja (solo reporta) | Hay que encontrar un paquete con vulnerabilidad baja y **solo** baja |
+> | Integración exitosa a la rama principal | Bloque 9 |
+> | Fallo de las pruebas de humo | Bloque 9 |
+> | Trazabilidad del despliegue | Bloque 9 |
 
 ## 9. Despliegue a staging — `T-008` · Kubernetes + ArgoCD
 
