@@ -79,8 +79,13 @@ services:
       DISABLE_INSTALL_DEMO_CONFIG: "true"
     ports:
       - "9201:9200"
+    # `mode=1777` no es decorativo: sin el, docker monta el tmpfs como root y
+    # OpenSearch --que corre como uid 1000-- no puede crear `data/nodes`. El
+    # contenedor muere con AccessDeniedException, el healthcheck agota sus 30
+    # reintentos y el job entero se cae dos minutos y medio despues, lejos de
+    # la causa. Paso en la corrida 31901096819.
     tmpfs:
-      - /usr/share/opensearch/data
+      - /usr/share/opensearch/data:mode=1777
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
       interval: 5s
