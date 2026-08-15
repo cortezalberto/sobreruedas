@@ -203,7 +203,7 @@ Cubre la capability `platform/delivery-pipeline`.
 - [x] 8.5 Configurar el job de seguridad: `pip-audit`, `npm audit` y `gitleaks`, bloqueante en alta o crítica y ante cualquier secreto
 - [x] 8.6 Configurar el job de integración levantando `docker-compose.test.yml`
 - [x] 8.7 Configurar la caché de dependencias de `pip` y `npm`
-- [ ] 8.8 Verificar con una propuesta de cambio de prueba: pasa en verde en menos de 15 minutos
+- [x] 8.8 Verificar con una propuesta de cambio de prueba: pasa en verde en menos de 15 minutos
 - [ ] 8.9 Verificar que un test que falla y una cobertura insuficiente bloquean efectivamente la integración
 
 > **`fail_under` no implementaba el umbral de ADR-014, y esa es la razón de ser de este bloque.**
@@ -257,21 +257,66 @@ Cubre la capability `platform/delivery-pipeline`.
 > `TEST_DATABASE_URL`/`TEST_REDIS_URL`, así que corren en el runner contra los
 > puertos publicados (5433 y 6380) sin tocar una línea.
 
-> **Fuera de alcance, declarado**
+> ### ✅ Tarea 8.8 — verde en el pipeline real, y las cuatro corridas que costó
 >
-> Las tareas **8.8 y 8.9 no son verificables todavía**: piden una propuesta de
-> cambio corriendo en GitHub Actions y midiendo el presupuesto de 15 minutos.
-> Lo que sí se verificó de forma local:
+> El pipeline nunca había corrido. `ci.yml` dispara en `pull_request → main` y
+> `push → main`, así que ningún push a la rama de trabajo lo activaba. Abrir el
+> **PR #1** fue el primer disparo real, y destapó cuatro fallos en cadena —
+> todos en cosas que hasta ese momento **nunca se habían ejecutado**.
 >
-> - `ci.yml` **parsea como YAML válido**, con los 6 jobs y los 2 disparadores.
-> - El gate bloquea de verdad: 19 tests cubren umbral incumplido, ramas por
->   debajo con líneas de sobra, decrecimiento, base ausente, base corrupta,
->   JSON sin medición de ramas y división por cero con 0 ramas.
-> - Quedan sin verificar **en el pipeline real**: el presupuesto de 15 minutos,
->   la efectividad de la caché y que el job de integración levante el compose en
->   el runner de GitHub.
+> | # | Run | Resultado | Qué se rompió |
+> |---|---|---|---|
+> | 1 | `31901096819` | ❌ 3 m 32 s | `pip-audit` bloqueó por 4 CVEs; OpenSearch nunca arrancó |
+> | 2 | `31902572855` | ❌ 1 m 00 s | `up --wait` fallaba por un contenedor de un solo uso |
+> | 3 | `31902708220` | ❌ 59 s | `test_la_sonda_hace_mas_que_abrir_el_socket` |
+> | 4 | `31902935253` | ✅ **1 m 04 s** | — |
 >
-> No se marca 8.8 ni 8.9 como hechas. El estado no miente.
+> **Los 6 jobs en verde en 1 m 04 s.** El presupuesto de D-6 es de 15 minutos:
+> quedan **13 m 56 s de margen**, y la corrida 1 midió 3 m 32 s con la caché
+> **fría**, así que el margen no depende de la caché para sostenerse.
+>
+> Las cuatro causas, para que no se repitan:
+>
+> 1. **`pip-audit` bloqueó por 4 CVEs** en `black` y `pytest`, ambas de
+>    desarrollo. **El gate hizo exactamente lo que debía.** Los pines tenían
+>    techo de major, así que el arreglo obligó a cruzarlo. `pytest-asyncio` subió
+>    a la serie 1.x en el mismo movimiento: con el techo `<1`, pip retrocedía
+>    hasta 0.23.3 para poder instalar pytest 9, que es cambiar una
+>    vulnerabilidad conocida por compatibilidad accidental.
+> 2. **OpenSearch moría con `AccessDeniedException`**: el tmpfs se montaba con
+>    dueño root y el proceso corre como uid 1000. Resuelto con `mode=1777`.
+> 3. **`up --wait` no puede esperar a `minio-init`**, que crea el bucket y
+>    termina: un contenedor que salió no está ni *running* ni *healthy*, así que
+>    el éxito se leía como fallo. Los servicios de larga vida van nombrados uno
+>    por uno y el bucket se crea en su propio step con `run --rm`, que **propaga
+>    el código de salida** — colgado del `up` nunca se verificaba.
+> 4. **Un test que nunca probó lo que decía probar.** Ver el bloque 5.
+>
+> #### Lo que la corrida verde deja demostrado de `platform/delivery-pipeline`
+>
+> Cuatro escenarios pasan de "solo verificable corriendo el pipeline" a
+> verificados, con evidencia de corridas reales:
+>
+> | Escenario | Evidencia |
+> |---|---|
+> | Una propuesta de cambio dispara el pipeline | PR #1 disparó las 4 corridas |
+> | El pipeline termina bajo el presupuesto de 15 min | 1 m 04 s, margen de 13 m 56 s |
+> | Código conforme atraviesa los controles de estilo | `lint-backend` y `lint-frontend` en verde |
+> | Una vulnerabilidad bloquea la integración | `pip-audit` frenó la corrida 1 |
+>
+> **Los otros escenarios siguen sin evidencia** y no se pueden marcar: linting
+> que bloquea, error de tipado que bloquea, secreto filtrado que bloquea, y
+> vulnerabilidad baja que solo reporta. Los cuatro exigen provocar el fallo a
+> propósito — es la tarea 8.9.
+
+> **Tarea 8.9 — abierta, y necesita lo contrario que 8.8.** Pide comprobar que
+> un test que falla y una cobertura insuficiente **bloquean** la integración.
+> Una corrida verde no lo demuestra: hace falta romper algo deliberadamente y
+> ver el rojo. Lo verificado hasta acá sigue siendo local — los 19 tests de
+> `tools/tests/test_check_coverage.py` cubren umbral incumplido, ramas por
+> debajo con líneas de sobra, decrecimiento, base ausente, base corrupta, JSON
+> sin medición de ramas y división por cero. Que el gate bloquee **en el
+> pipeline** es lo que falta.
 
 ## 9. Despliegue a staging — `T-008` · Kubernetes + ArgoCD
 
@@ -308,7 +353,7 @@ Cubre la capability `platform/delivery-pipeline`.
 
 ## 10. Verificación de cierre
 
-- [ ] 10.1 Verificar que el pipeline corre verde de punta a punta sobre el repositorio completo
+- [x] 10.1 Verificar que el pipeline corre verde de punta a punta sobre el repositorio completo
 - [x] 10.2 Verificar que ningún valor sensible real quedó versionado (`gitleaks` sobre todo el historial del change)
 - [ ] 10.3 Verificar que las tres capabilities tienen sus escenarios cubiertos por tests ejecutables
 - [x] 10.4 Verificar que `IN-22`, `IN-29` y `R-3` quedaron cerrados con su ADR correspondiente
@@ -331,7 +376,7 @@ Cubre la capability `platform/delivery-pipeline`.
 > |---|---|---|---|
 > | `platform/service-health` | 10 | **10** | ✅ completa |
 > | `platform/configuration` | 10 | **8** | ⚠️ faltan 2 |
-> | `platform/delivery-pipeline` | 15 | **4** | ❌ faltan 11 |
+> | `platform/delivery-pipeline` | 15 | **8** | ⚠️ faltan 7 |
 >
 > **`service-health` está entera**: los 10 escenarios tienen test, y 6 de ellos
 > además corren contra servicios reales en `tests/integration/`.
@@ -344,19 +389,26 @@ Cubre la capability `platform/delivery-pipeline`.
 >   configuración se registre en el log al iniciar, ni que ese registro no filtre
 >   los 15 campos sensibles. Es exactamente el punto donde un secreto se escapa.
 >
-> **`delivery-pipeline` — 11 de 15 sin cubrir**, y hay que separar dos causas
-> distintas porque no se arreglan igual:
+> **`delivery-pipeline` — 7 de 15 sin cubrir.** Los 8 cubiertos se reparten en
+> dos grupos: los **4 del gate de cobertura**, por los 19 tests de
+> `tools/tests/test_check_coverage.py`, y **4 que la corrida verde del PR #1
+> demostró en el pipeline real** (una propuesta de cambio lo dispara, termina
+> bajo el presupuesto de 15 minutos, el código conforme atraviesa los controles
+> de estilo, y una vulnerabilidad bloquea la integración — esto último lo probó
+> `pip-audit` frenando la primera corrida). Ver la auditoría de 8.8.
 >
-> - **7 escenarios describen comportamiento del workflow** (linting que bloquea,
->   error de tipado que bloquea, código conforme que pasa, vulnerabilidad crítica
->   que bloquea, secreto filtrado que bloquea, vulnerabilidad baja que solo
->   reporta, propuesta de cambio que dispara el pipeline, duración < 15 min).
->   **Solo se verifican corriendo el pipeline de verdad** — son las tareas 8.8 y
->   8.9, que siguen abiertas.
-> - **3 escenarios son del bloque 9** (despliegue a staging, reversión por fallo
->   de pruebas de humo, trazabilidad del commit desplegado). No implementados.
-> - Los **4 cubiertos** son los del gate de cobertura, y lo están por los 19
->   tests de `tools/tests/test_check_coverage.py`.
+> Los 7 que faltan se separan en dos causas, porque no se arreglan igual:
+>
+> - **4 exigen provocar el fallo a propósito**: linting que bloquea, error de
+>   tipado que bloquea, secreto filtrado que bloquea, y vulnerabilidad baja que
+>   solo reporta. Una corrida verde no puede demostrar ninguno. Es la tarea 8.9.
+> - **3 son del bloque 9** (despliegue a staging, reversión por fallo de pruebas
+>   de humo, trazabilidad del commit desplegado). No implementados, y bloqueados
+>   por el proveedor cloud sin decidir.
+>
+> > **Corrección a la auditoría anterior.** Decía "7 escenarios describen
+> > comportamiento del workflow" pero enumeraba **8**, y de ahí salía un total
+> > de 14 sobre 15. Los grupos correctos son 4 + 8 + 3 = 15.
 >
 > **Consecuencia: C-01 no se puede archivar.** No es una formalidad de proceso —
 > `openspec archive` sincroniza las delta specs contra `openspec/specs/`, y
@@ -425,6 +477,7 @@ Cubre la capability `platform/delivery-pipeline`.
 > `.env` ignorado (`.gitignore:48`), los 35 valores de `.env.example` en
 > `cambiame` o ficticios, y ningún otro archivo de entorno trackeado.
 
-> **Tarea 10.1 — sigue bloqueada.** Exige el pipeline verde de punta a punta, y
-> eso depende de 8.8 y 8.9: hace falta una corrida real en GitHub Actions sobre
-> una propuesta de cambio. No se puede sustituir con verificación local.
+> **✅ Tarea 10.1 — pipeline verde de punta a punta.** Corrida `31902935253`
+> sobre el PR #1, commit `299d485`: **los 6 jobs en verde en 1 m 04 s**, sobre
+> el repositorio completo. Costó cuatro corridas y tres arreglos; el detalle
+> está en la auditoría de 8.8.
