@@ -311,8 +311,7 @@ async def tablas_sin_politica() -> set[str]:
     queda corta en silencio en cuanto alguien agrega una tabla, y el test
     seguiria pasando sin cubrirla.
     """
-    consulta = text(
-        """
+    consulta = text("""
         SELECT c.relname
         FROM pg_class c
         JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -326,8 +325,7 @@ async def tablas_sin_politica() -> set[str]:
               SELECT 1 FROM pg_policies p
               WHERE p.schemaname = n.nspname AND p.tablename = c.relname
           )
-        """
-    )
+        """)
     async with sesion_de_plataforma(dsn=DSN) as sesion:
         filas = await sesion.execute(consulta)
         return {fila[0] for fila in filas}

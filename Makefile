@@ -17,7 +17,7 @@ COMPOSE := docker compose
 BACKEND := $(COMPOSE) run --rm --no-deps backend
 
 .DEFAULT_GOAL := help
-.PHONY: help up down logs migrate migrate-down-one migration test test-integration coverage test-tools lint format check
+.PHONY: help up down logs rebuild migrate migrate-down-one migration test test-integration coverage test-tools lint format check
 
 help:  ## Muestra esta ayuda
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /  ->  /'
@@ -91,8 +91,19 @@ endif
 test-tools:  ## Tests de los verificadores de tools/ (corren en el host)
 	@$(PYTEST_HOST) -m pytest tools/tests -q
 
+# ⚠️ Si `make lint` da verde y el CI da rojo, sospecha de la imagen: se
+# construye una vez y NO se entera de que pyproject.toml cambio sus pisos de
+# version. Paso el 16-ago-2026 — la imagen tenia black 24.10.0 mientras
+# pyproject exigia >=26.3.1, asi que el lint local corria una version que ni
+# siquiera cumplia la restriccion del proyecto (y con las vulnerabilidades
+# PYSEC que ese piso existe para evitar). El CI instala siempre desde cero.
+#
+#     make rebuild
 lint:  ## ruff + black --check + mypy --strict
 	$(BACKEND) sh -c "ruff check app tests alembic && black --check app tests alembic && mypy app"
+
+rebuild:  ## Reconstruye la imagen del backend tras tocar pyproject.toml
+	$(COMPOSE) build backend
 
 format:  ## Aplica black y arregla lo que ruff pueda
 	$(BACKEND) sh -c "ruff check --fix app tests alembic && black app tests alembic"
