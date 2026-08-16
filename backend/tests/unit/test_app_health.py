@@ -10,7 +10,7 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.config import get_settings
 from app.main import create_app
@@ -29,6 +29,21 @@ class CuerpoDePrueba(BaseModel):
     """
 
     cantidad: int
+
+
+class CuerpoDeTresCampos(BaseModel):
+    """Tres campos que pueden fallar por motivos DISTINTOS.
+
+    A nivel de modulo por el mismo motivo que `CuerpoDePrueba`.
+
+    Los tres motivos son a proposito distintos entre si —tipo equivocado,
+    ausente, y fuera de rango—: un test con tres campos que fallan igual no
+    distingue "un codigo por entrada" de "el mismo codigo repetido tres veces".
+    """
+
+    cantidad: int
+    nombre: str
+    edad: int = Field(ge=0)
 
 
 async def _sonda_sana() -> None:
@@ -265,3 +280,89 @@ def test_el_error_de_validacion_no_devuelve_lo_que_mando_el_cliente(
     respuesta = cliente.post("/_prueba/sensible", json={"cantidad": secreto})
     assert respuesta.status_code == 422
     assert secreto not in respuesta.text
+
+
+def test_cada_campo_invalido_trae_field_code_y_message(cliente: TestClient) -> None:
+    """Una entrada por campo, y cada una con las tres cosas — tarea 4.1.
+
+    El `code` de la entrada es lo que le permite al cliente discriminar POR QUE
+    fallo ese campo sin leer el mensaje en castellano. Sin el, la unica forma de
+    distinguir "falta" de "no es un numero" es parsear texto — que es
+    exactamente lo que el formato uniforme existe para evitar.
+
+    Ojo con la diferencia de niveles: el `code` de arriba (`validation_error`)
+    dice QUE CLASE de error es la respuesta; el de cada entrada dice QUE LE PASA
+    A ESE CAMPO. Son dos cosas y por eso son dos campos.
+    """
+
+    @cliente.app.post("/_prueba/tres-campos")
+    async def _recibe(cuerpo: CuerpoDeTresCampos) -> dict[str, int]:
+        return {"cantidad": cuerpo.cantidad}
+
+    respuesta = cliente.post(
+        "/_prueba/tres-campos",
+        json={"cantidad": "no-es-numero", "edad": -1},  # y `nombre` ausente
+    )
+    assert respuesta.status_code == 422
+
+    entradas = respuesta.json()["errors"]
+    assert len(entradas) == 3, f"se esperaba una entrada por campo invalido: {entradas}"
+
+    for entrada in entradas:
+        assert set(entrada) == {
+            "field",
+            "code",
+            "message",
+        }, f"la entrada no trae exactamente field/code/message: {entrada}"
+        assert entrada["code"], f"la entrada trae el codigo vacio: {entrada}"
+
+    # Los tres fallan por motivos distintos, asi que los tres codigos difieren.
+    # Sin esto, devolver una constante en `code` pasaria el test de arriba.
+    codigos = {entrada["field"].split(".")[-1]: entrada["code"] for entrada in entradas}
+    assert (
+        len(set(codigos.values())) == 3
+    ), f"tres motivos distintos deberian dar tres codigos distintos: {codigos}"
+
+
+def test_un_cursor_invalido_sale_con_el_formato_uniforme(cliente: TestClient) -> None:
+    """Tarea 4.4: el cursor ilegible se rechaza CON EL MISMO formato que todo lo demás.
+
+    Un cursor roto no es una regla de negocio incumplida ni un fallo de
+    validación de esquema —su formato es interno, ningún modelo Pydantic puede
+    describirlo—, así que sale por `RequestError` y da 400. Lo que no cambia es
+    la forma: mismo `content-type`, mismo `code` estable, mismo
+    `correlation_id`.
+    """
+    from app.core.pagination import CursorInvalido
+
+    @cliente.app.get("/_prueba/cursor")
+    async def _explota() -> None:
+        raise CursorInvalido
+
+    respuesta = cliente.get("/_prueba/cursor")
+
+    assert respuesta.status_code == 400
+    assert respuesta.headers["content-type"].startswith("application/problem+json")
+    cuerpo = respuesta.json()
+    assert cuerpo["code"] == "cursor_invalido"
+    assert "correlation_id" in cuerpo
+
+
+def test_el_codigo_del_campo_no_depende_del_idioma(cliente: TestClient) -> None:
+    """El codigo tiene que ser identificable por maquina.
+
+    Contrapeso del test de arriba: aquel exige que los codigos DIFIERAN, y eso
+    lo cumpliria tambien usar el mensaje descriptivo como codigo. Aca se exige
+    que el codigo sea un identificador estable y no la prosa.
+    """
+
+    @cliente.app.post("/_prueba/idioma")
+    async def _recibe(cuerpo: CuerpoDePrueba) -> dict[str, int]:
+        return {"cantidad": cuerpo.cantidad}
+
+    respuesta = cliente.post("/_prueba/idioma", json={"cantidad": "no-es-numero"})
+    entrada = respuesta.json()["errors"][0]
+
+    assert entrada["code"] != entrada["message"]
+    assert " " not in entrada["code"], f"el codigo parece prosa: {entrada['code']!r}"
+    assert entrada["code"] == entrada["code"].lower()

@@ -52,8 +52,8 @@ codigo, un nombre distinto se lee como una decision (design.md D-4).
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 
 from sqlalchemy import text
@@ -141,6 +141,50 @@ def violaciones_de_aislamiento() -> int:
     return _violaciones
 
 
+def registrar_violacion_de_aislamiento() -> None:
+    """Suma uno a la metrica centinela `rls_violations_total` (RN-MT-08).
+
+    Publica porque el acceso cruzado no se intenta solo por la via de una
+    consulta: un cursor de paginacion emitido para un tenant y presentado en
+    otro es exactamente lo mismo, y rechazarlo sin contarlo lo dejaria sin
+    registrar. Un ataque de enumeracion se ve en la metrica antes que en
+    cualquier otro lado, o no se ve.
+
+    Quien la llama tiene que ademas RECHAZAR la operacion. Contar sin rechazar
+    seria peor que no contar.
+    """
+    global _violaciones
+    _violaciones += 1
+
+
+@contextmanager
+def contexto_de_tenant(tenant_id: object) -> Iterator[uuid.UUID]:
+    """Establece el tenant que rige, sin abrir ninguna sesion.
+
+    Para trabajo que ocurre FUERA de un ciclo de peticion y respuesta: el
+    consumidor de eventos de dominio, sobre todo. El aislamiento no puede
+    depender de estar atendiendo un request (D-10).
+
+    OJO CON LO QUE ESTO ES Y LO QUE NO ES
+    ─────────────────────────────────────
+    Establece la capa 3 —el contexto que `exigir_tenant_del_contexto` compara—,
+    NO la capa 2. El parametro `app.current_tenant` de PostgreSQL vive en una
+    transaccion, y aca no hay ninguna abierta.
+
+    O sea: esto no reemplaza a `sesion_de_tenant`, la acompana. Quien procese un
+    evento igual tiene que pedir sus sesiones con `sesion_de_tenant`, que es lo
+    que pone el contexto del lado de la base.
+    """
+    tenant = tenant_valido(tenant_id)
+    testigo = _tenant_actual.set(tenant)
+    try:
+        yield tenant
+    finally:
+        # Se restaura aunque el cuerpo haya roto: un contexto que sobrevive es
+        # el proximo trabajo heredando el tenant del anterior.
+        _tenant_actual.reset(testigo)
+
+
 def exigir_tenant_del_contexto(tenant_id: object) -> uuid.UUID:
     """Verifica que lo que se va a consultar sea del tenant en contexto.
 
@@ -151,16 +195,14 @@ def exigir_tenant_del_contexto(tenant_id: object) -> uuid.UUID:
     Pedir otro tenant no devuelve vacio: rompe. Un vacio silencioso se lee como
     "no hay datos" y un intento de acceso cruzado quedaria sin registrar.
     """
-    global _violaciones
-
     pedido = tenant_valido(tenant_id)
     contexto = _tenant_actual.get()
 
     if contexto is None:
-        _violaciones += 1
+        registrar_violacion_de_aislamiento()
         raise AccesoCruzado("no hay contexto de tenant establecido")
     if pedido != contexto:
-        _violaciones += 1
+        registrar_violacion_de_aislamiento()
         raise AccesoCruzado("se pidio data de un tenant distinto al del contexto")
     return pedido
 

@@ -10,6 +10,26 @@ El formato es Problem Details (RFC 9457), con dos extensiones propias:
                   discrimine sin parsear el texto en castellano
   correlation_id  el identificador de la peticion. Sin esto, un usuario que
                   reporta "me dio error" no se puede rastrear en los logs.
+
+Y en los errores de validacion, una tercera:
+
+  errors[]        una entrada por campo invalido, con `field`, `code` y
+                  `message`.
+
+DOS `code` EN NIVELES DISTINTOS
+───────────────────────────────
+El `code` de arriba dice QUE CLASE de error es la respuesta (`validation_error`,
+`patente_duplicada`). El `code` de cada entrada de `errors[]` dice QUE LE PASA A
+ESE CAMPO (`missing`, `int_parsing`). Son dos preguntas distintas y por eso son
+dos campos; colapsarlos obligaria al cliente a leer el mensaje para saber por
+que fallo un campo, que es justo lo que este formato evita.
+
+El codigo por campo es el `type` de pydantic. Se usa tal cual y no se traduce a
+un vocabulario propio: el de pydantic ya es estable, esta documentado y cubre
+todos los casos, mientras que una tabla de equivalencias propia habria que
+mantenerla al dia sin ningun consumidor que hoy la pida. Si algun dia el
+contrato publico necesita independizarse de la version de pydantic, el lugar
+para traducir es este y nada mas que este.
 """
 
 from __future__ import annotations
@@ -41,6 +61,46 @@ class DomainError(Exception):
         self.code = code or "domain_error"
 
 
+class AuthenticationError(Exception):
+    """No se pudo establecer quien hace la peticion.
+
+    401 y no 403: son cosas distintas y confundirlas confunde a quien consume la
+    API. **401 es "no se quien sos"** —falta el token, o no vale— y se arregla
+    presentando uno bueno. **403 es "se quien sos y no podes"** —lo trae
+    `rbac.py` en el bloque 6— y no se arregla reintentando.
+
+    Devolver 403 ante un token vencido manda a pedir permisos que ya se tienen;
+    devolver 401 ante una falta de permisos manda a renovar un token que esta
+    perfecto. En los dos casos se pierde media hora mirando el lugar equivocado.
+    """
+
+    status_code = 401
+
+    def __init__(self, detail: str, *, code: str | None = None) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.code = code or "not_authenticated"
+
+
+class RequestError(Exception):
+    """La peticion no se pudo interpretar, y la validacion no lo atrapo.
+
+    Distinto de `DomainError`: alla la peticion se entendio y el dominio la
+    rechazo; aca no se llego a entender. Un cursor de paginacion ilegible es el
+    caso tipico — no es una regla de negocio incumplida, es una entrada rota que
+    ningun esquema Pydantic puede validar porque su formato es interno.
+
+    400 y no 422 por eso mismo.
+    """
+
+    status_code = 400
+
+    def __init__(self, detail: str, *, code: str | None = None) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.code = code or "invalid_request"
+
+
 def _problema(
     *, status: int, title: str, detail: str, code: str, extra: dict[str, Any] | None = None
 ) -> JSONResponse:
@@ -69,6 +129,24 @@ def register_exception_handlers(app: FastAPI) -> None:
             code=exc.code,
         )
 
+    @app.exception_handler(AuthenticationError)
+    async def _autenticacion(_: Request, exc: AuthenticationError) -> JSONResponse:
+        return _problema(
+            status=exc.status_code,
+            title="No autenticado",
+            detail=exc.detail,
+            code=exc.code,
+        )
+
+    @app.exception_handler(RequestError)
+    async def _peticion(_: Request, exc: RequestError) -> JSONResponse:
+        return _problema(
+            status=exc.status_code,
+            title="Peticion no interpretable",
+            detail=exc.detail,
+            code=exc.code,
+        )
+
     @app.exception_handler(StarletteHTTPException)
     async def _http(_: Request, exc: StarletteHTTPException) -> JSONResponse:
         return _problema(
@@ -82,9 +160,15 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def _validacion(_: Request, exc: RequestValidationError) -> JSONResponse:
         # `errors()` trae `input`, o sea el valor que mando el cliente. Se
         # descarta a proposito: puede ser una contrasena o un token.
+        #
+        # Se construye entrada por entrada y NO con un `dict(detalle)` filtrado:
+        # asi, el dia que pydantic agregue una clave nueva a su salida, esa
+        # clave no se cuela sola en la respuesta publica de la API. La lista de
+        # lo que sale es esta, y esta escrita.
         campos = [
             {
                 "field": ".".join(str(parte) for parte in detalle["loc"]),
+                "code": detalle["type"],
                 "message": detalle["msg"],
             }
             for detalle in exc.errors()
