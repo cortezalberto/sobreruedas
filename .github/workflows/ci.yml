@@ -246,6 +246,18 @@ jobs:
           TEST_REDIS_URL: redis://localhost:6380/0
         run: |
           git worktree add /tmp/base ${{ github.event.pull_request.base.sha }}
+
+          # La base puede no tener backend: hoy `main` no lo tiene, porque el
+          # backend entero nace en la rama de C-01. Eso NO es un fallo del
+          # pipeline ni un retroceso de cobertura — es que no hay contra que
+          # comparar. Se distingue a proposito de "la medicion se rompio":
+          # tratar los dos casos como el mismo error deja un `cd: No such file`
+          # crudo en el log, que se lee como pipeline roto.
+          if [ ! -d /tmp/base/backend ]; then
+            echo "::notice::la base ${{ github.event.pull_request.base.sha }} no tiene backend/; no hay cobertura previa con que comparar"
+            exit 0
+          fi
+
           cd /tmp/base/backend
           python -m pytest -q \
             --cov=app \
