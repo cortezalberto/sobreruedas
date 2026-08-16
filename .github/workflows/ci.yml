@@ -316,3 +316,29 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 \
             detect --source /repo --redact --no-banner --verbose
+
+      # ── Punto ciego de los documentos OOXML ────────────────────────────────
+      #
+      # El paso de arriba NO lee los .docx. gitleaks recorre la historia con
+      # `git log -p`, y ahi un .docx —que es un zip— sale como "Binary files
+      # a/... and b/... differ". Son 13 documentos del repositorio, mas de un
+      # millon de caracteres, entre ellos la constitucion y los planes de
+      # seguridad y de SRE, que el gate venia declarando limpios sin abrirlos.
+      #
+      # Medido: contra un repositorio con dos credenciales plantadas adentro de
+      # un .docx, el paso de arriba escanea 16 bytes y sale 0. Con estos dos
+      # pasos, gitleaks reporta los 2 hallazgos y sale 1.
+      #
+      # ALCANCE: el arbol de trabajo, no la historia. Un secreto commiteado
+      # adentro de un documento y borrado despues NO se detecta por esta via.
+      # Fue una decision explicita de alcance, no un olvido.
+      - name: Extraer el texto de los documentos OOXML
+        run: python tools/extract-docx-text.py --destino "$RUNNER_TEMP/ooxml"
+
+      # Misma imagen y misma version fijada que el escaneo principal: dos
+      # escaneres distintos sobre el mismo repositorio serian dos criterios
+      # distintos de que es un secreto.
+      - name: gitleaks — documentos OOXML
+        run: |
+          docker run --rm -v "$RUNNER_TEMP/ooxml:/docs" zricethezav/gitleaks:v8.28.0 \
+            detect --no-git --source /docs --redact --no-banner --verbose
