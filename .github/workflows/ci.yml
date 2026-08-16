@@ -130,41 +130,12 @@ jobs:
       - name: Tests del verificador de cobertura
         run: python -m pytest tools/tests -q
 
-      - name: pytest unitario con cobertura
+      # Solo los unitarios, y SIN gate de cobertura: este job existe para dar
+      # feedback rapido. La medicion de cobertura vive en el job de integracion
+      # — ver el comentario "POR QUE EL GATE DE COBERTURA VIVE ACA" mas abajo.
+      - name: pytest unitario
         working-directory: backend
-        run: |
-          python -m pytest -m 'not integration' -q \
-            --cov=app \
-            --cov-report=term-missing \
-            --cov-report=json:coverage.json
-
-      # ── No decrecimiento (Art. 2 · tarea 8.4) ───────────────────────────────
-      # Se mide la base en un worktree aparte. Los tests de la base corren con
-      # las dependencias YA instaladas de esta rama: reinstalar el entorno de
-      # main duplicaria el tiempo del job para una diferencia que casi nunca
-      # existe. Si la base no se puede medir, el paso no rompe y el verificador
-      # lo reporta como "sin base" — ausencia de base no es retroceso.
-      - name: Medir la cobertura de la base
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
-        run: |
-          git worktree add /tmp/base ${{ github.event.pull_request.base.sha }}
-          cd /tmp/base/backend
-          python -m pytest -m 'not integration' -q \
-            --cov=app \
-            --cov-report=json:"$GITHUB_WORKSPACE/backend/coverage-base.json" \
-            || echo "::warning::no se pudo medir la cobertura de la base; se sigue sin comparar"
-
-      # El gate de verdad. `fail_under` de coverage.py mezcla lineas y ramas en
-      # un solo numero y ADR-014 las pide por separado — ver el encabezado de
-      # tools/check-coverage.py.
-      - name: Gate de cobertura — 80 % lineas / 60 % ramas / no decrece
-        run: |
-          python tools/check-coverage.py \
-            --coverage-json backend/coverage.json \
-            --min-lineas 80 \
-            --min-ramas 60 \
-            --base backend/coverage-base.json
+        run: python -m pytest -m 'not integration' -q
 
   # ── 4. Tests de integracion contra servicios reales ────────────────────────
   #
@@ -212,15 +183,75 @@ jobs:
       - name: Crear el bucket de MinIO
         run: docker compose -f docker-compose.test.yml run --rm minio-init
 
+      # ── POR QUE EL GATE DE COBERTURA VIVE ACA ──────────────────────────────
+      #
+      # Porque medir solo los unitarios miente. Lo medido el 16-ago-2026 sobre
+      # el mismo commit:
+      #
+      #   solo unitarios      app/db/session.py  63.10 %   total  90.86 %
+      #   suite completa      app/db/session.py  95.24 %   total  98.44 %
+      #
+      # `db/session.py` es el aislamiento multi-tenant, y se prueba —tiene que
+      # probarse— contra PostgreSQL de verdad (regla dura 8). Medir excluyendo
+      # los tests de integracion lo mostraba como el archivo peor cubierto del
+      # backend justo cuando era el mejor probado, y hacia aparecer un
+      # decrecimiento de cobertura que no existia.
+      #
+      # Este job es el unico que tiene los servicios arriba, asi que es el unico
+      # que puede correr la suite ENTERA. Los unitarios corren dos veces (una
+      # aca y una en test-backend-unit, que da feedback rapido): son ~6 s contra
+      # la alternativa de combinar cobertura entre dos jobs por artefactos, que
+      # obligaria a un `needs` y serializaria el pipeline — rompiendo el
+      # paralelismo total de D-6.
+      #
       # El pytest corre en el runner, no adentro del compose, asi que los
       # servicios se alcanzan por los puertos publicados (desplazados a 5433 y
       # 6380 para no chocar con el compose de desarrollo).
-      - name: pytest de integracion
+      - name: pytest completo con cobertura
         working-directory: backend
         env:
           TEST_DATABASE_URL: postgresql+asyncpg://deruedas_test:deruedas_test@localhost:5433/deruedas_test
           TEST_REDIS_URL: redis://localhost:6380/0
-        run: python -m pytest -m integration -q
+        run: |
+          python -m pytest -q \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=json:coverage.json
+
+      # ── No decrecimiento (Art. 2 · tarea 8.4) ───────────────────────────────
+      # La base se mide en un worktree aparte y CON EL MISMO CRITERIO que la
+      # rama: suite completa. Compararla contra una medicion solo-unitaria seria
+      # comparar dos cosas distintas y llamarlo retroceso.
+      #
+      # Los tests de la base corren con las dependencias YA instaladas de esta
+      # rama: reinstalar el entorno de main duplicaria el tiempo del job para
+      # una diferencia que casi nunca existe. Si la base no se puede medir, el
+      # paso no rompe y el verificador lo reporta como "sin base" — ausencia de
+      # base no es retroceso.
+      - name: Medir la cobertura de la base
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          TEST_DATABASE_URL: postgresql+asyncpg://deruedas_test:deruedas_test@localhost:5433/deruedas_test
+          TEST_REDIS_URL: redis://localhost:6380/0
+        run: |
+          git worktree add /tmp/base ${{ github.event.pull_request.base.sha }}
+          cd /tmp/base/backend
+          python -m pytest -q \
+            --cov=app \
+            --cov-report=json:"$GITHUB_WORKSPACE/backend/coverage-base.json" \
+            || echo "::warning::no se pudo medir la cobertura de la base; se sigue sin comparar"
+
+      # El gate de verdad. `fail_under` de coverage.py mezcla lineas y ramas en
+      # un solo numero y ADR-014 las pide por separado — ver el encabezado de
+      # tools/check-coverage.py.
+      - name: Gate de cobertura — 80 % lineas / 60 % ramas / no decrece
+        run: |
+          python tools/check-coverage.py \
+            --coverage-json backend/coverage.json \
+            --min-lineas 80 \
+            --min-ramas 60 \
+            --base backend/coverage-base.json
 
       - name: Logs de los servicios si algo fallo
         if: failure()

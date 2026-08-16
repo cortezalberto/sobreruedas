@@ -56,9 +56,15 @@ test-integration:  ## Tests contra servicios reales
 # El mismo gate que corre el pipeline, para no enterarse recien en el PR.
 # `fail_under` de coverage.py NO alcanza: mezcla lineas y ramas en un numero
 # solo y ADR-014 las exige por separado. Ver tools/check-coverage.py.
+#
+# Corre la suite COMPLETA, no solo los unitarios, y por eso necesita los
+# servicios arriba (sin `--no-deps`). Medir excluyendo los tests de integracion
+# subestima justo lo que mas importa: `db/session.py` da 63 % solo-unitarios y
+# 95 % con la suite entera, porque el aislamiento multi-tenant se prueba contra
+# PostgreSQL de verdad. Es la misma medicion que hace el CI.
 coverage:  ## Cobertura con el gate de ADR-014: 80 % lineas Y 60 % ramas
-	$(BACKEND) pytest -m 'not integration' --cov=app --cov-report=json:coverage.json
-	@python tools/check-coverage.py --coverage-json backend/coverage.json
+	$(COMPOSE) run --rm backend pytest --cov=app --cov-report=json:coverage.json
+	@$(PYTEST_HOST) tools/check-coverage.py --coverage-json backend/coverage.json
 
 # Estos tests son la excepcion a la regla del encabezado: NO corren en el
 # contenedor. Crean repositorios git de verdad y la imagen del backend no trae
