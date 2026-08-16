@@ -103,17 +103,17 @@ jobs:
       - name: tsc --noEmit
         run: npm run typecheck
 
-  # ── 3. Tests unitarios del backend + gate de cobertura ─────────────────────
+  # ── 3. Tests unitarios del backend ─────────────────────────────────────────
+  #
+  # Solo unitarios y sin gate de cobertura: este job existe para dar feedback
+  # rapido. El gate vive en test-backend-integration, que es el unico que puede
+  # medir la suite completa. Por eso aca el checkout shallow alcanza.
   test-backend-unit:
     name: test-backend-unit
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Historia completa: el chequeo de no decrecimiento necesita el commit
-          # base de la propuesta de cambio, y el checkout por defecto es shallow.
-          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -152,6 +152,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Historia completa: el chequeo de no decrecimiento mide la base en un
+          # worktree, y `git worktree add` sobre un checkout shallow falla con
+          # codigo 128. Vive aca porque aca vive el gate.
+          #
+          # Se aprendio en la corrida 31949666200: el paso salio 128, el
+          # `continue-on-error` se lo trago, y el gate informo "sin base con que
+          # comparar" — o sea que el control de no decrecimiento no corria y el
+          # job igual daba verde.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
