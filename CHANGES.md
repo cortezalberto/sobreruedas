@@ -368,7 +368,7 @@ Tres observaciones sobre la cadena:
 - **Rango**: `T-009`, `T-010`, `T-012`, `T-013`, `T-014`, `T-015`, `T-016`, `T-032`, `T-033` (9 tareas) — ver **D-5**
 - **Scope**:
   - Migración de extensiones PostgreSQL (`uuid-ossp`, `pg_trgm`, `unaccent`, `btree_gin`)
-  - `db/session.py` con **tenant context**: `SET LOCAL app.current_tenant_id` por request — es el mecanismo sobre el que se apoya toda la RLS (ADR-006)
+  - `db/session.py` con **tenant context**: `set_config('app.current_tenant', …, true)` por request — es el mecanismo sobre el que se apoya toda la RLS (ADR-006)
   - `core/errors.py`: jerarquía `DomainError` + handlers con respuestas **RFC 7807** (`application/problem+json`)
   - `core/auth.py`: dependency `get_current_user` (validación de JWT de Keycloak, extracción de `tenant_id` y rol)
   - `core/rbac.py`: `require_role(...)` y `require_permission(...)` — **enumera el catálogo de roles: no se puede escribir sin `IN-01`/`IN-02`**

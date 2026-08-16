@@ -18,11 +18,12 @@
 
 ## 2. Prueba real del aislamiento — `T-010`
 
-> ⚠️ **Los tests estan escritos y 5 estan en fallo esperado estricto**: el rol de
-> conexion es superusuario con `BYPASSRLS` y saltea toda politica. Es un defecto
-> de infraestructura, no del codigo — ver [`ADR-020`](../../../docs/adr/ADR-020-rol-de-conexion-sin-bypass-de-rls.md)
-> y el change `rol-de-base-sin-bypass-rls`. Cuando ese change aterrice, los 5
-> pasan y la marca estricta obliga a sacarlos del xfail.
+> ✅ **Los 13 tests pasan sin marca alguna.** Estuvieron 5 en fallo esperado
+> estricto mientras el rol de conexion era superusuario con `BYPASSRLS` y
+> salteaba toda politica — un defecto de infraestructura, no del codigo. Lo
+> arreglo el change `rol-de-base-sin-bypass-rls` ([`ADR-020`](../../../docs/adr/ADR-020-rol-de-conexion-sin-bypass-de-rls.md)),
+> y la marca estricta hizo lo suyo: al empezar a pasar, pytest los convirtio en
+> ERROR y obligo a sacarla. Un `skip` los habria escondido para siempre.
 
 - [x] 2.1 Escribir el test que verifica que una consulta con contexto establecido devuelve solo filas del tenant en contexto
 - [x] 2.2 Escribir el test que verifica que **sin** contexto establecido la consulta no devuelve **ninguna** fila, y que no se asume tenant por defecto
@@ -35,39 +36,55 @@
 
 ## 3. Identidad — `T-013` · tramo 2
 
-- [ ] 3.1 Escribir los tests de rechazo del token: firma inválida, expirado, emisor distinto, receptor distinto y petición sin token
-- [ ] 3.2 Implementar la obtención y el cacheo del JWKS del realm, con vencimiento y refresco bajo demanda ante `kid` desconocido, con límite de frecuencia (D-8)
-- [ ] 3.3 Escribir el test de rotación de claves: el proveedor rota, llega un token con la clave nueva, el sistema lo acepta sin reiniciar
-- [ ] 3.4 Implementar la dependency `get_current_user` derivando identificador, tenant y rol **del token**, sin validar el rol contra el catálogo (D-9)
-- [ ] 3.5 Escribir el test que verifica que un token sin rol declarado rechaza la petición en lugar de asignar un rol por defecto
-- [ ] 3.6 Declarar explícitamente las rutas exentas de autenticación y escribir el test de que ninguna ruta que exponga datos de tenant está exenta
+- [x] 3.1 Escribir los tests de rechazo del token: firma inválida, expirado, emisor distinto, receptor distinto y petición sin token
+- [x] 3.2 Implementar la obtención y el cacheo del JWKS del realm, con vencimiento y refresco bajo demanda ante `kid` desconocido, con límite de frecuencia (D-8)
+- [x] 3.3 Escribir el test de rotación de claves: el proveedor rota, llega un token con la clave nueva, el sistema lo acepta sin reiniciar
+- [x] 3.4 Implementar la dependency `get_current_user` derivando identificador, tenant y rol **del token**, sin validar el rol contra el catálogo (D-9)
+- [x] 3.5 Escribir el test que verifica que un token sin rol declarado rechaza la petición en lugar de asignar un rol por defecto
+- [x] 3.6 Declarar explícitamente las rutas exentas de autenticación y escribir el test de que ninguna ruta que exponga datos de tenant está exenta
+
+> ✅ **Bloque 3 completo.** `core/auth.py`: validacion RS256 contra el JWKS del realm,
+> cache con vencimiento y refresco bajo demanda acotado, `get_current_user` y la lista
+> explicita de rutas exentas. 35 tests nuevos.
+>
+> ⚠️ **Deuda para C-05**: los nombres de claim (`tenant_id`, `role` de primer nivel) no
+> tienen fuente en el corpus. Quedan decididos en [`ADR-021`](../../../docs/adr/ADR-021-claims-de-tenant-y-rol.md)
+> y C-05 tiene que crear los dos mappers en el realm, o ningun token va a traerlos.
 
 ## 4. Convenciones de API — `T-012`, `T-015` · tramo 2
 
-- [ ] 4.1 Escribir el test que verifica que cada entrada de `errors[]` trae `field`, `code` y `message` — hoy falta `code`
-- [ ] 4.2 Completar `core/errors.py` agregando el código estable por campo, sin reescribir lo que C-01 ya dejó andando
-- [ ] 4.3 Escribir el test que verifica que el valor rechazado por la validación **no** aparece en la respuesta
-- [ ] 4.4 Escribir los tests de paginación por cursor: recorrido completo sin repetir ni saltear, última página inequívoca, tamaño por encima del máximo acotado al máximo, cursor inválido rechazado con el formato de error uniforme
-- [ ] 4.5 Implementar `core/pagination.py` con cursor opaco que codifica `(created_at, id)` y el tenant, y orden determinista por ese par (D-6)
-- [ ] 4.6 Escribir el test que verifica que un cursor obtenido en otro tenant no devuelve elementos de ese tenant
-- [ ] 4.7 Escribir la migración `003` con la tabla `idempotency_keys` y su `UNIQUE (tenant_id, key)` (D-5)
-- [ ] 4.8 Escribir los tests de idempotencia: reintento idéntico devuelve el original sin crear un segundo recurso; misma clave con contenido distinto da conflicto; clave vencida se trata como creación nueva; creación sin clave se procesa normalmente
-- [ ] 4.9 Implementar `core/idempotency.py` y escribir el test de que la misma clave en dos tenants distintos produce dos creaciones independientes
+- [x] 4.1 Escribir el test que verifica que cada entrada de `errors[]` trae `field`, `code` y `message` — hoy falta `code`
+- [x] 4.2 Completar `core/errors.py` agregando el código estable por campo, sin reescribir lo que C-01 ya dejó andando
+- [x] 4.3 Escribir el test que verifica que el valor rechazado por la validación **no** aparece en la respuesta
+- [x] 4.4 Escribir los tests de paginación por cursor: recorrido completo sin repetir ni saltear, última página inequívoca, tamaño por encima del máximo acotado al máximo, cursor inválido rechazado con el formato de error uniforme
+- [x] 4.5 Implementar `core/pagination.py` con cursor opaco que codifica `(created_at, id)` y el tenant, y orden determinista por ese par (D-6)
+- [x] 4.6 Escribir el test que verifica que un cursor obtenido en otro tenant no devuelve elementos de ese tenant
+- [x] 4.7 Escribir la migración `003` con la tabla `idempotency_keys` y su `UNIQUE (tenant_id, key)` (D-5)
+- [x] 4.8 Escribir los tests de idempotencia: reintento idéntico devuelve el original sin crear un segundo recurso; misma clave con contenido distinto da conflicto; clave vencida se trata como creación nueva; creación sin clave se procesa normalmente
+- [x] 4.9 Implementar `core/idempotency.py` y escribir el test de que la misma clave en dos tenants distintos produce dos creaciones independientes
+
+> ✅ **Bloque 4 completo.** `core/errors.py` con codigo por campo, `core/pagination.py`
+> con cursor opaco acotado al tenant, `core/idempotency.py` sobre la migracion `003`.
+> 48 tests nuevos. La clave vencida se **pisa en su lugar** y no se borra: el rol de
+> aplicacion no tiene `DELETE` (`ADR-020`), y resulto ser mejor solucion que borrar —
+> es atomica y no deja ventana.
 
 ## 5. Eventos de dominio y andamiaje de tests — `T-016`, `T-032`, `T-033` · tramo 3
 
-- [ ] 5.1 Escribir el test del sobre canónico: identificador único, tipo, versión, tenant, instante con zona horaria y contenido; y que dos publicaciones del mismo hecho llevan identificadores distintos
-- [ ] 5.2 Implementar el publisher sobre Redis Streams, rechazando en la publicación todo evento sin `tenant_id` (D-10)
-- [ ] 5.3 Escribir el test de que publicar no depende del consumidor: sin consumidores la publicación es exitosa, y un consumidor que falla no afecta a la petición que originó el evento
-- [ ] 5.4 Implementar el consumer base con consumer groups y confirmación explícita, **restableciendo el contexto de tenant** del sobre antes de tocar la base
-- [ ] 5.5 Escribir el test de que el consumidor procesa bajo el contexto correcto y no ve datos de otro tenant
-- [ ] 5.6 Implementar el reintento con espera creciente y techo acotado, y escribir los tests de fallo transitorio, de espera que crece y de reintentos acotados
-- [ ] 5.7 Implementar el stream de irrecuperables y escribir los tests de que el evento agotado queda registrado con el motivo del último fallo y de que la cola sigue avanzando
-- [ ] 5.8 Escribir el test de entrega repetida: el consumidor reconoce el `event_id` ya procesado y el efecto no se aplica dos veces
-- [ ] 5.9 Escribir el test de caída antes de confirmar: el evento vuelve a entregarse y no queda sin procesar
-- [ ] 5.10 Ampliar `tests/conftest.py` con las fixtures comunes: sesión con tenant, sesión de plataforma, cliente autenticado y emisor de tokens de prueba
-- [ ] 5.11 Agregar `factory_boy` a las dependencias de desarrollo y crear las factories base en `tests/factories/`
-- [ ] 5.12 Escribir el test de arquitectura que recorre los routers y falla si `get_platform_session` aparece fuera del espacio de rutas administrativo (D-4)
+- [x] 5.1 Escribir el test del sobre canónico: identificador único, tipo, versión, tenant, instante con zona horaria y contenido; y que dos publicaciones del mismo hecho llevan identificadores distintos
+- [x] 5.2 Implementar el publisher sobre Redis Streams, rechazando en la publicación todo evento sin `tenant_id` (D-10)
+- [x] 5.3 Escribir el test de que publicar no depende del consumidor: sin consumidores la publicación es exitosa, y un consumidor que falla no afecta a la petición que originó el evento
+- [x] 5.4 Implementar el consumer base con consumer groups y confirmación explícita, **restableciendo el contexto de tenant** del sobre antes de tocar la base
+- [x] 5.5 Escribir el test de que el consumidor procesa bajo el contexto correcto y no ve datos de otro tenant
+- [x] 5.6 Implementar el reintento con espera creciente y techo acotado, y escribir los tests de fallo transitorio, de espera que crece y de reintentos acotados
+- [x] 5.7 Implementar el stream de irrecuperables y escribir los tests de que el evento agotado queda registrado con el motivo del último fallo y de que la cola sigue avanzando
+- [x] 5.8 Escribir el test de entrega repetida: el consumidor reconoce el `event_id` ya procesado y el efecto no se aplica dos veces
+- [x] 5.9 Escribir el test de caída antes de confirmar: el evento vuelve a entregarse y no queda sin procesar
+- [x] 5.10 Fixtures comunes en `tests/integration/conftest.py` (no en `tests/conftest.py`: las de base necesitan DSN y ahí solo viven las unitarias): `tenant`, `otro_tenant`, `sesion`, `sesion_sin_tenant` y `redis`. Las cinco duplicadas que había en los archivos de test se eliminaron.
+      ⚠️ **`cliente autenticado` y `emisor de tokens de prueba` NO están**: dependen de `core/auth.py`, que es el bloque 3 — gobernanza CRÍTICA, sin aprobación todavía. Escribirlos ahora sería inventar la forma de los claims antes de decidirla.
+- [x] 5.11 (parcial) `factory_boy` agregada a las dependencias de desarrollo.
+      ⚠️ **`tests/factories/` NO se creó.** No hay ninguna entidad de negocio: la única tabla con `tenant_id` es la testigo `platform_probe`, y `Base` no tiene un solo modelo registrado. Una fábrica base sin nada que fabricar es andamiaje que hay que adivinar dos veces — se escribe junto a la primera entidad real (`users`, C-05), que es cuando se sabe qué convención necesita.
+- [x] 5.12 Test de arquitectura en `tests/unit/test_arquitectura.py`: analiza el **AST** de todo `app/**.py` y falla si `sesion_de_plataforma` se referencia fuera de `modules/admin/`. Por AST y no por texto para no marcar comentarios ni docstrings — un detector ruidoso termina desactivado. Se prueba el detector en cuatro variantes: infractor, espacio permitido, menciones que no son usos, y el uso por atributo (`session.sesion_de_plataforma()`), que es la forma de esquivarlo sin proponérselo.
 
 ## 6. Autorización — `T-014` · tramo 4 · ⛔ BLOQUEADO POR `E-001`
 
@@ -85,7 +102,7 @@
 
 ## 7. Cierre
 
-- [ ] 7.1 Corregir en `CHANGES.md` el nombre del parámetro de sesión: `app.current_tenant_id` → `app.current_tenant` (D-1)
-- [ ] 7.2 Registrar como ADR el desvío de la convención de API sobre el identificador en los errores (`correlation_id` en vez de `trace_id`), por la regla 3 de precedencia documental (D-11)
-- [ ] 7.3 Verificar que la cobertura sigue cumpliendo los pisos de `ADR-014` y no decrece
-- [ ] 7.4 Verificar que los escenarios de las cinco capabilities tienen test ejecutable, y dejar registrado cuáles no y por qué
+- [x] 7.1 Corregido en `CHANGES.md` (línea 371). Se escribió además la forma real (`set_config(...)`) y no `SET LOCAL`, que tampoco era lo que el código hace — ver D-2.
+- [x] 7.2 [`ADR-022`](../../../docs/adr/ADR-022-identificador-de-correlacion-en-los-errores.md). Sin él, por el Principio 5, el desvío no era vinculante.
+- [x] 7.3 **97.27 % líneas · 92.00 % ramas**, sin decrecimiento. 236 tests.
+- [x] 7.4 [`cobertura-de-escenarios.md`](cobertura-de-escenarios.md): **52 de 72** escenarios con test ejecutable, con el motivo de cada uno de los 20 restantes. Al auditar aparecieron 2 que no dependían de nada y se cubrieron en el acto.
