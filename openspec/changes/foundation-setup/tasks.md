@@ -406,7 +406,43 @@ Cubre la capability `platform/delivery-pipeline`.
 > cayera en el control correcto: un rojo en el step equivocado no prueba el
 > escenario.
 
-> ### Estado de `platform/delivery-pipeline`: **10 de 15**
+> #### Sonda del escenario *"Secreto filtrado en el cambio"*
+>
+> Este escenario venía sin acreditar con un motivo anotado: plantar un secreto
+> falso en un repositorio **público** puede activar la protección de push de
+> GitHub, y el push ni siquiera llegaría al pipeline.
+>
+> **La salida fue plantarlo también adentro de un `.docx`.** La protección de
+> push escanea texto y no lee binarios — el mismo punto ciego que el commit
+> `07b910f` cierra en nuestro propio gate, usado a favor. El push entró sin que
+> GitHub lo frenara.
+>
+> Dos corridas sobre el PR #4 (cerrado, rama borrada). Credenciales fabricadas,
+> ninguna real, y ninguna igual a `AKIAIOSFODNN7EXAMPLE`: ese valor está en la
+> allowlist de gitleaks y daría falso negativo.
+>
+> | Corrida | Secreto en | `gitleaks` | `gitleaks — documentos OOXML` |
+> |---|---|---|---|
+> | `31944844892` | `.txt` | ❌ `generic-api-key` | ⊘ el job aborta en el primer rojo |
+> | `31944989894` | `.docx` | ✅ `no leaks found` sobre 2,35 MB | ❌ `aws-access-token` |
+>
+> **La segunda fila es el punto ciego en vivo, dentro del pipeline real**: el
+> escáner recorrió 2,35 MB de historia y declaró limpio un repositorio que tenía
+> una credencial adentro de un documento versionado. El paso agregado la
+> encontró, sobre 14 documentos y 1.068.562 caracteres extraídos.
+>
+> Hicieron falta dos corridas por lo mismo que en las sondas de linting y
+> tipado: los steps de un job corren en cadena y el primero que falla corta el
+> resto. Con las dos credenciales juntas, la ruta OOXML nunca se habría
+> ejercitado y el escenario habría quedado *aparentando* evidencia que no tenía.
+> Aislarla exigió reescribir la rama descartable, no solo borrar el `.txt`: el
+> paso principal escanea la **historia**, y un borrado en un commit posterior lo
+> habría seguido encontrando.
+>
+> En las dos corridas los otros 5 jobs quedaron en verde. El rojo cayó en el
+> step correcto.
+
+> ### Estado de `platform/delivery-pipeline`: **11 de 15**
 >
 > | Escenario | Evidencia o motivo |
 > |---|---|
@@ -420,7 +456,7 @@ Cubre la capability `platform/delivery-pipeline`.
 > | Dependencia con vulnerabilidad crítica | Corrida `31901096819`, `pip-audit` |
 > | Propuesta de cambio abierta | PR #1 disparó las corridas |
 > | Duración de la ejecución | 1 m 04 s contra un presupuesto de 15 min |
-> | **Secreto filtrado en el cambio** | ⛔ Plantar un secreto falso en un repo **público** puede activar la protección de push de GitHub. Necesita pensarse aparte |
+> | Secreto filtrado en el cambio | Corridas `31944844892` (texto plano) y `31944989894` (OOXML) |
 > | **Vulnerabilidad de severidad baja (solo reporta)** | ⛔ Hay que hallar un paquete con vulnerabilidad baja y **solo** baja |
 > | **Integración exitosa a la rama principal** | ⛔ Bloque 9 |
 > | **Fallo de las pruebas de humo** | ⛔ Bloque 9 |
@@ -484,7 +520,13 @@ Cubre la capability `platform/delivery-pipeline`.
 > |---|---|---|---|
 > | `platform/service-health` | 10 | **10** | ✅ completa |
 > | `platform/configuration` | 10 | **10** | ✅ completa |
-> | `platform/delivery-pipeline` | 15 | **10** | ⚠️ faltan 5 |
+> | `platform/delivery-pipeline` | 15 | **11** | ⚠️ faltan 4 |
+>
+> > **Actualizado.** Esta auditoría cerró con `delivery-pipeline` en 10 y un
+> > total de 30. La sonda del secreto filtrado (corridas `31944844892` y
+> > `31944989894`, más arriba) subió la capability a **11** y el total a
+> > **31 de 35**. Los párrafos de abajo ya están corregidos; se deja dicho el
+> > movimiento para que el número no parezca haber sido siempre este.
 >
 > **`service-health` está entera**: los 10 escenarios tienen test, y 6 de ellos
 > además corren contra servicios reales en `tests/integration/`.
@@ -514,22 +556,22 @@ Cubre la capability `platform/delivery-pipeline`.
 > > una lista escrita a mano se queda corta en silencio en cuanto alguien agrega
 > > un secreto, y el test seguiría pasando sin cubrirlo.
 >
-> **`delivery-pipeline` — 5 de 15 sin cubrir.** Los 10 cubiertos se reparten en
-> tres grupos: los **4 del gate de cobertura**, por los 19 tests de
+> **`delivery-pipeline` — 4 de 15 sin cubrir.** Los 11 cubiertos se reparten en
+> cuatro grupos: los **4 del gate de cobertura**, por los 19 tests de
 > `tools/tests/test_check_coverage.py`; **4 que la corrida verde del PR #1
 > demostró en el pipeline real** (una propuesta de cambio lo dispara, termina
 > bajo el presupuesto de 15 minutos, el código conforme atraviesa los controles
 > de estilo, y una vulnerabilidad bloquea la integración — esto último lo probó
-> `pip-audit` frenando la primera corrida); y **2 de las sondas de calidad
-> estática** (linting que bloquea, tipado que bloquea). El desglose escenario
-> por escenario está en la tabla del bloque 8.
+> `pip-audit` frenando la primera corrida); **2 de las sondas de calidad
+> estática** (linting que bloquea, tipado que bloquea); y **1 de la sonda del
+> secreto filtrado**. El desglose escenario por escenario está en la tabla del
+> bloque 8.
 >
-> Los 5 que faltan se separan en dos causas, porque no se arreglan igual:
+> Los 4 que faltan se separan en dos causas, porque no se arreglan igual:
 >
-> - **2 exigen provocar un fallo que no es trivial de provocar**: un secreto
->   filtrado —plantar uno falso en un repo público puede activar la protección
->   de push de GitHub— y una vulnerabilidad de severidad baja, que exige hallar
->   un paquete con vulnerabilidad baja y **solo** baja.
+> - **1 exige provocar un fallo que no es trivial de provocar**: una
+>   vulnerabilidad de severidad baja, que exige hallar un paquete con
+>   vulnerabilidad baja y **solo** baja.
 > - **3 son del bloque 9** (despliegue a staging, reversión por fallo de pruebas
 >   de humo, trazabilidad del commit desplegado). No implementados, y bloqueados
 >   por el proveedor cloud sin decidir.
@@ -538,16 +580,16 @@ Cubre la capability `platform/delivery-pipeline`.
 > > comportamiento del workflow" pero enumeraba **8**, y de ahí salía un total
 > > de 14 sobre 15. Los grupos correctos son 4 + 8 + 3 = 15.
 >
-> **Consecuencia: C-01 sigue sin poder archivarse — 30 de 35.** No es una
+> **Consecuencia: C-01 sigue sin poder archivarse — 31 de 35.** No es una
 > formalidad de proceso: `openspec archive` sincroniza las delta specs contra
 > `openspec/specs/`, y promover a spec vigente un contrato con escenarios sin
 > verificación es declarar cubierto lo que no lo está.
 >
-> Dos de los tres capabilities ya están enteros. **Lo único que falta son 5
+> Dos de los tres capabilities ya están enteros. **Lo único que falta son 4
 > escenarios de `delivery-pipeline`, y ninguno depende de escribir un test**:
-> 3 esperan el bloque 9 —o sea la decisión de proveedor cloud— y los otros 2
-> exigen provocar fallos que no son triviales de provocar. Es un límite
-> distinto al de ayer, cuando lo que faltaba era trabajo de tests.
+> 3 esperan el bloque 9 —o sea la decisión de proveedor cloud— y el otro exige
+> provocar un fallo que no es trivial de provocar. Es un límite distinto al de
+> ayer, cuando lo que faltaba era trabajo de tests.
 
 > ### ✅ Tarea 10.2 — historial escaneado y limpio, con un punto ciego cerrado a mano
 >
