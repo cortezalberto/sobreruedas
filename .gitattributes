@@ -1,0 +1,29 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Finales de linea
+#
+# El equipo desarrolla en Windows con `core.autocrlf=true`, asi que al hacer
+# checkout git convierte LF a CRLF. Para casi todo el repositorio da igual.
+#
+# NO da igual para los archivos que se EJECUTAN ADENTRO DE UN CONTENEDOR LINUX.
+# Un script con CRLF falla ahi de la forma mas confusa posible:
+#
+#     #!/bin/bash\r          ->  "bad interpreter: /bin/bash^M: no such file"
+#     <<-'EOSQL' ... EOSQL\r ->  el heredoc nunca cierra
+#
+# El caso concreto que motivo este archivo: `infra/local/postgres/init/` lo
+# ejecuta el entrypoint de la imagen de PostgreSQL. Si ese init falla, el rol de
+# aplicacion de ADR-020 no se crea, el backend no conecta, y el sintoma —un
+# fallo de autenticacion— no se parece en nada a la causa. Exactamente la clase
+# de fallo silencioso que ese ADR existe para eliminar.
+#
+# Sin esto el repositorio funciona en la maquina donde se escribio y se rompe en
+# el proximo clone.
+# ─────────────────────────────────────────────────────────────────────────────
+
+*.sh text eol=lf
+
+# El init de PostgreSQL, cualquiera sea su extension.
+infra/local/postgres/init/** text eol=lf
+
+# Entrypoints y scripts de contenedor.
+**/docker-entrypoint*.sh text eol=lf
