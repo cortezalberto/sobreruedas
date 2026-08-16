@@ -34,6 +34,25 @@ dependencies = [
     # Cache, Streams y cola. ADR-009.
     "redis>=5.0,<6",
     "celery>=5.4,<6",
+
+    # Verificacion de los tokens que emite Keycloak (ADR-007, T-013).
+    #
+    # El extra `[crypto]` NO es opcional: arrastra `cryptography`, y sin ella
+    # PyJWT no puede verificar RS256 — que es el algoritmo que el realm firma.
+    # Sin el extra, la libreria importa igual y falla recien al validar el
+    # primer token, o sea en produccion.
+    #
+    # Se declara DIRECTA aunque ya venia arrastrada por otra dependencia: algo
+    # de lo que depende la validacion de identidad no puede estar en el arbol
+    # por casualidad, a merced de que un paquete intermedio la suelte.
+    "pyjwt[crypto]>=2.8,<3",
+
+    # Cliente HTTP del backend. Hoy lo usa una sola cosa —bajar el JWKS del
+    # realm— y por eso mismo va declarada: ya venia instalada como dependencia
+    # de desarrollo (cliente de tests de FastAPI), y apoyarse en eso dejaria la
+    # validacion de identidad rota en produccion, donde los extras de `dev` no
+    # se instalan.
+    "httpx>=0.27,<1",
 ]
 
 [project.optional-dependencies]
@@ -55,6 +74,10 @@ dev = [
     "ruff>=0.4,<1",
     "mypy>=1.10,<2",
     "black>=26.3.1,<27",
+    # Fabricas de datos de prueba (T-033). Declarada desde C-02, sin fabricas
+    # concretas todavia: la primera entidad de negocio es `users` y nace en
+    # C-05. Ver el bloque 5 de openspec/changes/core-backend-primitives/tasks.md.
+    "factory_boy>=3.3,<4",
 ]
 
 [tool.setuptools.packages.find]
