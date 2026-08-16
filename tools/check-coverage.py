@@ -128,7 +128,28 @@ def umbral(texto: str) -> float:
     return valor
 
 
+def consola_tolerante() -> None:
+    """Que un caracter que la consola no sabe representar no mate al gate.
+
+    Un gate que se cae al IMPRIMIR miente dos veces: no informa la cobertura, y
+    sale con un codigo que se lee identico a "la cobertura no alcanza". El
+    diagnostico arranca mirando los tests equivocados.
+
+    Todo lo que este script imprime es ASCII a proposito —misma decision que
+    `tools/check-services.sh`, por el mismo motivo: la consola de Windows es
+    cp1252—, asi que esto no deberia activarse nunca. Existe por lo que venga
+    despues: el dia que alguien agregue un simbolo lindo, el gate tiene que
+    seguir diciendo su numero en vez de morir escribiendolo.
+    """
+    for flujo in (sys.stdout, sys.stderr):
+        reconfigurar = getattr(flujo, "reconfigure", None)
+        if reconfigurar is not None:
+            reconfigurar(errors="replace")
+
+
 def main() -> int:
+    consola_tolerante()
+
     analizador = argparse.ArgumentParser(
         description="Verifica lineas y ramas por separado, como pide ADR-014.",
     )
@@ -155,7 +176,7 @@ def main() -> int:
 
     actual = leer_medicion(args.coverage_json)
 
-    print(f"── Cobertura de {args.etiqueta} " + "─" * 40)
+    print(f"-- Cobertura de {args.etiqueta} " + "-" * 40)
     print(f"   lineas : {actual.lineas:6.2f} %   (piso {args.min_lineas:.2f} %)")
     print(f"   ramas  : {actual.ramas:6.2f} %   (piso {args.min_ramas:.2f} %)")
 
@@ -178,7 +199,7 @@ def main() -> int:
     if args.base is not None:
         base = leer_base(args.base)
         if base is None:
-            print("   base   : sin base con que comparar — no se verifica el decrecimiento")
+            print("   base   : sin base con que comparar - no se verifica el decrecimiento")
         else:
             print(f"   base   : lineas {base.lineas:.2f} %  ramas {base.ramas:.2f} %")
             if actual.lineas < base.lineas:

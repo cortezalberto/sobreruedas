@@ -60,8 +60,30 @@ coverage:  ## Cobertura con el gate de ADR-014: 80 % lineas Y 60 % ramas
 	$(BACKEND) pytest -m 'not integration' --cov=app --cov-report=json:coverage.json
 	@python tools/check-coverage.py --coverage-json backend/coverage.json
 
+# Estos tests son la excepcion a la regla del encabezado: NO corren en el
+# contenedor. Crean repositorios git de verdad y la imagen del backend no trae
+# git — agregarselo seria engordar una imagen de produccion para correr tests.
+#
+# Corren en el host, y ahi `python` a secas no alcanza: en Windows suele
+# resolver a la instalacion del sistema, que no tiene pytest, y entonces
+# `make check` corta con "No module named pytest" — un mensaje que no le dice a
+# nadie que el interprete de al lado si lo tiene. El launcher `py -3` elige el
+# Python 3 mas nuevo, que es donde suelen estar las herramientas.
+#
+# Se resuelve con condicionales de Make y no con logica de shell a proposito:
+# en Windows este Makefile lo ejecuta cmd.exe, no sh, y un `for ... do` ahi
+# falla con "No se esperaba c en este momento".
+#
+# Si en tu maquina el que tiene pytest es otro:
+#     make test-tools PYTEST_HOST="py -3.12"
+ifeq ($(OS),Windows_NT)
+PYTEST_HOST ?= py -3
+else
+PYTEST_HOST ?= python3
+endif
+
 test-tools:  ## Tests de los verificadores de tools/ (corren en el host)
-	@python -m pytest tools/tests -q
+	@$(PYTEST_HOST) -m pytest tools/tests -q
 
 lint:  ## ruff + black --check + mypy --strict
 	$(BACKEND) sh -c "ruff check app tests alembic && black --check app tests alembic && mypy app"

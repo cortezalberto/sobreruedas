@@ -22,6 +22,7 @@ Se corren desde la raiz del repositorio:
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -59,13 +60,26 @@ def escribir_cobertura(
     return destino
 
 
-def correr(*argumentos: str) -> subprocess.CompletedProcess[str]:
+def correr(
+    *argumentos: str, entorno: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(SCRIPT), *argumentos],
         capture_output=True,
         text=True,
         cwd=REPO,
+        env={**os.environ, **entorno} if entorno else None,
     )
+
+
+# Una consola que NO puede representar caracteres fuera de Latin-1. Es la de
+# Windows por defecto, y tambien la que hereda cualquier subproceso lanzado
+# desde Git Bash en esa maquina.
+#
+# Se fija por variable de entorno y no por deteccion de plataforma para que el
+# runner de Linux corra exactamente el mismo caso: un fallo que solo aparece en
+# la maquina de quien lo sufre es un fallo que el pipeline nunca va a atajar.
+CONSOLA_LATIN1 = {"PYTHONIOENCODING": "cp1252"}
 
 
 # ── El caso feliz ────────────────────────────────────────────────────────────
@@ -318,3 +332,47 @@ def test_umbral_fuera_de_rango_es_error_de_uso(tmp_path: Path, bandera: str) -> 
     )
     resultado = correr("--coverage-json", str(archivo), bandera, "150")
     assert resultado.returncode == 2
+
+
+# ── El gate tiene que hablar en una consola que no entiende Unicode ──────────
+#
+# Un gate que se cae al IMPRIMIR miente dos veces: no dice la cobertura, y sale
+# con un codigo que se lee como "la cobertura no alcanza". El diagnostico
+# arranca mirando los tests equivocados.
+
+
+def test_el_caso_feliz_no_se_cae_en_consola_latin1(tmp_path: Path) -> None:
+    archivo = escribir_cobertura(
+        tmp_path / "coverage.json",
+        sentencias=100,
+        lineas_cubiertas=90,
+        ramas=50,
+        ramas_cubiertas=35,
+    )
+    resultado = correr("--coverage-json", str(archivo), entorno=CONSOLA_LATIN1)
+
+    assert "UnicodeEncodeError" not in resultado.stderr, resultado.stderr
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+    # No alcanza con no reventar: tiene que seguir informando los numeros.
+    assert "90.00" in resultado.stdout
+    assert "70.00" in resultado.stdout
+
+
+def test_el_bloqueo_sigue_siendo_por_cobertura_en_consola_latin1(tmp_path: Path) -> None:
+    """El 1 tiene que venir del piso incumplido, no de la codificacion.
+
+    Es la mitad que importa: los dos fallos salen 1, y sin esta distincion el
+    test de arriba se cumpliria igual con un script que aborta siempre.
+    """
+    archivo = escribir_cobertura(
+        tmp_path / "coverage.json",
+        sentencias=100,
+        lineas_cubiertas=50,
+        ramas=100,
+        ramas_cubiertas=90,
+    )
+    resultado = correr("--coverage-json", str(archivo), entorno=CONSOLA_LATIN1)
+
+    assert "UnicodeEncodeError" not in resultado.stderr, resultado.stderr
+    assert resultado.returncode == 1
+    assert "50.00" in resultado.stdout
