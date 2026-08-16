@@ -3,9 +3,18 @@
 Dos decisiones que conviene tener presentes:
 
 1. **La URL sale de `Settings`, no de `alembic.ini`.** Escribirla en el `.ini`
-   la versionaria con la contrasena adentro (Art. 3). Aca se lee de
-   `DATABASE_URL` igual que la aplicacion, asi que migraciones y runtime nunca
-   apuntan a bases distintas por descuido.
+   la versionaria con la contrasena adentro (Art. 3).
+
+   Ojo que la URL de migracion **no es la de la aplicacion**: desde ADR-020 son
+   dos roles distintos, y el de la aplicacion no puede crear tablas ni
+   politicas — que es exactamente lo que una migracion hace.
+
+   Antes, usar una sola variable garantizaba de arranque que migraciones y
+   runtime nunca apuntaran a bases distintas. Con dos variables ese descuido
+   vuelve a ser posible, asi que la garantia se **verifica**: si las dos URLs no
+   coinciden en host, puerto y nombre de base, esto muere antes de aplicar nada.
+   Migrar la base equivocada es de los errores mas caros que existen y no
+   deberia depender de que nadie se confunda al copiar un `.env`.
 
 2. **Motor asincrono.** El stack usa `asyncpg` (ADR-003), y Alembic corre
    sincronico por naturaleza. Se usa la receta oficial: se abre un engine async
@@ -19,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from logging.config import fileConfig
+from urllib.parse import urlparse
 
 from alembic import context
 from sqlalchemy import pool
@@ -64,9 +74,53 @@ except ModuleNotFoundError:
     )
 
 
+def _verificar_misma_base(aplicacion: str, migracion: str) -> None:
+    """Las dos URLs tienen que apuntar a la misma base; solo cambia el usuario.
+
+    Se comparan host, puerto y nombre de base. El usuario y la contrasena son
+    justamente lo que debe diferir: uno es el rol de aplicacion y el otro el
+    propietario (ADR-020, design.md D-5).
+
+    El mensaje nombra que componente no coincide y **nunca incluye las URLs**:
+    llevan credenciales embebidas y esto va a parar a los logs de despliegue.
+    """
+    app, mig = urlparse(aplicacion), urlparse(migracion)
+
+    diferencias = [
+        nombre
+        for nombre, uno, otro in (
+            ("host", app.hostname, mig.hostname),
+            ("puerto", app.port, mig.port),
+            ("base", app.path.strip("/"), mig.path.strip("/")),
+        )
+        if uno != otro
+    ]
+    if diferencias:
+        raise RuntimeError(
+            "DATABASE_URL y DATABASE_MIGRATION_URL apuntan a bases distintas: "
+            f"no coinciden en {', '.join(diferencias)}. "
+            "Solo pueden diferir en el usuario (ADR-020)."
+        )
+
+
 def _url_de_settings() -> str:
-    """La misma `DATABASE_URL` que usa la aplicacion."""
-    return get_settings().database.url.get_secret_value()
+    """La URL del rol PROPIETARIO, verificada contra la de la aplicacion.
+
+    Las migraciones NO corren con el rol de la aplicacion: crear tablas y
+    politicas es precisamente lo que ese rol no debe poder hacer (ADR-020).
+    """
+    base_de_datos = get_settings().database
+
+    if base_de_datos.migration_url is None:
+        raise RuntimeError(
+            "falta DATABASE_MIGRATION_URL. Las migraciones corren con el rol "
+            "propietario y no con el de la aplicacion, que no puede crear "
+            "tablas ni politicas (ADR-020). Ver .env.example."
+        )
+
+    migracion = base_de_datos.migration_url.get_secret_value()
+    _verificar_misma_base(base_de_datos.url.get_secret_value(), migracion)
+    return migracion
 
 
 def run_migrations_offline() -> None:

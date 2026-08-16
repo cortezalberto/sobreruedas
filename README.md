@@ -28,6 +28,16 @@ Arranque en frío medido: **99 s** hasta los seis servicios de infraestructura `
 >
 > `check-services.sh` los reporta como `PENDIENTE`, no como `FAIL`.
 
+> 🔴 **¿Ya tenías el entorno levantado de antes del 16-ago-2026?** Hay que recrear el volumen de PostgreSQL una vez:
+>
+> ```bash
+> docker compose down -v && docker compose up -d
+> ```
+>
+> [`ADR-020`](docs/adr/ADR-020-rol-de-conexion-sin-bypass-de-rls.md) agregó un rol de aplicación (`mitutu`) que no puede saltear las políticas RLS — es lo que hace que el aislamiento entre agencias exista de verdad. Ese rol lo crea el init de PostgreSQL, que **solo corre al crear el volumen**.
+>
+> Sin recrearlo, el backend muere con `password authentication failed for user "mitutu"`, que se lee como credencial mal copiada y manda a editar el `.env`, donde no hay nada que arreglar. `check-services.sh` detecta el caso y te dice esto mismo.
+
 **¿Un puerto ocupado?** Los mapeos del host son configurables sin tocar el compose — poné el override en tu `.env`:
 
 ```bash

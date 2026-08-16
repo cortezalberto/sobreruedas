@@ -54,15 +54,23 @@ services:
     # 'extension "postgis" is not available'. Verificado el 13-ago-2026.
     image: postgis/postgis:16-3.4-alpine
     environment:
+      # POSTGRES_USER es el rol PROPIETARIO: dueno del esquema, corre las
+      # migraciones, NO atiende trafico.
       POSTGRES_USER: ${POSTGRES_USER:-deruedas}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-deruedas}
       POSTGRES_DB: ${POSTGRES_DB:-deruedas}
+      # APP_DB_* es el rol de APLICACION, sin capacidad de saltear RLS. Lo crea
+      # el init 02 (ADR-020). Son variables del CONTENEDOR DE LA BASE, no de la
+      # aplicacion: por eso no estan en .env.example ni en ADR-013, igual que
+      # POSTGRES_USER.
+      APP_DB_USER: ${APP_DB_USER:-mitutu}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-mitutu}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
-      # Las extensiones se habilitan al CREAR el volumen, una sola vez.
-      # Ubicacion fijada por ADR-019.
+      # Las extensiones y el rol de aplicacion se crean al CREAR el volumen, una
+      # sola vez. Ubicacion fijada por ADR-019.
       - ./infra/local/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-deruedas} -d ${POSTGRES_DB:-deruedas}"]
@@ -213,7 +221,13 @@ services:
       API_BASE_URL: http://localhost:8000
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       # Direcciones por nombre de servicio — ver la nota del encabezado.
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-deruedas}:${POSTGRES_PASSWORD:-deruedas}@postgres:5432/${POSTGRES_DB:-deruedas}
+      #
+      # DOS URLS, DOS ROLES (ADR-020, design.md D-5):
+      #   DATABASE_URL            rol de aplicacion, sin BYPASSRLS ni DDL
+      #   DATABASE_MIGRATION_URL  rol propietario, solo para alembic
+      # env.py verifica que apunten a la MISMA base y muere si no.
+      DATABASE_URL: postgresql+asyncpg://${APP_DB_USER:-mitutu}:${APP_DB_PASSWORD:-mitutu}@postgres:5432/${POSTGRES_DB:-deruedas}
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://${POSTGRES_USER:-deruedas}:${POSTGRES_PASSWORD:-deruedas}@postgres:5432/${POSTGRES_DB:-deruedas}
       DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-20}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
@@ -262,7 +276,9 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-local}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-deruedas}:${POSTGRES_PASSWORD:-deruedas}@postgres:5432/${POSTGRES_DB:-deruedas}
+      # El worker atiende trabajo de dominio, asi que va con el rol de
+      # aplicacion igual que el backend. No migra: no lleva DATABASE_MIGRATION_URL.
+      DATABASE_URL: postgresql+asyncpg://${APP_DB_USER:-mitutu}:${APP_DB_PASSWORD:-mitutu}@postgres:5432/${POSTGRES_DB:-deruedas}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       S3_ENDPOINT: http://minio:9000

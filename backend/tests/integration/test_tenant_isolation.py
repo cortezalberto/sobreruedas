@@ -16,9 +16,7 @@ Se corre con:
 from __future__ import annotations
 
 import asyncio
-import os
 import uuid
-from collections.abc import AsyncIterator
 
 import pytest
 from sqlalchemy import text
@@ -26,34 +24,26 @@ from sqlalchemy.exc import DBAPIError
 
 from app.db.session import (
     AccesoCruzado,
-    cerrar_engines,
     exigir_tenant_del_contexto,
     sesion_de_plataforma,
     sesion_de_tenant,
     violaciones_de_aislamiento,
 )
 
+from .soporte import DSN_APLICACION as DSN
+from .soporte import sesion_de_propietario
+
 pytestmark = pytest.mark.integration
 
 
 @pytest.fixture(autouse=True)
-async def engines_limpios() -> AsyncIterator[None]:
-    """Cierra los engines al terminar cada test.
+def _con_la_base_migrada(base_migrada: None) -> None:
+    """Todo lo de este archivo consulta `platform_probe`, que crea la migracion 002.
 
-    pytest-asyncio abre un event loop por test. Un engine reutilizado entre dos
-    loops arrastra conexiones del anterior, ya cerrado, y el sintoma —"Event
-    loop is closed"— aparece en un test que no tiene nada que ver.
-
-    `autouse` a proposito: acordarse de pedirlo es exactamente el error que
-    este fixture existe para evitar.
+    Autouse en vez de un parametro en cada una de las trece firmas: la
+    dependencia es del archivo entero, no de un test en particular.
     """
-    yield
-    await cerrar_engines()
 
-
-DSN = os.getenv(
-    "TEST_DATABASE_URL", "postgresql+asyncpg://deruedas:deruedas@postgres:5432/deruedas"
-)
 
 TABLA = "platform_probe"
 
@@ -71,29 +61,6 @@ SQL_CONTAR = text(f"SELECT count(*) FROM {TABLA}")  # noqa: S608
 SQL_ETIQUETAS_DEL_TENANT = text(f"SELECT etiqueta FROM {TABLA} WHERE tenant_id = :t")  # noqa: S608
 SQL_CONTEXTO_ACTUAL = text("SELECT current_setting('app.current_tenant', true)")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# ⚠️ EL AISLAMIENTO NO ESTA ACTIVO TODAVIA — ADR-020
-#
-# El rol con el que la aplicacion se conecta es superusuario con `rolbypassrls`,
-# y un rol asi IGNORA todas las politicas RLS. Medido sobre esta misma tabla,
-# con esta misma politica, en el mismo momento:
-#
-#     prueba_rls (NOSUPERUSER NOBYPASSRLS), sin contexto ->  0 filas  OK
-#     prueba_rls,                           con contexto ->  1 fila   OK
-#     deruedas   (superusuario)                          -> 26 filas  MAL
-#
-# La politica es correcta; el rol la anula. El arreglo toca compose, el init de
-# PostgreSQL, .env, el CI y Terraform: va en el change `rol-de-base-sin-bypass-rls`.
-#
-# `strict=True` a proposito: el dia que el rol se arregle, estos tests pasan y
-# pytest convierte el "fallo esperado" en ERROR, obligando a sacar la marca. Un
-# `skip` los habria escondido para siempre, que es como una capa de seguridad
-# se apaga sin que nadie se entere.
-# ─────────────────────────────────────────────────────────────────────────────
-SIN_AISLAMIENTO_REAL = pytest.mark.xfail(
-    strict=True,
-    reason="ADR-020: el rol de conexion es superusuario con BYPASSRLS y saltea toda politica",
-)
 
 # Tablas legitimamente exentas de RLS, exhaustivas segun RN-MT-09. Ninguna otra
 # puede estarlo. La lista se escribe a mano A PROPOSITO: es la declaracion de
@@ -142,7 +109,6 @@ async def etiquetas_visibles(tenant: uuid.UUID) -> list[str]:
 # ── 2.1 · Con contexto se ve lo propio, y solo lo propio ─────────────────────
 
 
-@SIN_AISLAMIENTO_REAL
 async def test_solo_se_ven_las_filas_del_tenant_en_contexto(
     tenant_a: uuid.UUID, tenant_b: uuid.UUID
 ) -> None:
@@ -153,7 +119,6 @@ async def test_solo_se_ven_las_filas_del_tenant_en_contexto(
     assert await etiquetas_visibles(tenant_b) == ["de-b"]
 
 
-@SIN_AISLAMIENTO_REAL
 async def test_la_politica_tambien_gobierna_la_escritura(tenant_a: uuid.UUID) -> None:
     """`WITH CHECK`: no alcanza con no VER lo ajeno, tampoco se puede ESCRIBIR
     una fila a nombre de otro tenant."""
@@ -173,7 +138,6 @@ async def test_la_politica_tambien_gobierna_la_escritura(tenant_a: uuid.UUID) ->
 # ── 2.2 · Sin contexto no hay filas ──────────────────────────────────────────
 
 
-@SIN_AISLAMIENTO_REAL
 async def test_sin_contexto_no_se_devuelve_ninguna_fila(tenant_a: uuid.UUID) -> None:
     await sembrar(tenant_a, "de-a")
 
@@ -182,7 +146,6 @@ async def test_sin_contexto_no_se_devuelve_ninguna_fila(tenant_a: uuid.UUID) -> 
         assert filas.all() == []
 
 
-@SIN_AISLAMIENTO_REAL
 async def test_sin_contexto_no_se_asume_ningun_tenant(
     tenant_a: uuid.UUID, tenant_b: uuid.UUID
 ) -> None:
@@ -221,7 +184,6 @@ async def test_el_parametro_no_sobrevive_a_la_transaccion(tenant_a: uuid.UUID) -
 # ── 2.4 · Concurrencia ───────────────────────────────────────────────────────
 
 
-@SIN_AISLAMIENTO_REAL
 async def test_dos_tenants_concurrentes_no_se_pisan(
     tenant_a: uuid.UUID, tenant_b: uuid.UUID
 ) -> None:
@@ -266,10 +228,25 @@ async def test_el_filtro_explicito_acota_aunque_la_politica_no_aplique(
 ) -> None:
     """La segunda capa, probada CON LA PRIMERA DESACTIVADA.
 
-    `NO FORCE` deja de aplicar la politica al dueno de la tabla, que es como se
-    conecta la aplicacion. Con RLS asi neutralizado, el filtro explicito de la
-    consulta tiene que seguir acotando al tenant — eso es lo que `RN-MT-04`
-    pide y lo unico que hace que la redundancia valga algo.
+    Con RLS neutralizado, el filtro explicito de la consulta tiene que seguir
+    acotando al tenant — eso es lo que `RN-MT-04` pide y lo unico que hace que
+    la redundancia valga algo.
+
+    POR QUE `DISABLE` Y NO `NO FORCE`
+    ─────────────────────────────────
+    Este test usaba `NO FORCE`, y funcionaba porque la aplicacion se conectaba
+    como DUENA de la tabla: `NO FORCE` desactiva la politica **solo para el
+    dueno**. Desde ADR-020 el rol de aplicacion ya no es dueno, asi que
+    `NO FORCE` no lo afecta en absoluto — la politica le sigue aplicando y el
+    test dejaba de probar lo que dice probar.
+
+    `DISABLE ROW LEVEL SECURITY` apaga RLS para todos, que es la neutralizacion
+    que este test necesita, y ademas es mas fuerte que la anterior.
+
+    Quien apaga y prende es el PROPIETARIO; quien consulta es la APLICACION.
+    Antes las dos cosas iban por la misma conexion, y solo porque esa conexion
+    era superusuario. Que ahora sean dos roles no es una complicacion del test:
+    es la separacion real del sistema, y el test la refleja en vez de taparla.
     """
     await sembrar(tenant_a, "de-a")
     await sembrar(tenant_b, "de-b")
@@ -277,9 +254,9 @@ async def test_el_filtro_explicito_acota_aunque_la_politica_no_aplique(
     # `ALTER TABLE` toma un lock exclusivo: si otra conexion quedo con una
     # transaccion abierta, espera. Sin techo esperaria para siempre, y un test
     # colgado es peor que uno rojo — no dice nada y ademas frena la suite.
-    async with sesion_de_plataforma(dsn=DSN) as sesion:
+    async with sesion_de_propietario() as sesion:
         await sesion.execute(text("SET LOCAL lock_timeout = '5s'"))
-        await sesion.execute(text(f"ALTER TABLE {TABLA} NO FORCE ROW LEVEL SECURITY"))
+        await sesion.execute(text(f"ALTER TABLE {TABLA} DISABLE ROW LEVEL SECURITY"))
     try:
         async with sesion_de_tenant(tenant_a, dsn=DSN) as sesion:
             # Sin politica aplicando, una consulta SIN filtro ve todo:
@@ -296,8 +273,13 @@ async def test_el_filtro_explicito_acota_aunque_la_politica_no_aplique(
         # En `finally` a proposito: dejar la tabla sin FORCE por un test que
         # fallo a la mitad convertiria este test en el que rompe todos los
         # demas, y el diagnostico empezaria por el lugar equivocado.
-        async with sesion_de_plataforma(dsn=DSN) as sesion:
+        async with sesion_de_propietario() as sesion:
             await sesion.execute(text("SET LOCAL lock_timeout = '5s'"))
+            # Las dos: `DISABLE` apaga `relrowsecurity` y deja
+            # `relforcerowsecurity` como estaba, pero restaurar solo una de las
+            # dos banderas dejaria la tabla en un estado que ningun otro test
+            # espera. Se devuelve exactamente al estado de la migracion 002.
+            await sesion.execute(text(f"ALTER TABLE {TABLA} ENABLE ROW LEVEL SECURITY"))
             await sesion.execute(text(f"ALTER TABLE {TABLA} FORCE ROW LEVEL SECURITY"))
 
 
@@ -310,6 +292,22 @@ async def tablas_sin_politica() -> set[str]:
     Recorre el catalogo REAL y no una lista mantenida a mano: una lista se
     queda corta en silencio en cuanto alguien agrega una tabla, y el test
     seguiria pasando sin cubrirla.
+
+    ⚠️ CORRE COMO PROPIETARIO, Y NO ES UN DETALLE
+    ─────────────────────────────────────────────
+    `information_schema.columns` **solo muestra columnas de tablas sobre las que
+    el usuario actual tiene algun privilegio**. Con el rol de aplicacion, una
+    tabla a la que le falte el GRANT no aparece en esta consulta: el detector no
+    la encontraria y este test la daria por inexistente en vez de por
+    descubierta.
+
+    O sea que la tabla peor configurada del esquema —sin politica Y sin
+    permisos— seria justo la invisible para el test que existe para encontrarla.
+    Es la misma falla que ADR-020 documenta, un nivel mas arriba: un control que
+    el catalogo da por puesto y no esta.
+
+    El hueco complementario —que a una tabla le falten los permisos— lo cubre
+    `test_permisos.py`. Ninguno de los dos alcanza solo.
     """
     consulta = text("""
         SELECT c.relname
@@ -326,14 +324,51 @@ async def tablas_sin_politica() -> set[str]:
               WHERE p.schemaname = n.nspname AND p.tablename = c.relname
           )
         """)
-    async with sesion_de_plataforma(dsn=DSN) as sesion:
+    async with sesion_de_propietario() as sesion:
         filas = await sesion.execute(consulta)
         return {fila[0] for fila in filas}
 
 
+async def faltantes(exentas: frozenset[str] = EXENTAS_DE_RLS) -> set[str]:
+    """Las tablas que incumplen, descontando las exenciones declaradas.
+
+    `exentas` es parametro para que el test de abajo pueda pasarle una lista
+    distinta y comprobar que la resta efectivamente resta. Con la constante
+    incrustada, una resta rota daria verde igual.
+    """
+    return await tablas_sin_politica() - exentas
+
+
 async def test_toda_tabla_con_tenant_id_tiene_politica() -> None:
-    faltantes = await tablas_sin_politica() - EXENTAS_DE_RLS
-    assert not faltantes, f"tablas con tenant_id y sin politica RLS: {sorted(faltantes)}"
+    sin_politica = await faltantes()
+    assert not sin_politica, f"tablas con tenant_id y sin politica RLS: {sorted(sin_politica)}"
+
+
+async def test_una_tabla_exenta_declarada_no_se_reporta() -> None:
+    """El contrapeso de `test_el_detector_detecta`.
+
+    Aquel comprueba que una tabla sin politica se ENCUENTRA. Este, que una
+    declarada exenta **no** se reporta. Sin los dos, la lista de exenciones
+    podria estar rota —ignorada por completo, o aplicada a todo— y el resultado
+    seguiria siendo verde en los dos casos.
+
+    `RN-MT-09` admite exenciones; lo que no admite es que sean tacitas.
+    """
+    nombre = f"probe_exenta_{uuid.uuid4().hex[:8]}"
+    async with sesion_de_propietario() as sesion:
+        await sesion.execute(
+            text(f"CREATE TABLE {nombre} (id serial PRIMARY KEY, tenant_id uuid NOT NULL)")
+        )
+    try:
+        # Sin declararla: se reporta, porque no tiene politica.
+        assert nombre in await faltantes()
+
+        # Declarada exenta: deja de reportarse. Eso y nada mas es lo que la
+        # lista tiene que hacer.
+        assert nombre not in await faltantes(EXENTAS_DE_RLS | {nombre})
+    finally:
+        async with sesion_de_propietario() as sesion:
+            await sesion.execute(text(f"DROP TABLE {nombre}"))
 
 
 async def test_el_detector_detecta() -> None:
@@ -345,25 +380,31 @@ async def test_el_detector_detecta() -> None:
     encuentra, el test de arriba no vale nada.
     """
     nombre = f"probe_sin_politica_{uuid.uuid4().hex[:8]}"
-    async with sesion_de_plataforma(dsn=DSN) as sesion:
+    async with sesion_de_propietario() as sesion:
         await sesion.execute(
             text(f"CREATE TABLE {nombre} (id serial PRIMARY KEY, tenant_id uuid NOT NULL)")
         )
     try:
         assert nombre in await tablas_sin_politica()
     finally:
-        async with sesion_de_plataforma(dsn=DSN) as sesion:
+        async with sesion_de_propietario() as sesion:
             await sesion.execute(text(f"DROP TABLE {nombre}"))
 
 
 async def test_la_tabla_testigo_tiene_force_activo() -> None:
     """`ENABLE` sin `FORCE` deja la politica sin aplicar al dueno de la tabla.
 
-    La aplicacion se conecta justamente como dueno. Con solo ENABLE, la
-    politica existe, `pg_policies` la lista, cualquier auditoria la da por
-    buena — y no aisla nada. Es el modo mas silencioso de tener RLS que no RLS.
+    Desde ADR-020 la aplicacion ya NO se conecta como dueno, asi que este ya no
+    es el agujero por el que se filtraban datos. Sigue siendo obligatorio igual:
+    `FORCE` es lo que hace que las migraciones y cualquier tarea que corra con
+    el propietario tampoco vean de mas, y es una linea de defensa que no cuesta
+    nada mantener puesta.
+
+    Con solo ENABLE, la politica existe, `pg_policies` la lista, cualquier
+    auditoria la da por buena — y no aisla al dueno. Es el modo mas silencioso
+    de tener RLS que no es RLS.
     """
-    async with sesion_de_plataforma(dsn=DSN) as sesion:
+    async with sesion_de_propietario() as sesion:
         fila = await sesion.execute(
             text("SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = :t"),
             {"t": TABLA},

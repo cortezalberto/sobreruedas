@@ -102,6 +102,31 @@ else
   fallo "extensiones" "se esperaban 3, hay '${EXT:-ninguna}' — recrea el volumen con 'docker compose down -v'"
 fi
 
+# Rol de aplicacion sin BYPASSRLS (ADR-020). Lo crea el init 02, que —igual que
+# el de extensiones— corre UNA SOLA VEZ, al crear el volumen.
+#
+# Sin este chequeo, quien tenga el entorno de antes de ADR-020 se encuentra con
+# un "password authentication failed for user mitutu" al levantar el backend.
+# Eso se lee como credencial mal copiada y manda a editar el .env, que no tiene
+# la culpa y donde no hay nada que arreglar.
+#
+# El nombre del rol NO se interpola en el SQL: se traen todos los roles y se
+# filtra en el shell. Ademas de evitar armar SQL por concatenacion (regla dura
+# 9), esquiva que `psql -c` no sustituya variables `-v` — que es como este
+# chequeo dio un falso "no existe" la primera vez que se escribio.
+ROL_APP="${APP_DB_USER:-mitutu}"
+ROL_SQL="SELECT rolname, rolsuper::int + rolbypassrls::int FROM pg_roles;"
+ROL=$(docker compose exec -T postgres \
+        psql -tAU "${POSTGRES_USER:-deruedas}" -d "${POSTGRES_DB:-deruedas}" \
+             -c "$ROL_SQL" 2>/dev/null | tr -d '[:blank:]' | grep "^${ROL_APP}|" | cut -d'|' -f2)
+if [ -z "$ROL" ]; then
+  fallo "rol de app" "'$ROL_APP' no existe — recrea el volumen con 'docker compose down -v' (ADR-020)"
+elif [ "$ROL" = "0" ]; then
+  ok "rol de app" "'$ROL_APP' existe y no puede saltear RLS"
+else
+  fallo "rol de app" "'$ROL_APP' puede saltear RLS: el aislamiento multi-tenant no aisla (ADR-020)"
+fi
+
 # Bucket de MinIO, creado por el servicio efimero minio-init.
 if docker compose run --rm --entrypoint sh minio-init -c \
      "mc alias set c http://minio:9000 ${S3_ACCESS_KEY:-minioadmin} ${S3_SECRET_KEY:-minioadmin} > /dev/null && mc ls c/${S3_BUCKET:-deruedas-media}" \

@@ -18,12 +18,19 @@ corre en produccion.
 ⚠️ `FORCE ROW LEVEL SECURITY` NO ES OPCIONAL
 ────────────────────────────────────────────
 `ENABLE ROW LEVEL SECURITY` deja las politicas SIN aplicar para el DUENO de la
-tabla. La aplicacion se conecta con el rol que creo el esquema, o sea el dueno:
-con solo ENABLE, la politica existe, `pg_policies` la lista, cualquier auditoria
-la da por buena — y no filtra nada.
+tabla: la politica existe, `pg_policies` la lista, cualquier auditoria la da por
+buena — y no filtra nada para el. Es el modo mas silencioso de tener RLS que no
+aisla, y `FORCE` es lo que la aplica tambien al dueno.
 
-Es el modo mas silencioso de tener RLS que no aisla. `FORCE` la aplica tambien
-al dueno.
+Cuando se escribio esta migracion, la aplicacion se conectaba con el rol que
+creo el esquema, o sea el dueno, y `FORCE` era lo unico que la ponia bajo la
+politica. Desde ADR-020 ya no: hay un rol de aplicacion aparte y la propiedad
+quedo del lado del que migra.
+
+`FORCE` sigue siendo obligatorio igual. Ahora cubre a las migraciones y a
+cualquier tarea que corra con el propietario, que sin el verian todo. Es una
+linea de defensa que no cuesta nada mantener puesta, y sacarla porque "ya no es
+el agujero" seria quedarse con una sola.
 
 Revision ID: 002
 Revises: 001

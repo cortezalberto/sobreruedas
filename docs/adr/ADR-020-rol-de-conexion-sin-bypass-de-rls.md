@@ -78,7 +78,9 @@ El punto 4 es el que convierte esto en una garantía y no en una convención: si
 
 ### En contra — asumidas
 
-- Los `GRANT` hay que mantenerlos: cada tabla nueva necesita permisos explícitos para el rol de aplicación. Es fricción real, y es la contracara de que el rol no sea dueño de todo.
+- ~~Los `GRANT` hay que mantenerlos: cada tabla nueva necesita permisos explícitos para el rol de aplicación.~~ **Resuelto al implementar** (16-ago-2026): el init deja puesto un `ALTER DEFAULT PRIVILEGES` **sin `FOR ROLE`**, que aplica al rol que lo ejecuta —el propietario— y por lo tanto alcanza a toda tabla que ese rol cree de ahí en adelante. Además es agnóstico de cómo se llame el propietario, que en el compose de tests es otro. La fricción anticipada acá no existe.
+
+  Con una salvedad que la sustituye, más chica: un default privilege es **silencioso cuando no se aplica** —volumen viejo, tabla creada por otro rol, esquema nuevo— y el síntoma sería un `permission denied` en runtime. Por eso va acompañado de un test que recorre el catálogo y falla si a alguna tabla con `tenant_id` le faltan permisos. Ver `design.md` D-3 del change.
 - El entorno local necesita recrear el volumen (`docker compose down -v`) para que el init cree el rol nuevo.
 - Terraform tendrá que provisionar los dos roles cuando se encare el bloque 9 de C-01.
 

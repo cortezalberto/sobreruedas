@@ -6,6 +6,7 @@
 - **Resuelve**: `R-3` · `PA-06`
 - **Afecta**: `C-01` (T-004, T-002, T-001), `backend/app/config.py`, `.env.example`, `docker-compose.yml`, `infra/k8s/`
 - **Naturaleza**: **decisión sin fuente en el corpus.** No es un desvío: ningún documento de los 11 contiene una tabla canónica de variables de entorno. Se registra como ADR porque el Principio 5 de la constitución exige que las decisiones sean explícitas para ser vinculantes.
+- **Enmendado**: 16-ago-2026 — se agrega `DATABASE_MIGRATION_URL` por [`ADR-020`](ADR-020-rol-de-conexion-sin-bypass-de-rls.md). La tabla pasa de 35 a **36 variables** y de 15 a **16 sensibles**. Solo por adición: ninguna variable existente cambia de nombre, de significado ni de clasificación.
 
 ---
 
@@ -21,14 +22,19 @@ Sin esta tabla, `T-004` no se puede implementar y `T-002` no puede escribir `.en
 
 Se adopta como **canónica** la tabla de abajo: la de `08_arquitectura_propuesta.md` reorganizada según los grupos que `T-004` exige, con dos correcciones y un hueco cubierto.
 
-Son **35 variables**, de las cuales **15 son sensibles**.
+Son **36 variables**, de las cuales **16 son sensibles**.
 
 ### `DatabaseSettings`
 
 | Variable | Para qué | Ejemplo | 🔒 |
 |---|---|---|:-:|
-| `DATABASE_URL` | Conexión a PostgreSQL 16 | `postgresql+asyncpg://app:***@db:5432/deruedas` | 🔒 |
+| `DATABASE_URL` | Conexión a PostgreSQL 16 con el rol de **aplicación** | `postgresql+asyncpg://mitutu:***@db:5432/deruedas` | 🔒 |
+| `DATABASE_MIGRATION_URL` | Conexión con el rol **propietario**. Solo la usa Alembic | `postgresql+asyncpg://deruedas:***@db:5432/deruedas` | 🔒 |
 | `DATABASE_POOL_SIZE` | Tamaño del pool (headroom ≤ 60 %) | `20` | |
+
+> **Por qué son dos.** [`ADR-020`](ADR-020-rol-de-conexion-sin-bypass-de-rls.md): el rol que atiende tráfico no puede saltear RLS ni tocar el esquema, y crear tablas y políticas es exactamente lo que una migración hace. Las dos URLs deben apuntar a la **misma base** — solo cambia el usuario — y `alembic/env.py` lo verifica al arrancar.
+>
+> `DATABASE_MIGRATION_URL` es **opcional**: el proceso que atiende peticiones y el worker no migran, y exigírsela les metería adentro la credencial del propietario, que es justamente la que no deben tener.
 
 ### `RedisSettings`
 

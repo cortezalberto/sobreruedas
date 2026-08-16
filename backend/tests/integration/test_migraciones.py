@@ -8,78 +8,44 @@ Se corre con:
 
     docker compose run --rm backend pytest -m integration
 
-La base de tests del CI arranca vacia y con el init de extensiones de
-desarrollo, que trae `pgcrypto`, `pg_trgm`, `postgis` y `uuid-ossp` pero NO
-`unaccent` ni `btree_gin`. Esas dos solo pueden llegar por migracion — que es
-exactamente el camino que tienen que recorrer para llegar a staging y a
-produccion, donde ese init NO corre.
+La base de tests del CI arranca vacia y con el init de desarrollo, que trae
+`pgcrypto`, `pg_trgm`, `postgis` y `uuid-ossp` pero NO `unaccent` ni `btree_gin`.
+Esas dos solo pueden llegar por migracion — que es exactamente el camino que
+tienen que recorrer para llegar a staging y a produccion, donde ese init NO
+corre.
+
+Desde ADR-020 las migraciones corren con el rol PROPIETARIO y no con el de la
+aplicacion: crear tablas y politicas es precisamente lo que el rol de aplicacion
+no debe poder hacer. Los tests del final de este archivo lo verifican.
 """
 
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
-from pathlib import Path
-
 import asyncpg
 import pytest
 
-pytestmark = pytest.mark.integration
-
-RAIZ_BACKEND = Path(__file__).resolve().parent.parent.parent
-
-DSN = os.getenv(
-    "TEST_DATABASE_URL", "postgresql+asyncpg://deruedas:deruedas@postgres:5432/deruedas"
+from .soporte import (
+    DSN_APLICACION,
+    DSN_PROPIETARIO,
+    SIN_URL_DE_MIGRACION,
+    alembic,
+    dsn_asyncpg,
 )
+
+pytestmark = pytest.mark.integration
 
 # Las cuatro que el stack declara y que T-009 exige. `postgis` y `pgcrypto` no
 # entran: las instala el init local y, en los ambientes gestionados, Terraform.
 EXTENSIONES_EXIGIDAS = ("uuid-ossp", "pg_trgm", "unaccent", "btree_gin")
 
-# Alembic construye `Settings` a traves de env.py, asi que necesita el conjunto
-# minimo de variables obligatorias. En el runner del CI solo estan las TEST_*,
-# de modo que las demas se pasan explicitamente con valores de descarte: esta
-# corrida migra, no se conecta a Keycloak ni a S3.
-ENTORNO_DE_MIGRACION = {
-    "KEYCLOAK_CLIENT_SECRET": "no-se-usa-en-esta-corrida",
-    "S3_ACCESS_KEY": "no-se-usa-en-esta-corrida",
-    "S3_SECRET_KEY": "no-se-usa-en-esta-corrida",
-    "TENANT_SECRETS_MASTER_KEY": "no-se-usa-en-esta-corrida",
-}
-
-
-def dsn_asyncpg(url: str) -> str:
-    """`postgresql+asyncpg://...` -> `postgresql://...` (asyncpg lo quiere pelado)."""
-    return url.replace("+asyncpg", "", 1)
-
-
-def alembic(*argumentos: str) -> subprocess.CompletedProcess[str]:
-    """Corre alembic como PROCESO, igual que `make migrate`.
-
-    Invocarlo por API en vez de por linea de comandos probaria un camino que
-    nadie usa: ni el Makefile ni el despliegue llaman a `command.upgrade`.
-    """
-    # noqa S603: no hay entrada no confiable. El ejecutable es el interprete de
-    # este mismo proceso y los argumentos son literales de este archivo. Correr
-    # alembic por proceso es justamente el punto del test.
-    return subprocess.run(  # noqa: S603
-        [sys.executable, "-m", "alembic", *argumentos],
-        cwd=RAIZ_BACKEND,
-        capture_output=True,
-        text=True,
-        env={**os.environ, **ENTORNO_DE_MIGRACION, "DATABASE_URL": DSN},
-    )
-
-
-@pytest.fixture(scope="module")
-def base_migrada() -> None:
-    resultado = alembic("upgrade", "head")
-    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
-
 
 async def extensiones_presentes() -> set[str]:
-    conexion = await asyncpg.connect(dsn_asyncpg(DSN), timeout=10)
+    """Las extensiones vistas DESDE LA APLICACION.
+
+    Con el DSN de la aplicacion a proposito: de paso acredita que ese rol puede
+    conectarse, que es la mitad de lo que este change cambia.
+    """
+    conexion = await asyncpg.connect(dsn_asyncpg(DSN_APLICACION), timeout=10)
     try:
         filas = await conexion.fetch("SELECT extname FROM pg_extension")
     finally:
@@ -101,3 +67,69 @@ async def test_migrar_dos_veces_no_falla(base_migrada: None) -> None:
     """
     resultado = alembic("upgrade", "head")
     assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+
+
+# ── 4.1 y 4.3 · Las migraciones son del propietario, y solo de el ────────────
+
+
+async def test_migrar_con_el_rol_de_la_aplicacion_falla(base_migrada: None) -> None:
+    """El rol de aplicacion no puede migrar, y eso es el punto.
+
+    Se corre `downgrade -1` y no `upgrade head`: sobre una base ya migrada un
+    upgrade no tiene nada que hacer, asi que pasaria sin intentar un solo DDL y
+    el test no probaria nada. El downgrade si intenta tocar el esquema.
+
+    Que falle NO deja la base a medias: alembic corre cada migracion en su
+    transaccion y el DDL de PostgreSQL es transaccional, asi que el rechazo por
+    permisos revierte todo. Lo verifica el `upgrade head` del final.
+    """
+    resultado = alembic("downgrade", "-1", url_de_migracion=DSN_APLICACION)
+
+    assert resultado.returncode != 0, (
+        "el rol de la aplicacion pudo modificar el esquema: puede crear tablas "
+        "sin politica RLS o alterar las existentes (ADR-020)"
+    )
+    salida = resultado.stdout + resultado.stderr
+    assert (
+        "InsufficientPrivilege" in salida or "permission denied" in salida.lower()
+    ), f"fallo, pero por un motivo distinto a permisos:\n{salida}"
+
+    # La base queda como estaba.
+    assert alembic("upgrade", "head").returncode == 0
+
+
+async def test_las_dos_urls_deben_apuntar_a_la_misma_base() -> None:
+    """Dos variables reabren un descuido que una sola no permitia.
+
+    Antes de ADR-020, `DATABASE_URL` era la unica y por construccion migraciones
+    y runtime nunca podian apuntar a bases distintas. Con dos URLs eso vuelve a
+    ser posible, asi que la garantia pasa a verificarse en `env.py`.
+
+    Migrar la base equivocada es de los errores mas caros que existen y no
+    deberia depender de que nadie se confunda al copiar un `.env`.
+    """
+    otra_base = DSN_PROPIETARIO.rsplit("/", 1)[0] + "/una_base_que_no_es_esta"
+
+    resultado = alembic("upgrade", "head", url_de_migracion=otra_base)
+
+    assert resultado.returncode != 0, "alembic migro contra una base distinta sin quejarse"
+    salida = resultado.stdout + resultado.stderr
+    assert (
+        "apuntan a bases distintas" in salida
+    ), f"fallo, pero no por la verificacion de ADR-020:\n{salida}"
+    # El mensaje nombra QUE no coincide, y no las URLs: llevan credenciales.
+    assert "base" in salida
+    assert "una_base_que_no_es_esta" not in salida
+
+
+async def test_sin_url_de_migracion_alembic_no_arranca() -> None:
+    """Falta la variable: muere nombrandola, no con un error de conexion.
+
+    Sin este mensaje, el sintoma seria un fallo de autenticacion contra el rol
+    de aplicacion — que se lee como credencial mal copiada y manda a revisar el
+    lugar equivocado.
+    """
+    resultado = alembic("upgrade", "head", url_de_migracion=SIN_URL_DE_MIGRACION)
+
+    assert resultado.returncode != 0
+    assert "DATABASE_MIGRATION_URL" in resultado.stdout + resultado.stderr

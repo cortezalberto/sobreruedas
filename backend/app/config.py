@@ -81,12 +81,24 @@ class DatabaseSettings(BaseSettings):
     model_config = _CONFIG
 
     # Sensible: lleva usuario y contrasena embebidos en la URL.
+    #
+    # Es el DSN del rol de APLICACION: sin BYPASSRLS, sin DDL, sin DELETE
+    # (ADR-020). Con el se atiende trafico y nada mas.
     url: SecretStr = Field(min_length=1, validation_alias="DATABASE_URL")
     pool_size: int = Field(default=20, ge=1, validation_alias="DATABASE_POOL_SIZE")
 
-    @field_validator("url")
+    # Sensible. DSN del rol PROPIETARIO, el unico que puede crear tablas y
+    # politicas. Lo usa alembic y nada mas.
+    #
+    # OPCIONAL a proposito: el backend que atiende peticiones y el worker NO
+    # migran, y exigirles esta variable les pondria la credencial del
+    # propietario adentro del proceso que justamente no debe tenerla. Quien la
+    # necesita es alembic, y `env.py` muere con un mensaje explicito si falta.
+    migration_url: SecretStr | None = Field(default=None, validation_alias="DATABASE_MIGRATION_URL")
+
+    @field_validator("url", "migration_url")
     @classmethod
-    def _dsn_bien_formado(cls, valor: SecretStr) -> SecretStr:
+    def _dsn_bien_formado(cls, valor: SecretStr | None) -> SecretStr | None:
         """Rechaza un DSN mal formado al arrancar, no al primer query.
 
         `min_length=1` solo atrapa el valor vacio. Una URL con un typo pasaba la
@@ -99,7 +111,14 @@ class DatabaseSettings(BaseSettings):
 
         El mensaje describe que se esperaba y **nunca incluye el valor**: es una
         credencial, y este error va a parar a los logs de arranque.
+
+        Vale para las DOS urls: la de aplicacion y la de migracion. Que la
+        segunda sea opcional no la exime de estar bien escrita si esta puesta —
+        un typo ahi se descubriria recien al migrar, que es el peor momento.
         """
+        if valor is None:
+            return None
+
         partes = urlparse(valor.get_secret_value())
         if not partes.scheme or not partes.hostname or partes.path.strip("/") == "":
             raise ValueError(

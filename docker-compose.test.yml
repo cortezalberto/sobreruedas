@@ -31,9 +31,16 @@ services:
     # 'extension "postgis" is not available'. Verificado el 13-ago-2026.
     image: postgis/postgis:16-3.4-alpine
     environment:
+      # Propietario del esquema. Se llama distinto que en desarrollo a
+      # proposito, y el init 02 no lo sabe: usa el rol que ejecuta, no un nombre.
       POSTGRES_USER: deruedas_test
       POSTGRES_PASSWORD: deruedas_test
       POSTGRES_DB: deruedas_test
+      # Rol de aplicacion sin BYPASSRLS (ADR-020). Mismo nombre que en
+      # desarrollo: es otro cluster, no se pisan, y que coincida hace que un
+      # DSN copiado de un lado al otro falle por el puerto y no por el usuario.
+      APP_DB_USER: mitutu
+      APP_DB_PASSWORD: mitutu
       # fsync off: se puede perder todo ante una caida, y no importa — esta
       # base no sobrevive a la corrida. A cambio, las migraciones vuelan.
       POSTGRES_INITDB_ARGS: "--nosync"

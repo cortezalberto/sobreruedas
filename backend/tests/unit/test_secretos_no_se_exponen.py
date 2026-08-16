@@ -49,6 +49,23 @@ def variables_sensibles() -> list[str]:
     return sorted(alias)
 
 
+def _con_la_forma_que_pide(variable: str, marcador: str) -> str:
+    """Envuelve el marcador en el formato que esa variable exige.
+
+    Los secretos que llevan una URL —`DATABASE_URL`, `DATABASE_MIGRATION_URL`—
+    se validan por forma antes de que el proceso arranque, así que un marcador
+    suelto haría fallar la construcción de `Settings` en vez de probar la fuga.
+    El marcador va en la contraseña, que es la parte que jamás debe aparecer.
+
+    Se decide por el sufijo y no con una lista de excepciones: cuando apareció
+    el segundo secreto con forma de DSN, la excepción escrita a mano que había
+    acá rompió este test. Una tercera no debería volver a romperlo.
+    """
+    if variable.endswith("_URL"):
+        return f"postgresql+asyncpg://u:{marcador}@db:5432/deruedas"
+    return marcador
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Escenario: Fallo de arranque por credencial inválida
 # ─────────────────────────────────────────────────────────────────────────────
@@ -148,18 +165,17 @@ def test_el_registro_de_arranque_no_filtra_ningun_valor_sensible(
     sensibles = variables_sensibles()
     assert sensibles, "no se detecto ningun campo sensible: el test se quedo sin objeto"
 
-    valores = {variable: f"{CREDENCIAL}-{variable}" for variable in sensibles}
-    for variable, valor in valores.items():
-        monkeypatch.setenv(variable, valor)
-    # DATABASE_URL es sensible pero ademas tiene que ser un DSN valido.
-    valores["DATABASE_URL"] = f"postgresql+asyncpg://u:{CREDENCIAL}-DATABASE_URL@db:5432/deruedas"
-    monkeypatch.setenv("DATABASE_URL", valores["DATABASE_URL"])
+    marcadores = {variable: f"{CREDENCIAL}-{variable}" for variable in sensibles}
+    for variable, marcador in marcadores.items():
+        monkeypatch.setenv(variable, _con_la_forma_que_pide(variable, marcador))
     get_settings.cache_clear()
 
     registros = _arrancar_y_capturar(caplog)
     texto = "\n".join(r.getMessage() for r in registros)
 
-    filtradas = [variable for variable, valor in valores.items() if valor in texto]
+    # Se busca el MARCADOR y no el valor entero: si el enmascarado fallara solo
+    # para la contrasena de un DSN, comparar el DSN completo no lo detectaria.
+    filtradas = [variable for variable, marcador in marcadores.items() if marcador in texto]
     assert not filtradas, f"el registro de arranque filtro: {', '.join(filtradas)}"
 
 

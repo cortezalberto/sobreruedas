@@ -220,7 +220,13 @@ jobs:
       - name: pytest completo con cobertura
         working-directory: backend
         env:
-          TEST_DATABASE_URL: postgresql+asyncpg://deruedas_test:deruedas_test@localhost:5433/deruedas_test
+          # DOS DSN, DOS ROLES (ADR-020). El rol de aplicacion no puede saltear
+          # RLS ni tocar el esquema, asi que las migraciones y el andamiaje que
+          # hace DDL van por el propietario. El rol lo crea el init de
+          # infra/local/postgres/init/, que docker-compose.test.yml ya monta:
+          # no hace falta un paso extra en este workflow.
+          TEST_DATABASE_URL: postgresql+asyncpg://mitutu:mitutu@localhost:5433/deruedas_test
+          TEST_DATABASE_OWNER_URL: postgresql+asyncpg://deruedas_test:deruedas_test@localhost:5433/deruedas_test
           TEST_REDIS_URL: redis://localhost:6380/0
         run: |
           python -m pytest -q \
@@ -242,7 +248,13 @@ jobs:
         if: github.event_name == 'pull_request'
         continue-on-error: true
         env:
-          TEST_DATABASE_URL: postgresql+asyncpg://deruedas_test:deruedas_test@localhost:5433/deruedas_test
+          # DOS DSN, DOS ROLES (ADR-020). El rol de aplicacion no puede saltear
+          # RLS ni tocar el esquema, asi que las migraciones y el andamiaje que
+          # hace DDL van por el propietario. El rol lo crea el init de
+          # infra/local/postgres/init/, que docker-compose.test.yml ya monta:
+          # no hace falta un paso extra en este workflow.
+          TEST_DATABASE_URL: postgresql+asyncpg://mitutu:mitutu@localhost:5433/deruedas_test
+          TEST_DATABASE_OWNER_URL: postgresql+asyncpg://deruedas_test:deruedas_test@localhost:5433/deruedas_test
           TEST_REDIS_URL: redis://localhost:6380/0
         run: |
           git worktree add /tmp/base ${{ github.event.pull_request.base.sha }}

@@ -471,6 +471,8 @@ Cubre la capability `platform/delivery-pipeline`.
 
 - [ ] 9.1 Escribir `infra/terraform/staging/` provisionando el cluster de Kubernetes con disponibilidad multi-zona
 - [ ] 9.2 Provisionar con Terraform la red, la base gestionada, los buckets, el registry, el DNS y los certificados
+- [ ] 9.2.b Provisionar en la base gestionada **los dos roles** de [`ADR-020`](../../../docs/adr/ADR-020-rol-de-conexion-sin-bypass-de-rls.md): el propietario del esquema y el de aplicación (`NOSUPERUSER NOBYPASSRLS`), con su `ALTER DEFAULT PRIVILEGES`, y dos secretos distintos para `DATABASE_URL` y `DATABASE_MIGRATION_URL`
+- [ ] 9.2.c Verificar el rol provisionado corriendo `tests/integration/test_rol_de_conexion.py` contra staging — es lo que va a decir sin ambigüedad si la base gestionada del proveedor permite un rol de esquema sin `BYPASSRLS` (pregunta abierta del change)
 - [ ] 9.3 Instalar ArgoCD en el cluster y configurar su acceso de solo lectura al repositorio de manifests
 
 **Cargas de trabajo (manifests)**
