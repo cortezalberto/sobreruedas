@@ -558,7 +558,21 @@ Cubre la capability `platform/delivery-pipeline`.
 > |---|---|---|---|
 > | `platform/service-health` | 10 | **10** | ✅ completa |
 > | `platform/configuration` | 10 | **10** | ✅ completa |
-> | `platform/delivery-pipeline` | 15 | **11** | ⚠️ faltan 4 |
+> | `platform/delivery-pipeline` | 15 | **13** | ⚠️ faltan 2 |
+>
+> > **Actualizado el 17-ago-2026 — de 31 a 33 de 35.** Dos de los cuatro que
+> > faltaban estaban trabados por una razón que **dejó de existir**: la auditoría
+> > decía *"bloqueados por el proveedor cloud sin decidir"*, y [`ADR-023`](../../../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md)
+> > cerró esa decisión. Con el bloque 9 implementado y ejercitado en local, los
+> > escenarios **"las pruebas de humo posteriores fallan"** y **"trazabilidad del
+> > despliegue"** ya tienen test ejecutable en
+> > [`tests/unit/test_despliegue_escenarios.py`](../../../backend/tests/unit/test_despliegue_escenarios.py).
+> >
+> > Los del humo son **dinámicos**: ejecutan `humo.sh` con una sonda inyectada y
+> > verifican que sale 0 con todo sano, 1 con una sonda caída, y 2 con un color
+> > inválido — que es el contrato del que depende el agente para NO conmutar.
+> > Se agregó `SONDA_CMD` al script para poder probarlo sin levantar stacks: un
+> > gate que solo se puede verificar a mano no se verifica nunca.
 >
 > > **Actualizado.** Esta auditoría cerró con `delivery-pipeline` en 10 y un
 > > total de 30. La sonda del secreto filtrado (corridas `31944844892` y
@@ -605,29 +619,46 @@ Cubre la capability `platform/delivery-pipeline`.
 > secreto filtrado**. El desglose escenario por escenario está en la tabla del
 > bloque 8.
 >
-> Los 4 que faltan se separan en dos causas, porque no se arreglan igual:
+> **Los 2 que faltan, y por qué ninguno se arregla escribiendo un test:**
 >
-> - **1 exige provocar un fallo que no es trivial de provocar**: una
->   vulnerabilidad de severidad baja, que exige hallar un paquete con
->   vulnerabilidad baja y **solo** baja.
-> - **3 son del bloque 9** (despliegue a staging, reversión por fallo de pruebas
->   de humo, trazabilidad del commit desplegado). No implementados, y bloqueados
->   por el proveedor cloud sin decidir.
+> - 🔴 **"Vulnerabilidad de severidad baja" — no falta un test, hay una
+>   contradicción entre la spec y la implementación.** El escenario pide que las
+>   vulnerabilidades bajas o medias *"se reporten sin bloquear"*.
+>   `npm audit --audit-level=high` hace exactamente eso. **`pip-audit` no**:
+>   bloquea ante **cualquier** severidad, a propósito, porque la herramienta no
+>   expone severidad y filtrarla obligaría a mantener una lista a mano
+>   (`ci.yml:356`).
+>
+>   La decisión de ser más estricto es defendible. Lo que no lo es, es **dónde
+>   vive**: en un comentario de código. Por el **Principio 5** una decisión
+>   implícita no es vinculante, y acá además **contradice un escenario de una
+>   spec que está por promoverse a vigente**.
+>
+>   Tres salidas posibles: enmendar el escenario para que describa lo que el
+>   sistema hace; registrar el desvío como ADR dejando el escenario intacto; o
+>   cambiar `pip-audit` por una herramienta que exponga severidad.
+>   **Pendiente de decisión del Tech Lead** — no se puede tildar honestamente
+>   hasta entonces.
+>
+> - ⏸️ **"Integración exitosa a la rama principal → se despliega automáticamente
+>   a staging"** — el mecanismo está entero y probado en local, pero este
+>   escenario afirma que el despliegue **ocurre**, y eso solo se demuestra con
+>   un servidor recibiendo un despliegue de verdad. Es el único de los 35 que
+>   necesita el VPS. Se cierra con las tareas 9.20 y 9.1-9.3.
 >
 > > **Corrección a la auditoría anterior.** Decía "7 escenarios describen
 > > comportamiento del workflow" pero enumeraba **8**, y de ahí salía un total
 > > de 14 sobre 15. Los grupos correctos son 4 + 8 + 3 = 15.
 >
-> **Consecuencia: C-01 sigue sin poder archivarse — 31 de 35.** No es una
+> **Consecuencia: C-01 sigue sin poder archivarse — 33 de 35.** No es una
 > formalidad de proceso: `openspec archive` sincroniza las delta specs contra
 > `openspec/specs/`, y promover a spec vigente un contrato con escenarios sin
 > verificación es declarar cubierto lo que no lo está.
 >
-> Dos de los tres capabilities ya están enteros. **Lo único que falta son 4
-> escenarios de `delivery-pipeline`, y ninguno depende de escribir un test**:
-> 3 esperan el bloque 9 —o sea la decisión de proveedor cloud— y el otro exige
-> provocar un fallo que no es trivial de provocar. Es un límite distinto al de
-> ayer, cuando lo que faltaba era trabajo de tests.
+> Dos de los tres capabilities están enteros. **Quedan 2 escenarios de
+> `delivery-pipeline`, y ninguno depende de escribir un test**: uno espera una
+> **decisión** sobre el conflicto entre la spec y `pip-audit`, y el otro espera
+> **el servidor**. El trabajo de tests se terminó.
 
 > ### ✅ Tarea 10.2 — historial escaneado y limpio, con un punto ciego cerrado a mano
 >

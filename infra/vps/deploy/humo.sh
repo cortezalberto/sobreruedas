@@ -32,9 +32,23 @@ RED="${RED_DOCKER:-deruedas_default}"
 log() { printf '[humo:%s] %s\n' "$COLOR" "$*" >&2; }
 
 # Se sondea desde un contenedor efimero DENTRO de la red de Docker. Desde el
-# host los alias no resuelven.
+# host los alias con color no resuelven.
+#
+# SONDA_CMD existe para poder PROBAR este script. Si esta seteada, se invoca con
+# la URL como unico argumento y su codigo de salida decide. Sin ella, el
+# comportamiento es exactamente el de siempre.
+#
+# No es un agujero: el escenario "las pruebas de humo posteriores fallan" de
+# `platform/delivery-pipeline` exige verificar que un humo fallido NO conmuta el
+# trafico. Sin poder inyectar la sonda, ese test necesitaria levantar stacks de
+# verdad, y un gate que solo se puede probar a mano no se prueba nunca — que es
+# el mismo criterio que ADR-023 le aplico a gitleaks.
 sondear() {
     local url="$1"
+    if [[ -n "${SONDA_CMD:-}" ]]; then
+        "$SONDA_CMD" "$url"
+        return $?
+    fi
     docker run --rm --network "$RED" curlimages/curl:latest \
         --silent --show-error --fail --max-time 5 "$url" >/dev/null 2>&1
 }
