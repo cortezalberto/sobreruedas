@@ -41,9 +41,7 @@ WORKFLOW_PUBLICAR = RAIZ_REPO / ".github" / "workflows" / "deploy-staging.yml"
 # distintos. Ademas es lo que pide la regla S607 de ruff, y con razon.
 BASH = shutil.which("bash")
 
-bash_disponible = pytest.mark.skipif(
-    BASH is None, reason="requiere bash para ejecutar los scripts"
-)
+bash_disponible = pytest.mark.skipif(BASH is None, reason="requiere bash para ejecutar los scripts")
 
 
 def _correr_humo(tmp_path: Path, *, sonda_falla: bool, duracion: int = 6) -> int:
@@ -184,9 +182,9 @@ def test_las_imagenes_llevan_la_etiqueta_oci_de_revision() -> None:
     construir = [p for p in pasos if "build-push-action" in str(p.get("uses", ""))]
 
     labels = construir[0]["with"].get("labels", "")
-    assert "org.opencontainers.image.revision" in labels, (
-        "falta la etiqueta OCI de revision en la imagen"
-    )
+    assert (
+        "org.opencontainers.image.revision" in labels
+    ), "falta la etiqueta OCI de revision en la imagen"
 
 
 def test_el_agente_lee_la_revision_y_la_persiste() -> None:
@@ -196,9 +194,9 @@ def test_el_agente_lee_la_revision_y_la_persiste() -> None:
     """
     guion = DESPLEGAR.read_text(encoding="utf-8")
 
-    assert "org.opencontainers.image.revision" in guion, (
-        "el agente no lee la etiqueta de revision de la imagen"
-    )
+    assert (
+        "org.opencontainers.image.revision" in guion
+    ), "el agente no lee la etiqueta de revision de la imagen"
     assert re.search(r'>\s*"\$ESTADO_SHA"', guion), (
         "el agente no deja registrado el SHA desplegado: sin eso, inspeccionar "
         "una version desplegada no permite identificar su commit"
@@ -216,6 +214,4 @@ def test_la_firma_se_verifica_por_digest_y_no_por_tag() -> None:
     firmar = [p for p in pasos if "cosign sign" in str(p.get("run", ""))]
 
     assert firmar, "el workflow no firma las imagenes"
-    assert "${DIGEST}" in firmar[0]["run"], (
-        "cosign firma por tag en vez de por digest"
-    )
+    assert "${DIGEST}" in firmar[0]["run"], "cosign firma por tag en vez de por digest"
