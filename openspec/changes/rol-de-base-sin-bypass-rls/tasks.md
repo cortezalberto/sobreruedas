@@ -66,7 +66,7 @@
 - [x] 6.1 Pasar `TEST_DATABASE_URL` (aplicación) y `TEST_DATABASE_OWNER_URL` (propietario) en el paso de pytest del job `test-backend-integration`
 - [x] 6.2 Verificar que el init del rol corre en el compose de tests sin agregar un paso al workflow — verificado levantando `docker-compose.test.yml`: rol `mitutu` creado, otorgante `deruedas_test`
 - [x] 6.3 Pasar las dos variables también al paso que mide la cobertura de la base
-- [ ] 6.4 Correr el pipeline entero y verificar que el guardián pasa en CI — **requiere push**, no se puede acreditar localmente
+- [x] 6.4 Correr el pipeline entero y verificar que el guardián pasa en CI — acreditado el 17-ago-2026 en la corrida [`32028736000`](https://github.com/cortezalberto/sobreruedas/actions/runs/32028736000): **6/6 jobs verdes**, `test-backend-integration` con **236 tests pasando** contra `mitutu` (`TEST_DATABASE_URL`) y **0 xfail**. `test_rol_de_conexion.py` no tiene ninguna condición de `skip`, así que el verde es del guardián y no de su ausencia. Cobertura **96.86 %** líneas sobre el umbral de 80 %
 
 ## 7. Cierre del fallo esperado · C-02, bloque 2
 
