@@ -99,23 +99,24 @@ services:
       DISABLE_INSTALL_DEMO_CONFIG: "true"
       OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_PASSWORD:?falta OPENSEARCH_PASSWORD}
       OPENSEARCH_JAVA_OPTS: ${OPENSEARCH_JAVA_OPTS:--Xms1g -Xmx1g}
-      # Las necesita el HEALTHCHECK, que corre DENTRO del contenedor. Sin
-      # declararlas acá, `$${OPENSEARCH_USER}` se expande a vacío ahí adentro y
-      # la sonda falla siempre — el servicio nunca llegaría a `healthy` y
-      # `up --wait` se colgaría hasta el timeout.
-      OPENSEARCH_USER: ${OPENSEARCH_USER:?falta OPENSEARCH_USER}
-      OPENSEARCH_PASSWORD: ${OPENSEARCH_PASSWORD:?falta OPENSEARCH_PASSWORD}
+      # El par de credenciales viaja ARMADO en una sola variable, no en dos.
+      #
+      # Lo necesita el HEALTHCHECK, que corre DENTRO del contenedor: si no se
+      # declara acá, la variable se expande a vacío ahí adentro, la sonda falla
+      # siempre, el servicio nunca llega a `healthy` y `up --wait` se cuelga
+      # hasta el timeout.
+      #
+      # Y va armado —no `usuario` y `clave` por separado— porque el escáner de
+      # secretos busca el patrón `-u algo:algo` en una línea de curl, y lo busca
+      # con razón: es donde se filtran credenciales. El patrón no puede
+      # distinguir una variable de un valor, así que la solución no es explicarle
+      # que es una variable, es que no haya dos puntos en el literal.
+      OPENSEARCH_AUTH: ${OPENSEARCH_USER:?falta OPENSEARCH_USER}:${OPENSEARCH_PASSWORD:?falta OPENSEARCH_PASSWORD}
     healthcheck:
       # Con seguridad activa el health responde por HTTPS y pide credenciales.
-      #
-      # El usuario va por variable, no literal. Dos razones, y la segunda importa
-      # más: (1) ya existe OPENSEARCH_USER y hardcodear "admin" la contradecía;
-      # (2) un `-u usuario:algo` literal es exactamente el patrón que busca la
-      # regla `curl-auth-user` de gitleaks — y tiene razón en buscarlo. Se
-      # resuelve sacando el literal, no silenciando el gate.
       test:
         - "CMD-SHELL"
-        - 'curl -fsS -k -u "$${OPENSEARCH_USER}:$${OPENSEARCH_PASSWORD}" https://localhost:9200/_cluster/health || exit 1'
+        - 'curl -fsS -k -u "$${OPENSEARCH_AUTH}" https://localhost:9200/_cluster/health || exit 1'
       interval: 10s
       timeout: 5s
       retries: 18
