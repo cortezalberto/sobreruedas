@@ -293,11 +293,38 @@ services:
       start_period: 20s
     networks: [default, observability]
 
-  # Comparte imagen y codigo con `backend`: mismo build, distinto comando.
+  # ── Worker de Celery — DECLARADO, pero todavia sin trabajo que hacer ────────
+  #
+  # ⚠️ NO arranca con `docker compose up -d`. Esta detras de un profile a
+  #    proposito, y no es pereza: HOY NO EXISTE NINGUNA TAREA DE CELERY.
+  #
+  # El comando anterior era `celery -A app.core.events worker`, y estaba mal por
+  # una confusion de dos cosas distintas:
+  #
+  #   app/core/events.py  ES el publicador y consumidor de eventos de dominio
+  #                       sobre Redis Streams (C-02). Tiene grupos, reintentos
+  #                       con backoff y cola de irrecuperables. NO es una app de
+  #                       Celery y nunca va a serlo.
+  #
+  #   Celery             lo fija ADR-009 y es real, pero su PRIMERA tarea nace
+  #                       en C-17 (importacion-csv-de-stock): ImportService
+  #                       ejecutandose en background. Hasta entonces un worker
+  #                       de Celery no tiene absolutamente nada que consumir.
+  #
+  # Con el comando viejo el servicio moria al arrancar —el modulo no expone una
+  # app de Celery— y ensuciaba cada `docker compose up` del entorno local.
+  #
+  # CUANDO C-17 LO NECESITE: crear la app de Celery, apuntar el comando ahi y
+  # BORRAR el profile. La ruta de abajo es una propuesta, no una decision
+  # tomada: la fija C-17.
+  #
+  # Nombrarlo explicitamente lo levanta igual, sin activar el profile a mano:
+  #   docker compose up -d worker
   worker:
+    profiles: ["worker"]
     build:
       context: ./backend
-    command: ["celery", "-A", "app.core.events", "worker", "--loglevel=INFO"]
+    command: ["celery", "-A", "app.core.tasks", "worker", "--loglevel=INFO"]
     depends_on:
       redis: { condition: service_healthy }
       postgres: { condition: service_healthy }

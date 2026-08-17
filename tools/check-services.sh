@@ -144,16 +144,26 @@ else
   pendiente "backend" "falta backend/app/main.py (lo crea T-005)"
 fi
 
-# El worker de Celery necesita app.core.events, que crea T-016 (C-02 en
-# adelante). Comparte imagen con backend, pero no arranca sin ese modulo.
-if [ -f backend/app/core/events.py ]; then
+# ── Worker de Celery ────────────────────────────────────────────────────────
+#
+# La condicion anterior miraba si existia app/core/events.py, y estaba mal: ese
+# modulo es el publicador y consumidor de eventos sobre REDIS STREAMS (C-02), no
+# una app de Celery. Al crearse events.py, este chequeo empezo a exigir un
+# worker que no puede arrancar, y reportaba FAIL en cada corrida.
+#
+# Eso es exactamente lo que el encabezado de este archivo dice que no hay que
+# hacer: contar como error algo que todavia no existe entrena a ignorar el rojo.
+#
+# La condicion correcta es si existe la APP DE CELERY. La crea C-17
+# (importacion-csv-de-stock), que trae la primera tarea en background.
+if [ -f backend/app/core/tasks.py ]; then
   if docker compose ps --status running --services 2>/dev/null | grep -qx worker; then
     ok "worker" "contenedor corriendo"
   else
     fallo "worker" "el contenedor no esta corriendo"
   fi
 else
-  pendiente "worker" "falta backend/app/core/events.py (lo crea T-016)"
+  pendiente "worker" "sin tareas de Celery todavia; la primera nace en C-17"
 fi
 
 if [ -f frontend-web/package.json ]; then
