@@ -1,3 +1,7 @@
+## Purpose
+
+Define cómo el sistema garantiza que los datos de una agencia jamás sean visibles para otra: de dónde sale la identidad del tenant, cuándo se establece su contexto, con qué privilegios se conecta la aplicación a la base de datos, y qué debe ocurrir cuando alguna de esas condiciones falta.
+
 ## ADDED Requirements
 
 ### Requirement: El rol de conexión no puede eludir el aislamiento
