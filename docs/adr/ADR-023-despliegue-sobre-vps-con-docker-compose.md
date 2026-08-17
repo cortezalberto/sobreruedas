@@ -136,5 +136,5 @@ Ninguno de estos puntos se ejecuta con este ADR. Se listan para que no queden im
 1. **Reescribir el bloque 9 de `C-01`** — 16 tareas de Terraform, ArgoCD y manifests que ya no aplican.
 2. **Corregir la regla dura 4 de `CLAUDE.md`**, que nombra dos gestores de secretos inexistentes en este despliegue.
 3. **Actualizar `knowledge-base/08` §Secrets management y `knowledge-base/12`**, que declaran rotación trimestral sobre un gestor del proveedor.
-4. **Llevar el conflicto de disponibilidad a Dirección + SRE**, con el detalle de §Conflicto declarado con N3.
+4. ✅ **Llevar el conflicto de disponibilidad a Dirección + SRE**, con el detalle de §Conflicto declarado con N3. **Hecho el 17-ago-2026**: [`ESC-001`](../escalaciones/ESC-001-sla-sobre-nodo-unico.md), registrada como `PA-30`. Queda **abierta**, esperando al decisor. ⚠️ `ESC-001` corrige dos imprecisiones de este ADR: los planes tienen **créditos de servicio**, no *"devolución de dinero"*, y la exposición se mide contra la **Versión A** del pricing, que es la que lleva la fila de SLA.
 5. **Revisar `T-030` y la stack de observabilidad**: `ADR-016` eligió Tempo, y su despliegue estaba pensado sobre Kubernetes.
