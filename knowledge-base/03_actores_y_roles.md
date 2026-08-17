@@ -16,9 +16,11 @@ Este es uno de los puntos **bloqueantes** de la base documental. Cuatro versione
 | `historias-usuario.md` | 5 *personas*: P1 Gerente, P2 Vendedor, P3 Administrativo, P4 Customer Success Manager, P5 Super Admin |
 | `manual-usuario.md` | Solo `manager`, `salesperson`, `admin_staff` (es el manual del cliente) |
 
-Ver `IN-01` y `IN-02` en [10_preguntas_abiertas.md](10_preguntas_abiertas.md). **No se puede implementar `users.role` sin resolver esto.**
+✅ **`IN-01` e `IN-02` están decididos** por [`ADR-017`](../docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md), **condicionado a la ratificación de [`E-001`](../docs/adr/E-001-enmienda-glosario-super-admin.md)** (cierre de discusión: 20-ago-2026). La tabla de arriba queda como registro de la discrepancia original.
 
-Interpretación de trabajo adoptada en esta KB (a confirmar): existen **4 roles**, de los cuales 3 son roles *dentro del tenant* y 1 es un rol *de la plataforma*. La equivalencia con el español de la constitución es: Gerente = `manager`, Vendedor = `salesperson`, Administrativo = `admin_staff`.
+**Catálogo vigente**: **4 roles en el sistema, 3 en `user_role_enum`.** Los tres roles *de tenant* viven en `users`; `super_admin` es un rol *de plataforma* y vive en su propia tabla `super_admins`, sin `tenant_id` y exenta de RLS. `users.tenant_id` sigue **`NOT NULL` sin excepciones**.
+
+Equivalencia con el español de la constitución: Gerente = `manager`, Vendedor = `salesperson`, Administrativo = `admin_staff`. Los identificadores en código son en inglés; la interfaz muestra los términos en español del glosario.
 
 ## Actores del sistema
 
@@ -34,57 +36,45 @@ Interpretación de trabajo adoptada en esta KB (a confirmar): existen **4 roles*
 
 ## RBAC — Matriz de permisos
 
-⚠️ **No existe en el corpus una matriz RBAC canónica y completa.** El plan de seguridad lo dice explícitamente. Lo que sigue está **reconstruido** cruzando la tabla del manual de usuario (§2.4) con los permisos declarados ficha por ficha en el plan de implementación. Cualquier celda es candidata a revisión.
+> ✅ **La matriz canónica vive en [`ADR-024`](../docs/adr/ADR-024-matriz-rbac-canonica.md)**, que cierra el riesgo `R-2`. Esta sección es **material derivado**: resume la forma y remite al ADR para las celdas. Ante cualquier diferencia, **gana el ADR**.
 
-### Vista funcional (derivada del manual de usuario)
+Hasta el 17-ago-2026 esta sección contenía **dos vistas parciales en conflicto** —una funcional derivada del manual de usuario, otra por recurso derivada del plan de implementación—. `ADR-024` las reconcilió y encontró que **no eran un empate**: la vista funcional venía del manual de usuario, que [`ADR-000`](../docs/adr/ADR-000-precedencia-documental.md) clasifica como **N4, no normativo**. Donde chocaba con `RN-CR-12` o con el plan de implementación, perdía por precedencia.
 
-| Acción | `manager` | `salesperson` | `admin_staff` | `super_admin` |
-|---|:---:|:---:|:---:|:---:|
-| Ver dashboard ejecutivo | ✅ | ❌ (solo el propio) | ✅ | ✅ (cross-tenant) |
-| Cargar y editar vehículos | ✅ | ⚠️ limitado | ✅ | — |
-| Ver precio de costo / margen | ✅ | ❌ | ✅ | — |
-| Ver leads de toda la agencia | ✅ | ❌ (solo los propios) | ✅ (lectura) | — |
-| Crear y editar leads | ✅ | ✅ | ✅ | — |
-| Marcar venta como ganada | ✅ | ✅ (los propios) | ❌ | — |
-| Reasignar leads entre vendedores | ✅ | ❌ | ❌ | — |
-| Configurar pipeline y reglas | ✅ | ❌ | ❌ | — |
-| Crear / editar usuarios | ✅ | ❌ | ❌ | — |
-| Configurar integraciones (WhatsApp, portal) | ✅ | ❌ | ❌ | — |
-| Gestionar sucursales | ✅ | ❌ | ❌ | — |
-| Ver reportes ejecutivos | ✅ | ❌ | ✅ | — |
-| Generar exports de datos | ✅ | ❌ | ✅ | — |
-| Cambiar el plan contratado | ✅ | ❌ | ❌ | ✅ |
-| Gestión documental | ✅ | ⚠️ parcial | ✅ | — |
-| Alta / suspensión de tenants | ❌ | ❌ | ❌ | ✅ |
-| Gestionar planes y precios | ❌ | ❌ | ❌ | ✅ |
-| Impersonar un tenant | ❌ | ❌ | ❌ | ✅ (auditado) |
-| Editar catálogos canónicos (marcas/modelos) | ❌ | ❌ | ❌ | ✅ |
-| Administrar feature flags | ❌ | ❌ | ❌ | ✅ |
+El ADR también incorporó **dos fuentes que ninguna de las dos vistas había cruzado**: las reglas `RN-*` de [05_reglas_de_negocio.md](05_reglas_de_negocio.md) (`RN-MT-10`, `RN-ST-12`, `RN-ST-15`, `RN-CR-12`, `RN-CR-13`, `RN-FI-04`, `RN-AD-06`) y el principio **`S3`** del plan de seguridad (N3), que **prohíbe la herencia entre roles**.
 
-### Vista por recurso (derivada del plan de implementación)
+### Forma de la matriz
 
-| Recurso / acción | Roles autorizados |
+**Son dos matrices disjuntas, no una de cuatro columnas.** No existe un solo endpoint donde los cuatro roles compitan: ningún rol de tenant entra al espacio administrativo, y el rol de plataforma no obtiene acceso cross-tenant fuera de él.
+
+```
+Espacio de tenant  /api/v1/…        Espacio de plataforma  /admin/api/v1/…
+├── manager                          └── super_admin
+├── salesperson
+└── admin_staff
+```
+
+Un permiso se identifica con `recurso:acción` y cada par (rol, permiso) declara un **alcance** y, opcionalmente, un **conjunto de campos**:
+
+| Eje | Valores |
 |---|---|
-| `POST /vehicles` | `manager`, `admin_staff` |
-| `PATCH /vehicles/{id}` | `manager`, `admin_staff`; `salesperson` solo `internal_notes` y auto-asignación |
-| `POST /vehicles/{id}/status` | `manager`; `salesperson` transición limitada (`available`→`reserved`, si está asignado) |
-| `DELETE /vehicles/{id}` (archivar) | `manager` |
-| `POST /vehicles/{id}/photos` | `manager`, `admin_staff`, `salesperson` asignado |
-| Borrar / reordenar fotos | `manager`, `admin_staff` |
-| `POST /vehicles/import` | `manager`, `admin_staff` |
-| `POST /vehicles/{id}/publications/republish` | `manager`, `admin_staff` |
-| Contactos (lectura/escritura) | `manager`, `admin_staff`, `salesperson` (solo asignados) |
-| `POST /contacts/merge` | `manager`, `admin_staff` |
-| Pipeline stages (escritura) | `manager` |
-| Leads | `manager` (todo), `salesperson` (solo asignados), `admin_staff` (lectura de todo) |
-| Loss reasons (escritura) | `manager` |
-| Dashboard CRM | `manager`, `admin_staff` (todo); `salesperson` (solo su data) |
-| Conversaciones | `salesperson` (asignadas), `manager` y `admin_staff` (todas) |
-| WhatsApp templates | `manager`, `admin_staff` |
-| Branches (CRUD) | `manager` |
-| Users (invitar / editar / desactivar) | `manager`; el propio usuario puede editar campos no privilegiados |
-| Integraciones (settings) | `manager` |
-| `/admin/api/v1/*` | `super_admin` exclusivamente |
+| **Alcance** | `all` (todo el tenant) · `own` (ver abajo) · *ausente* = **denegado** |
+| **Campos** | Si está presente, la operación se limita a esos campos — **tanto en escritura como en lectura** |
+
+- **Denegar por defecto**: un recurso que el ADR no declara está denegado para todos. **Nueve de los 16 módulos** están hoy en esa situación, deliberadamente.
+- **Sin herencia** (`S3`): `manager` **no** hereda de `salesperson`. Cada celda se enumera.
+- **`own` = `assigned_user_id` estricto**: solo lo asignado al sujeto *en el momento de la petición*. Crear un recurso no da acceso permanente, y **`user_branches` no participa de la autorización**.
+
+### Reglas de negocio que la gobiernan
+
+| Regla | Qué fija |
+|---|---|
+| `RN-MT-10` | Solo `super_admin` opera cross-tenant, y solo bajo `/admin/api/v1`. Sin excepciones — ni siquiera para el cambio de plan. |
+| `RN-ST-12` | `acquisition_cost_ars` solo lo ven `manager` y `admin_staff`. Es el caso que obliga a restringir **campos en lectura**. |
+| `RN-ST-15` | El catálogo de marcas/modelos/versiones es cross-tenant y de solo lectura para los tenants; solo `super_admin` lo edita. |
+| `RN-CR-12` | `salesperson` solo ve y opera sus propios leads; `manager` ve todos; **`admin_staff` los ve en lectura**. |
+| `RN-CR-13` | **Solo el `manager` reasigna leads.** Es lo que le da sentido al alcance `own` estricto. |
+| `RN-FI-04` | Las financieras las configura exclusivamente el `super_admin`. |
+| `RN-AD-06` | La impersonación de un tenant por `super_admin` queda auditada — y es la **única** vía por la que llega a datos reales de un tenant. |
 
 ## Cómo se aplica la autorización
 
@@ -93,11 +83,12 @@ Regla vinculante de la constitución (Artículo 3): **la autorización se verifi
 Mecanismos concretos:
 
 - `require_role(*roles)` — dependency factory de FastAPI. Devuelve **403** si el rol no matchea.
-- `require_permission(perm)` — permisos finos por módulo, para casos como "`salesperson` puede leer todos los vehículos del tenant pero solo editar `internal_notes` y `assigned_user_id`".
+- `require_permission(perm)` — permisos finos por módulo, con **alcance** (`all` / `own`) y **restricción de campos**, para casos como "`salesperson` puede leer todos los vehículos del tenant pero solo editar `internal_notes` y `assigned_user_id`".
 - `@audit_action(action_name)` — decorador obligatorio en endpoints sensibles; escribe en `audit_logs`.
 - El frontend **solo oculta UI** por UX; no es una defensa.
-- La definición canónica de permisos vive en el módulo `auth` y se exporta como diccionario consultable.
-- Tests de autorización recorren los 4 roles contra cada endpoint (introspección del router de FastAPI) verificando 200/403 exacto. **Bloqueantes en CI.**
+- La definición canónica de permisos vive en el módulo `auth` y se exporta como diccionario consultable. Es la **traducción literal de las tablas de [`ADR-024`](../docs/adr/ADR-024-matriz-rbac-canonica.md)** y no puede divergir de ellas sin un ADR que las enmiende.
+- Tests de autorización por introspección del router de FastAPI, verificando 200/403 exacto. **Bloqueantes en CI.** Recorren los **3 roles de tenant** contra `/api/v1`, y `super_admin` contra `/admin/api/v1` — son dos espacios disjuntos, no una matriz de 4 columnas.
+- Una operación que no declara acceso **no autoriza a nadie**, y la inspección automática la reporta como operación sin declarar.
 
 ## Reglas estructurales de identidad
 

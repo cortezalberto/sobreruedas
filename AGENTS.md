@@ -48,7 +48,7 @@ Todo en [`knowledge-base/`](knowledge-base/) está **derivado** de los 11 docume
 |---|---|
 | [01_vision_y_objetivos.md](knowledge-base/01_vision_y_objetivos.md) | Qué se construye y para quién |
 | [02_descripcion_general.md](knowledge-base/02_descripcion_general.md) | Stack, 16 módulos, catálogo de endpoints |
-| [03_actores_y_roles.md](knowledge-base/03_actores_y_roles.md) | Roles y matriz RBAC ⚠️ (en disputa, `IN-01`) |
+| [03_actores_y_roles.md](knowledge-base/03_actores_y_roles.md) | Roles (`ADR-017`) y forma de la matriz RBAC — **las celdas canónicas están en [`ADR-024`](docs/adr/ADR-024-matriz-rbac-canonica.md)** |
 | [04_modelo_de_datos.md](knowledge-base/04_modelo_de_datos.md) | ~35 entidades, ERD, máquinas de estado, validadores argentinos |
 | [05_reglas_de_negocio.md](knowledge-base/05_reglas_de_negocio.md) | ~130 reglas `RN-{DOMINIO}-{NN}` |
 | [06_funcionalidades.md](knowledge-base/06_funcionalidades.md) | 12 épicas, 92 HU, Definition of Done |

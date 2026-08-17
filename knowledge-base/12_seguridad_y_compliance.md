@@ -49,11 +49,13 @@ Threat model resumido de la spec técnica (§8.1), consistente: filtración cros
 
 ## Autorización
 
-Roles canónicos: **`super_admin`, `manager`, `salesperson`, `admin_staff`** ⚠️ (`IN-01`, `IN-02`).
+Roles canónicos: **`super_admin`, `manager`, `salesperson`, `admin_staff`** — decididos por [`ADR-017`](../docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md), condicionado a `E-001`. Cuatro en el sistema, **tres en `user_role_enum`**: `super_admin` vive en `super_admins`, fuera de `users`.
 
-**No existe en el corpus una matriz RBAC tabular completa rol × permiso.** El plan de seguridad lo reconoce explícitamente: solo lista los 4 roles y da ejemplos puntuales de permisos finos. La matriz reconstruida está en [03_actores_y_roles.md](03_actores_y_roles.md).
+✅ **La matriz RBAC canónica es [`ADR-024`](../docs/adr/ADR-024-matriz-rbac-canonica.md)**, que cierra el riesgo `R-2`. El corpus no la tenía: el plan de seguridad solo listaba los 4 roles y daba ejemplos puntuales, y las dos vistas parciales que la KB había reconstruido en [03_actores_y_roles.md](03_actores_y_roles.md) no coincidían entre sí. `ADR-024` las reconcilió aplicando la precedencia de `ADR-000` e incorporó las reglas `RN-*` y el principio `S3`, que ninguna de las dos había cruzado.
 
-Ejemplo de permiso fino documentado: `salesperson` tiene lectura de todos los vehículos del tenant, pero **solo puede editar `internal_notes` y `assigned_user_id`**.
+`S3` **prohíbe la herencia entre roles**: cada celda se enumera, `manager` no hereda de `salesperson`, y agregar un permiso a uno no se lo da al otro.
+
+Ejemplos de permiso fino, que en `ADR-024` dejan de ser ejemplos y pasan a ser celdas: `salesperson` lee todos los vehículos del tenant pero **solo edita `internal_notes` y `assigned_user_id`**, y **no ve `acquisition_cost_ars`** (`RN-ST-12`) — este último obliga a restringir campos **también en lectura**, no solo en escritura.
 
 Endpoint especial: `/admin/api/v1/tenants/{tenant_id}` requiere `super_admin` y es el **único que admite `tenant_id` por path**.
 

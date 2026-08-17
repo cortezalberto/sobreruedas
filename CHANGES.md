@@ -127,7 +127,7 @@ Esto **no** son contradicciones entre documentos: es trabajo que **ninguna de la
 | # | Vacío | Impacto | Change afectado | Referencia |
 |---|---|---|---|---|
 | **R-1** | **El contrato de API del portal deRuedas no existe.** Es la integración **más crítica del MVP** —la razón de ser de la épica E3— y ningún documento especifica su API: ni endpoints, ni autenticación, ni esquema de listing, ni códigos de error, ni rate limits. | **Bloqueo duro de C-22 y C-23** (15 tareas, T-115…T-129). `DerRuedasAdapter` (T-117) y el mapping `vehicle→listing` (T-118) son inescribibles sin él. | **C-22** | `PA-25` |
-| **R-2** | **No existe la matriz RBAC canónica.** El propio plan de seguridad lo admite. La KB reconstruyó dos vistas parciales —una funcional desde el manual, otra por recurso desde el plan— que **no coinciden entre sí**. | Los tests de autorización son **quality gate bloqueante en CI** según el plan de testing. Sin matriz, no hay contra qué testear. Agravado por `IN-01`/`IN-02`. | **C-02**, **C-05** | `03_actores_y_roles.md` §RBAC |
+| ~~**R-2**~~ | ✅ **CERRADO el 17-ago-2026 por [`ADR-024`](docs/adr/ADR-024-matriz-rbac-canonica.md).** El diagnóstico original —"no existe la matriz"— era incompleto: el corpus tenía **cuatro** fuentes, y las dos que la KB no había cruzado (las reglas `RN-*` y el principio `S3` del plan de seguridad) son las de mayor autoridad. Las dos vistas parciales **no eran un empate**: la funcional venía del manual de usuario, **N4 no normativo**, y perdía por `ADR-000`. | Los tests de autorización ya tienen contra qué escribirse. Los **9 módulos sin fuente quedan denegados en bloque** por denegar-por-defecto; cada change futuro agrega sus filas al ADR. | **C-02**, **C-05** | [`ADR-024`](docs/adr/ADR-024-matriz-rbac-canonica.md) |
 | **R-3** | **No existe la tabla canónica de variables de entorno.** La de `08_arquitectura_propuesta.md` está **derivada del stack, no transcripta de una fuente**. | Setup de entornos, `.env.example` (T-004), secretos de staging cifrados con SOPS (T-008). | **C-01** | `PA-06` |
 | **R-4** | **No existe el design system técnico.** El brand book remite a un "design system técnico" que **no está en el corpus**, y los *"13 componentes UI primitivos"* de T-037 **no están enumerados en ningún lado**. | T-036 y T-037 arrancan sin especificación de componentes. Agravado por `IN-44` (contraste AA vs AAA del mismo par de colores) e `IN-45` (el "Rojo crítico" `#974706` es un marrón, visualmente idéntico al "Amarillo atención" `#9C5700`). | **C-07** | `PA-30`, `PA-27` |
 | **R-5** | **La marca no tiene tagline.** El brand book estructura *"logo + tagline"* en el footer pero **nunca escribe el texto** en sus 965 líneas. | Layout principal (T-038), piezas de marketing. Bajo impacto técnico. | **C-07** | `IN-58`, `PA-26` |
@@ -322,7 +322,7 @@ Tres observaciones sobre la cadena:
 | 14 | — | — | **C-31** whatsapp-web-inbox-y-templates |
 | 15 | **C-32** whatsapp-crm-integracion-y-cierre | — | — |
 
-**Paso 4 es el cuello de botella** (⚠️): B y C quedan sin trabajo desbloqueado. Aprovechalo para el trabajo humano que el roadmap no puede hacer solo: abrir la **enmienda del Art. 8 para `IN-01`** (`PA-01` ya está cerrada por `ADR-000`), conseguir el contrato del portal (**R-1**), redactar la matriz RBAC (**R-2**) y enumerar los primitivos del design system (**R-4**).
+**Paso 4 es el cuello de botella** (⚠️): B y C quedan sin trabajo desbloqueado. Aprovechalo para el trabajo humano que el roadmap no puede hacer solo: abrir la **enmienda del Art. 8 para `IN-01`** (`PA-01` ya está cerrada por `ADR-000`; la enmienda es `E-001`), conseguir el contrato del portal (**R-1**) y enumerar los primitivos del design system (**R-4**). ~~Redactar la matriz RBAC (**R-2**)~~ ✅ hecha: [`ADR-024`](docs/adr/ADR-024-matriz-rbac-canonica.md).
 
 **Pasos 9, 10, 12 y 14-15**: los huecos de B y C son el momento de subdividir el change del agente A o de adelantar documentación y runbooks.
 
@@ -381,7 +381,7 @@ Tres observaciones sobre la cadena:
 - **Bloqueantes a resolver (al inicio del change)**:
   - **`IN-01`** — catálogo de roles. Cinco documentos discrepan: 3 roles en español (constitución, vinculante), 3 en inglés sin `super_admin` (spec `user_role_enum`), **4** (plan de implementación T-014, plan de seguridad, plan de testing), 5 personas (historias de usuario). `require_role()` los enumera literalmente. Resolución propuesta por la KB: adoptar los 4 en inglés con equivalencia documentada, y enmendar el glosario constitucional.
   - **`IN-02`** — `super_admin` no es representable. La spec define 11 endpoints bajo `/admin/api/v1` para un rol que **no existe en `user_role_enum`**, y `users.tenant_id` es `FK NOT NULL` mientras que un `super_admin` de deRuedas no pertenece a ningún tenant. Hay que elegir: (a) cuarto valor del enum con `tenant_id` nullable, (b) tabla `super_admins` aparte —el plan de testing ya la menciona en su lista de tablas exentas de RLS, evidencia indirecta a favor—, o (c) solo rol de Keycloak sin fila en `users`. La decisión condiciona `rbac.py`, la migración de `users` (C-05) y todo C-09.
-- **Riesgos**: **R-2** (no existe matriz RBAC canónica — `rbac.py` se escribe sin especificación de permisos por recurso).
+- **Riesgos**: ~~**R-2**~~ ✅ **cerrado** por [`ADR-024`](docs/adr/ADR-024-matriz-rbac-canonica.md) — `rbac.py` ya tiene la especificación de permisos por recurso, y su definición ejecutable debe ser la **traducción literal** de las tablas del ADR. **No re-decidir: aplicar.**
 - **Leer antes**:
   - `knowledge-base/03_actores_y_roles.md` §RBAC — Matriz de permisos, §Cómo se aplica la autorización, §Reglas estructurales de identidad
   - `knowledge-base/02_descripcion_general.md` §Multi-tenancy (ADR-006), §Comunicación entre módulos (3 patrones), §API REST — convenciones
@@ -453,7 +453,7 @@ Tres observaciones sobre la cadena:
   - **`IN-06`** — `users.password_hash NOT NULL`. `spec-tecnica` §3.3 define la columna (*"hash argon2id"*), pero §8.3 y ADR-007 dicen que la autenticación **se delega íntegramente a Keycloak** y que *"la aplicación nunca maneja contraseñas"*; el plan de seguridad confirma que el hash argon2id vive **en Keycloak**. Sin embargo spec §4.2.1 y el plan definen `POST /api/v1/auth/login` como endpoint propio. Decide dos cosas: (a) si `users` lleva `password_hash`, y (b) si el login es **redirect OIDC (Authorization Code + PKCE)** o **proxy de credenciales (ROPC)** —este último desaconsejado y en vías de deprecación en OAuth 2.1—. Resolución propuesta: eliminar la columna, tratar `users` como espejo local del usuario de Keycloak, y definir `/auth/login` como callback OIDC.
   - **`IN-12(a)`** — `accept-invitation` tiene **dos paths en el mismo documento**: `POST /api/v1/users/accept-invitation` (T-024) y `POST /auth/accept-invitation` (T-054, que consume C-12). Distinto prefijo y distinto namespace. Es una contradicción interna del plan de implementación. Elegir uno y escribirlo en `docs/openapi.yaml` — de ahí el frontend genera sus tipos.
   - *Heredados de C-02, ya decididos*: `IN-01` (catálogo de roles) e `IN-02` (`super_admin`) determinan el `CREATE TYPE user_role_enum` y la nulabilidad de `users.tenant_id` de este change. **No re-decidir: aplicar.**
-- **Riesgos**: **R-2** (matriz RBAC canónica inexistente — los tests de autorización de `T-027` no tienen especificación contra la cual escribirse).
+- **Riesgos**: ~~**R-2**~~ ✅ **cerrado** por [`ADR-024`](docs/adr/ADR-024-matriz-rbac-canonica.md) — los tests de autorización de `T-027` ya tienen contra qué escribirse. Las celdas de `users`, `branches` y `tenant` están en §6 del ADR; ojo con el conjunto `[perfil]` de autoedición, que el ADR define y la vista vieja dejaba como *"campos no privilegiados"* sin enumerar.
 - **Leer antes**:
   - `knowledge-base/03_actores_y_roles.md` (completo — incluye la advertencia previa sobre el catálogo de roles)
   - `knowledge-base/07_flujos_principales.md` §Flujo 1 — Autenticación y sesión
@@ -603,7 +603,7 @@ Tres observaciones sobre la cadena:
 - **Dependencias**: `C-05`, `C-07`, `C-10`
 - **Governance**: **MEDIO** — la gestión de roles desde la UI es superficie de autorización, aunque el enforcement viva en el backend.
 - **Bloqueantes a resolver**: ninguno propio; **aplica** `IN-12(a)` (path de `accept-invitation`, resuelto en C-05). Si el frontend y el backend no coinciden acá, el E2E de `T-061` falla.
-- **Riesgos**: **R-2** — la página de gestión de usuarios expone los roles al cliente final sin una matriz RBAC canónica que diga qué puede hacer cada uno.
+- **Riesgos**: ~~**R-2**~~ ✅ **cerrado** por [`ADR-024`](docs/adr/ADR-024-matriz-rbac-canonica.md) — la página ya tiene qué mostrar por rol. Cuidado con dos cosas del ADR: los roles **no son jerárquicos** (`S3`), así que no se los puede presentar como niveles crecientes de acceso; y la UI **solo oculta**, nunca autoriza.
 - **Leer antes**:
   - `knowledge-base/03_actores_y_roles.md` §RBAC — Matriz de permisos, §Rutas públicas
   - `knowledge-base/06_funcionalidades.md` §Épica 1 — Onboarding y configuración
@@ -1113,7 +1113,7 @@ Tres cosas que **no** son código y que conviene arrancar ya, porque bloquean o 
 
 1. 🟡 **Llevar la enmienda [`E-001`](docs/adr/E-001-enmienda-glosario-super-admin.md) hasta su ratificación.** Abierta el 13-ago-2026; la discusión cierra el **20-ago-2026** (5 días hábiles, Art. 8). Incorpora *"Super Admin"* al glosario canónico. **Mientras no se ratifique, `C-02` no puede escribir la migración de `users` ni `rbac.py`.** El contenido técnico ya está decidido en `ADR-017` — lo que falta es el procedimiento, no la decisión.
 2. **Conseguir el contrato de la API del portal deRuedas** (**R-1**). Bloquea 15 tareas y está sobre el camino crítico. Arrancar la conversación con el equipo del portal ahora, no en el paso 8.
-3. **Escribir la matriz RBAC canónica** (**R-2**). C-02 la necesita para `rbac.py` y el plan de testing la convierte en quality gate bloqueante de CI. **Ya se puede escribir**: `ADR-017` fijó el catálogo de roles.
+3. ~~**Escribir la matriz RBAC canónica** (**R-2**).~~ ✅ **Hecha el 17-ago-2026**: [`ADR-024`](docs/adr/ADR-024-matriz-rbac-canonica.md). Hereda la condicionalidad de `E-001` — si la enmienda se rechaza, el catálogo de roles cambia y la matriz se revisa.
 
 > ✅ Cerrados durante la propuesta de C-01: `PA-01` ([`ADR-000`](docs/adr/ADR-000-precedencia-documental.md)), `IN-16` ([`ADR-015`](docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) — ⛔ **superado el 17-ago-2026 por [`ADR-023`](docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md)**), `IN-15` ([`ADR-016`](docs/adr/ADR-016-trazas-distribuidas-tempo.md)), `IN-01` e `IN-02` ([`ADR-017`](docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md), condicionados a `E-001`).
 

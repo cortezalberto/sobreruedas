@@ -59,6 +59,13 @@ Ninguna. Las tres capabilities de C-01 (`platform/service-health`, `platform/con
 
 **Alcance de la traba: una de las nueve tareas.** El contexto de tenant, las extensiones, la identidad, las convenciones de API, los eventos y las factories no dependen del catálogo de roles. `platform/authorization` se especifica ahora —para que la ratificación no encuentre una hoja en blanco— y se implementa después.
 
-### Riesgo abierto
+### Riesgo cerrado
 
-**`R-2` — no existe matriz RBAC canónica.** El propio plan de seguridad lo admite. La KB reconstruyó dos vistas parciales, una funcional y otra por recurso, que **no coinciden entre sí**. `require_permission()` necesita una definición de permisos que hoy no existe en ningún documento vinculante. `E-001` desbloquea *quiénes* son los roles; no produce la matriz de *qué puede cada uno*.
+~~**`R-2` — no existe matriz RBAC canónica.**~~ ✅ **Cerrado el 17-ago-2026 por [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md).**
+
+`require_permission()` ya tiene contra qué construirse: el ADR fija la forma del permiso (`recurso:acción` + alcance `all`/`own` + conjunto de campos), el criterio de **denegar por defecto**, la **ausencia de herencia** entre roles (`S3`) y las celdas de siete módulos. La **definición ejecutable de este change debe ser la traducción literal de esas tablas.**
+
+Dos consecuencias del ADR que caen sobre este change:
+
+1. **La restricción de campos aplica también en lectura**, no solo en escritura — `RN-ST-12` lo obliga. La spec de `platform/authorization` solo cubría escritura; se le agrega el requisito faltante.
+2. **`E-001` sigue siendo el bloqueante.** `ADR-024` **hereda su condicionalidad**: si la enmienda se rechaza el 20-ago-2026, el catálogo de roles cambia y la matriz se revisa. La regla dura 12 sigue vigente sobre el bloque 6.

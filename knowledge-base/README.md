@@ -20,7 +20,7 @@ El chequeo de consistencia cruzada detectó **54 inconsistencias reales entre do
 |---|---|
 | [01_vision_y_objetivos.md](01_vision_y_objetivos.md) | Propósito, contexto estratégico, objetivos por actor, alcance del producto y del MVP, fuera de alcance, métricas de éxito |
 | [02_descripcion_general.md](02_descripcion_general.md) | Stack tecnológico completo, arquitectura general, 16 módulos, comunicación inter-módulo, multi-tenancy, integraciones externas, convenciones y catálogo de endpoints de la API |
-| [03_actores_y_roles.md](03_actores_y_roles.md) | Actores del sistema, catálogo de roles (⚠️ en disputa), matriz RBAC reconstruida, mecanismos de autorización, rutas públicas |
+| [03_actores_y_roles.md](03_actores_y_roles.md) | Actores del sistema, catálogo de roles (`ADR-017`), forma de la matriz RBAC (canónica en `ADR-024`), mecanismos de autorización, rutas públicas |
 | [04_modelo_de_datos.md](04_modelo_de_datos.md) | Convenciones, ERD, 10 dominios, ~35 entidades con campos/constraints/índices, máquinas de estado, vistas materializadas, seed data, validadores argentinos |
 | [05_reglas_de_negocio.md](05_reglas_de_negocio.md) | ~130 reglas codificadas `RN-{DOMINIO}-{NN}` en 12 dominios, más los trade-offs ya resueltos por constitución |
 | [06_funcionalidades.md](06_funcionalidades.md) | 12 épicas y 92 historias de usuario con prioridad MoSCoW, estimación Fibonacci y fase; Definition of Done |
