@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Hallazgos de gitleaks revisados uno por uno y descartados con fundamento.
+#
+# ⚠️ ESTO NO ES UNA LISTA PARA SILENCIAR RUIDO.
+#
+# Cada linea es un FINGERPRINT exacto: commit + archivo + regla + numero de
+# linea. No desactiva la regla ni el archivo. Una ocurrencia nueva del mismo
+# patron, en otra linea o en otro commit, se sigue detectando y sigue rompiendo
+# el pipeline. Es la diferencia entre "este caso puntual esta revisado" y "no
+# me molestes mas con esto", y la regla dura 4 solo tolera lo primero.
+#
+# Antes de agregar una linea aca hay que poder responder por que el hallazgo NO
+# es un secreto. Si la respuesta es "porque molesta", la respuesta es no.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── 17-ago-2026 · healthcheck de OpenSearch en docker-compose.prod.yml ───────
+#
+# Que detecto: la regla `curl-auth-user`, sobre
+#     curl -fsS -k -u admin:$${OPENSEARCH_PASSWORD} https://localhost:9200/...
+#
+# Por que NO es un secreto: lo unico literal es el nombre de usuario `admin`.
+# La contrasena es una referencia a variable de entorno que Compose resuelve en
+# el VPS desde el archivo que descifra SOPS. En el repositorio no hay ningun
+# valor.
+#
+# La regla igual tenia razon en dispararse: un `-u usuario:algo` literal es
+# exactamente donde suelen filtrarse credenciales, y el patron no puede
+# distinguir a simple vista una variable de un valor.
+#
+# QUE SE HIZO, ademas de esta linea: el healthcheck se corrigio para que el
+# usuario tambien venga por variable, asi el literal desaparece. De paso se
+# arreglo un bug real que estaba escondido detras del hallazgo — ni
+# OPENSEARCH_USER ni OPENSEARCH_PASSWORD estaban declaradas en el entorno del
+# contenedor, asi que esa sonda habria fallado siempre y el servicio nunca
+# habria llegado a `healthy`.
+#
+# Esta linea existe solo porque gitleaks escanea la HISTORIA —a proposito, ver
+# el comentario del job `security`— y el commit 0af06ad ya esta pusheado. El
+# arbol de trabajo actual ya no tiene el patron.
+0af06ad5420373ff0a0454d69446bd06c5af35cd:docker-compose.prod.yml:curl-auth-user:106
