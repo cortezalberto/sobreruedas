@@ -159,7 +159,9 @@ Campos: `trace_id`, `user_id`, `tenant_id`, `ip`, `user_agent`, `action`, `entit
 
 Regla constitucional: **las vulnerabilidades de severidad alta o crítica bloquean el merge**.
 
-**Gestión de secretos**: KMS / secret manager del cloud provider (AWS Secrets Manager o Google Secret Manager). Rotación **trimestral automatizada** para las credenciales que lo soportan; ejercicio anual obligatorio de rotación de secretos de tenant.
+**Gestión de secretos**: ⛔ ~~KMS / secret manager del cloud provider (AWS Secrets Manager o Google Secret Manager)~~ → **SOPS + age** desde [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md). Rotación **trimestral automatizada** para las credenciales que lo soportan; ejercicio anual obligatorio de rotación de secretos de tenant.
+
+⚠️ **La rotación automatizada queda sin mecanismo.** La ofrecía el gestor del proveedor; SOPS cifra pero no rota. El compromiso trimestral sigue siendo exigible y hoy no tiene con qué cumplirse — o se implementa el procedimiento, o se declara la excepción. `ADR-023` no lo cubre.
 
 **Pentesting**: **anual** con vendor externo, más bajo demanda tras cambios mayores. La primera auditoría externa de seguridad técnica es un hito de Ola 1 (horizonte 0-6 meses).
 

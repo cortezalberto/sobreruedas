@@ -27,12 +27,12 @@
 | Estilos / UI | Tailwind CSS + Radix UI + Lucide Icons | — | ADR-004 |
 | Estado / datos en cliente | TanStack Query; React Hook Form + Zod | — | — |
 | Observabilidad | Prometheus + Grafana + Loki + **Jaeger** ⚠️ + OpenTelemetry + Sentry | — | — |
-| IaC / CI | Terraform + GitHub Actions + Docker / Docker Compose | — | — |
-| Orquestación | Kubernetes ⚠️ (alcance no cerrado) | — | — |
+| IaC / CI | ~~Terraform~~ + GitHub Actions + Docker / Docker Compose ⛔ | — | ADR-023 |
+| Orquestación | ~~Kubernetes~~ → **Docker Compose sobre VPS único** ⛔ | — | ADR-023 |
 | Feature flags | Implementación propia (tabla `feature_flags` + servicio cacheado) | — | ADR-012 |
 
 ⚠️ **Jaeger vs Tempo**: la spec técnica y `mejoras-y-saas` dicen **Jaeger**; el plan de SRE dice **Tempo + OpenTelemetry**. Ver `IN-15`.
-⚠️ **Kubernetes / ArgoCD**: `mejoras-y-saas` declara "Kubernetes + Terraform + ArgoCD"; el plan de implementación marca `infra/k8s/` como *condicional* y **nunca menciona ArgoCD**. Ver `IN-16`.
+⛔ **Kubernetes / ArgoCD — descartados el 17-ago-2026.** `mejoras-y-saas` declaraba "Kubernetes + Terraform + ArgoCD" sobre AWS o GCP; el plan de implementación marcaba `infra/k8s/` como *condicional* y nunca mencionaba ArgoCD. `IN-16` se cerró primero por `ADR-015` (Kubernetes + ArgoCD) y **volvió a cerrarse** por [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md): **VPS único en Hostinger con Docker Compose**, sin Terraform, sin Kubernetes y sin ArgoCD. `mejoras-y-saas` es N4 y no es normativo.
 
 ## Arquitectura general
 

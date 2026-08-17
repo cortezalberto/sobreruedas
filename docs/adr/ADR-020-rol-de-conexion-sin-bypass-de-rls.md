@@ -2,7 +2,8 @@
 
 - **Estado**: 🟢 **Aceptado** — 16-ago-2026
 - **Origen**: hallazgo durante la implementación del bloque 2 de C-02 (`core-backend-primitives`)
-- **Impacta**: `docker-compose.yml`, `docker-compose.test.yml`, `infra/local/postgres/init/`, `.env.example`, el job `test-backend-integration` del CI, y el Terraform de staging y producción (bloque 9 de C-01, hoy sin arrancar)
+- **Impacta**: `docker-compose.yml`, `docker-compose.test.yml`, `infra/local/postgres/init/`, `.env.example`, el job `test-backend-integration` del CI, y el aprovisionamiento de staging y producción (bloque 9 de C-01, sin arrancar)
+- ⚠️ **Nota del 17-ago-2026**: este ADR **sigue vigente**, pero su ruta de aprovisionamiento cambió. Decía *"Terraform de staging y producción"*; con [`ADR-023`](ADR-023-despliegue-sobre-vps-con-docker-compose.md) no hay Terraform — los dos roles se crean en el **init de PostgreSQL** del VPS, igual que en local y en CI. La decisión de fondo (dos roles, aplicación sin `BYPASSRLS`) no se toca. Y **su pregunta abierta desapareció**: preguntaba si una base gestionada permitiría un rol de esquema sin `BYPASSRLS`, y con PostgreSQL autoalojado el `initdb` es nuestro.
 - **Se implementa en**: change propio `rol-de-base-sin-bypass-rls` — **no** en C-02
 
 ---

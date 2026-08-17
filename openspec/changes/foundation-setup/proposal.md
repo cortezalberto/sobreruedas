@@ -26,7 +26,7 @@ Ambos venían declarados como "a resolver al inicio". [`ADR-000`](../../../docs/
 
 ### Bloqueante resuelto durante la propuesta
 
-- **`IN-16` — sustrato de infraestructura.** Estaba abierto y dejaba a `T-008` sin poder implementarse. Cerrado por [`ADR-015`](../../../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md): **Kubernetes con despliegue GitOps vía ArgoCD**. No se resolvió aplicando `ADR-000` sino llenando un vacío — N1 no menciona orquestación, N2 la deja condicional y el único documento que la nombra es N4, no normativo. **Con esto el change es implementable de punta a punta.**
+- **`IN-16` — sustrato de infraestructura.** Estaba abierto y dejaba a `T-008` sin poder implementarse. Cerrado primero por [`ADR-015`](../../../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) (Kubernetes + ArgoCD) y **cerrado de nuevo el 17-ago-2026** por [`ADR-023`](../../../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md), que lo supersede: **VPS único en Hostinger con Docker Compose**. No se resolvió aplicando `ADR-000` sino llenando un vacío — N1 no menciona orquestación, N2 la deja condicional y el único documento que la nombra es N4, no normativo. **Con esto el change es implementable de punta a punta.**
 
 ### Riesgo que este change tiene que cerrar
 

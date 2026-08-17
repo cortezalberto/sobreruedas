@@ -63,7 +63,7 @@ Disponibles: `POSTGRES_PORT`, `REDIS_PORT`, `OPENSEARCH_PORT`, `KEYCLOAK_PORT`, 
 | [`frontend-web/`](frontend-web/) | Next.js 14+ con App Router — la aplicación del cliente |
 | [`frontend-mobile/`](frontend-mobile/) | React Native + Expo. **Sin tareas asignadas todavía** — ver `ADR-018` |
 | [`frontend-admin/`](frontend-admin/) | Backoffice de deRuedas, estructura espejo de `frontend-web/` |
-| [`infra/`](infra/) | Terraform, manifests de Kubernetes y configuración de observabilidad |
+| [`infra/`](infra/) | Soporte del entorno local, override de despliegue del VPS y configuración de observabilidad — sin Terraform ni Kubernetes ([`ADR-023`](docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md)) |
 | [`tools/`](tools/) | Utilidades de desarrollo y verificación |
 | [`docs/sdd/`](docs/sdd/) | **Corpus fuente inmutable**: los 11 documentos vinculantes del SDD |
 | [`docs/adr/`](docs/adr/) | ADRs posteriores al SDD — las decisiones que toma el proyecto |

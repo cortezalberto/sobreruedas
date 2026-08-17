@@ -133,25 +133,30 @@ Disparadores: propuesta de cambio contra `main` y push a `main`. Caché de depen
 
 `gitleaks` corre además en pre-commit (regla dura 4), pero se repite en CI: un hook local es una cortesía, no un control.
 
-### D-7 — Despliegue a staging: Kubernetes con GitOps
+### D-7 — Despliegue a staging: VPS único con Docker Compose
 
-Fijado por [`ADR-015`](../../../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md), que cierra `IN-16`. **Kubernetes** como plataforma de orquestación, **ArgoCD** como mecanismo de despliegue.
+> **Reemplazado el 17-ago-2026.** Esta decisión estaba fijada por [`ADR-015`](../../../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) — Kubernetes con ArgoCD sobre nube gestionada — que quedó **superado** por [`ADR-023`](../../../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md).
+
+**Un VPS único en Hostinger con Docker Compose.** Sin Kubernetes, sin ArgoCD, sin Terraform.
 
 Reparto de responsabilidades:
 
-| Herramienta | De qué se hace cargo |
+| Pieza | De qué se hace cargo |
 |---|---|
-| **Terraform** | El cluster, la red, la base gestionada, buckets, registry, DNS y certificados. Lo que tiene ciclo de vida propio. |
-| **ArgoCD** | Las cargas de trabajo: `Deployment`, `Service`, `Ingress`, `ConfigMap`. Lo que cambia con cada release. |
-| **GitHub Actions** | Construir, firmar y publicar imágenes, y actualizar el tag en el repositorio de manifests. **Nada más.** |
+| **Docker Compose** | Todas las cargas de trabajo, con el mismo archivo del entorno local más un override de producción. |
+| **Reverse proxy** (Caddy o Traefik) | TLS automático y la conmutación azul-verde entre los dos stacks. |
+| **GitHub Actions** | Construir, firmar y publicar imágenes etiquetadas con el SHA. **Nada más.** |
+| **Agente en el VPS** | Detectar el tag nuevo y aplicar el despliegue. El VPS tira; el pipeline no empuja. |
 
-La frontera es deliberada: **GitHub Actions nunca recibe credenciales del cluster.** Su permiso máximo es escribir un tag en un repositorio git. Comprometer el pipeline de CI no da acceso al cluster.
+La frontera de seguridad **se conserva del diseño anterior**: **GitHub Actions nunca recibe acceso al servidor de producción.** Su permiso máximo es publicar una imagen. Comprometer el pipeline de CI no da acceso al VPS. Era el argumento más fuerte de `ADR-015` y sobrevive intacto al cambio de infraestructura — por eso el despliegue lo inicia un agente que tira, y no un `ssh` desde el workflow, que hubiera sido más simple y habría regalado justamente ese control.
 
-**Azul-verde en Kubernetes**: dos `ReplicaSet` conviviendo y un `Service` cuyo selector decide cuál recibe tráfico. Las pruebas de humo corren contra el pool nuevo **antes** de conmutar el selector. Si fallan, el selector no se mueve — el pool viejo nunca dejó de servir.
+**Azul-verde sobre Compose**: dos stacks conviviendo y un reverse proxy cuyo *upstream* decide cuál recibe tráfico. Las pruebas de humo corren contra el stack nuevo **antes** de conmutar. Si fallan, el upstream no se mueve — el stack viejo nunca dejó de servir.
 
-Esto simplifica el requisito de reversión de `platform/delivery-pipeline`: no hay que revertir nada, alcanza con **no conmutar**.
+Esto simplifica el requisito de reversión de `platform/delivery-pipeline` igual que antes: no hay que revertir nada, alcanza con **no conmutar**. El requisito **no cambió**; es agnóstico de tecnología.
 
-**El entorno local no cambia.** Docker Compose sigue siendo el entorno de desarrollo; Kubernetes empieza en staging. Levantar un cluster local para desarrollar sería complejidad sin contrapartida.
+**El entorno local tampoco cambia**, y ahora por una razón más fuerte: producción corre el mismo Docker Compose con un override. Dejan de ser dos tecnologías distintas separadas por la frontera local/staging.
+
+**Lo que se pierde, asumido**: sin GitOps no hay detección de deriva. Un cambio hecho a mano sobre el VPS no lo denuncia nadie. Y sobre un nodo único quedan dos compromisos del plan de SRE sin poder cumplirse — escalado a Dirección + SRE por `ADR-023`.
 
 ### D-8 — Trazas distribuidas: Tempo, no Jaeger
 
@@ -187,10 +192,18 @@ No hay datos ni usuarios: no hay migración de estado. La única mudanza es de a
 
 ## Open Questions
 
-**Ninguna.** `IN-16` era la única, y quedó cerrada por [`ADR-015`](../../../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) el 13-ago-2026: Kubernetes con ArgoCD. Ver D-7.
+`IN-16` quedó cerrado, primero por [`ADR-015`](../../../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) el 13-ago-2026 y **de nuevo** por [`ADR-023`](../../../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) el 17-ago-2026, que lo supersede. Ver D-7.
 
-Se deja registrado, porque forma parte del razonamiento: la recomendación inicial de este documento era la contraria —Terraform sobre contenedores gestionados, sin Kubernetes— por cautela operativa en la Ola 0. El Tech Lead priorizó portabilidad entre proveedores y despliegue declarativo desde el inicio, evitando una migración futura a cambio de complejidad temprana. Es un trade-off legítimo y las contras quedan asumidas explícitamente en `ADR-015` §Consecuencias.
+Vale la pena registrar el recorrido, porque cierra un círculo: **la recomendación inicial de este documento era no usar Kubernetes** —contenedores gestionados, por cautela operativa en la Ola 0—. El Tech Lead la descartó priorizando portabilidad y despliegue declarativo. `ADR-023` vuelve a la opción simple por una razón distinta de la original: no cautela operativa, sino **costo base** sobre un producto que compite contra Excel. Las contras de esa vuelta están asumidas en `ADR-023` §Consecuencias, y no son las mismas que se habían discutido en su momento — ahora se pierde portabilidad y detección de deriva.
 
-`IN-16` no se resolvió aplicando `ADR-000` sino llenando un vacío: N1 guarda silencio sobre orquestación, N2 la deja condicional (*"si aplica"*) y el único documento que nombra Kubernetes es N4, no normativo. Es la regla 4 de `ADR-000` funcionando — un vacío documental es un riesgo abierto, no una licencia para inferir.
+`IN-16` nunca se resolvió aplicando `ADR-000` sino llenando un vacío: N1 guarda silencio sobre orquestación, N2 la deja condicional (*"si aplica"*) y el único documento que nombra Kubernetes es N4, no normativo. Es la regla 4 de `ADR-000` funcionando — un vacío documental es un riesgo abierto, no una licencia para inferir. Que el vacío se haya llenado dos veces con respuestas opuestas confirma que era un vacío, no una regla mal leída.
+
+**Abiertas desde `ADR-023`** — ninguna bloquea a C-01, las tres exceden su alcance:
+
+| Pregunta | Quién decide |
+|---|---|
+| El nodo único no sostiene el *"DR en región alternativa"* (RTO 4 h) ni el 99.9 % de Enterprise, que tiene crédito del 25 % escrito contra él | **Dirección + SRE** (`ADR-023` §Conflicto declarado con N3) |
+| Cifrado en reposo: un VPS no tiene KMS gestionado. ¿Cifrado de volumen del proveedor, o `pgcrypto` por campo? | Seguridad |
+| Rotación **trimestral automatizada** de secretos: la ofrecía el gestor del proveedor. SOPS cifra pero no rota, así que el compromiso quedó sin mecanismo | Seguridad |
 
 **Con esto, T-008 queda desbloqueado y el change es implementable de punta a punta.**

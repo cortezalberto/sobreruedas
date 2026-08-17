@@ -30,10 +30,13 @@ Compite contra Excel, cuadernos y WhatsApp — no contra CRMs enterprise. Eso co
 | Mensajería | WhatsApp Business Cloud API (Meta, directo, sin BSP) | — | ADR-010 |
 | Pagos | Mercado Pago | — | — |
 | Observabilidad | Prometheus + Grafana + Loki + OpenTelemetry + Sentry | — | — |
-| IaC / CI | Terraform + GitHub Actions + Docker Compose | — | — |
+| Despliegue | **VPS único (Hostinger) + Docker Compose** · reverse proxy con TLS automático | — | ADR-023 |
+| CI | GitHub Actions | — | — |
 | Feature flags | Implementación propia (tabla `feature_flags` + servicio cacheado) | — | ADR-012 |
 
-Dos puntos del stack **no están cerrados**: Jaeger vs Tempo (`IN-15`) y el alcance de Kubernetes/ArgoCD (`IN-16`). No los des por decididos.
+Los dos puntos que estaban abiertos ya **están cerrados**: `IN-15` por [`ADR-016`](docs/adr/ADR-016-trazas-distribuidas-tempo.md) (**Tempo**, no Jaeger) e `IN-16` por [`ADR-023`](docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) (**VPS con Docker Compose**, que supersede a `ADR-015`).
+
+⛔ **No hay Kubernetes, ni ArgoCD, ni Terraform.** `ADR-015` los había fijado y quedó superado el 17-ago-2026. Si encontrás una referencia a `infra/k8s/` o `infra/terraform/` en documentación derivada, es residuo — la decisión vigente es `ADR-023`.
 
 ---
 
@@ -136,8 +139,9 @@ Cada change de `CHANGES.md` declara: scope, nivel de gobernanza, dependencias, r
    *Art. 3 · ADR-007 · override `O-1` · bloqueante `IN-06`*
 3. **NUNCA borrado físico** → soft delete universal. `db.delete(obj)` está prohibido.
    *Principio 3 · override `O-2`*
-4. **NUNCA secretos en el repositorio** → solo `.env.example` sin valores reales. Los secretos viven en AWS Secrets Manager / Google Secret Manager. `gitleaks` + `trufflehog` corren en pre-commit y en CI.
-   *Art. 3*
+4. **NUNCA secretos en claro en el repositorio** → solo `.env.example` sin valores reales. Los secretos de despliegue se versionan **cifrados con SOPS + age**; la clave privada vive únicamente en el VPS y no se versiona nunca. `gitleaks` + `trufflehog` corren en pre-commit y en CI, y deben seguir detectando un secreto en claro que se cuele junto a los cifrados.
+   *Art. 3 · ADR-023*
+   > La parte constitucional es **"nunca secretos en el repositorio"**, y sigue intacta: lo que se versiona es texto cifrado, no un secreto legible. Lo que cambió es el gestor. La versión anterior de esta regla nombraba AWS Secrets Manager / Google Secret Manager, que provenía de `spec-tecnica` §1554 (N1) y no existe en este despliegue.
 5. **Cobertura de tests: 80 % de líneas, backend, global** — y **no decrece entre commits**. Un PR que la baje no se mergea sin justificación documentada.
    *Art. 2 — esto resuelve `IN-22` a favor de la constitución, contra el 70 %/60 % del plan de testing*
 

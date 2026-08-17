@@ -458,44 +458,63 @@ Cubre la capability `platform/delivery-pipeline`.
 > | Duración de la ejecución | 1 m 04 s contra un presupuesto de 15 min |
 > | Secreto filtrado en el cambio | Corridas `31944844892` (texto plano) y `31944989894` (OOXML) |
 > | **Vulnerabilidad de severidad baja (solo reporta)** | ⛔ Hay que hallar un paquete con vulnerabilidad baja y **solo** baja |
-> | **Integración exitosa a la rama principal** | ⛔ Bloque 9 |
-> | **Fallo de las pruebas de humo** | ⛔ Bloque 9 |
-> | **Trazabilidad del despliegue** | ⛔ Bloque 9 |
+> | **Integración exitosa a la rama principal** | ⛔ Bloque 9 (reescrito sobre `ADR-023`) |
+> | **Fallo de las pruebas de humo** | ⛔ Bloque 9 (reescrito sobre `ADR-023`) |
+> | **Trazabilidad del despliegue** | ⛔ Bloque 9 (reescrito sobre `ADR-023`) |
 
-## 9. Despliegue a staging — `T-008` · Kubernetes + ArgoCD
+## 9. Despliegue a staging — `T-008` · VPS con Docker Compose
 
-> **Desbloqueado.** `IN-16` cerrado por `ADR-015` el 13-ago-2026: Kubernetes con GitOps vía ArgoCD.
-> Frontera de seguridad no negociable: **GitHub Actions no recibe credenciales del cluster.** Su permiso máximo es escribir un tag de imagen en el repositorio de manifests.
+> **Reescrito el 17-ago-2026.** `ADR-015` (Kubernetes + ArgoCD) quedó **superado** por [`ADR-023`](../../../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md): VPS único en Hostinger con Docker Compose. Las 16 tareas anteriores provisionaban un cluster gestionado y ya no aplican.
+> El requisito *"Despliegue automático a staging con reversión"* de `platform/delivery-pipeline` **no cambia**: es agnóstico de tecnología. Cambia cómo se cumple, no qué se cumple.
+> Frontera de seguridad no negociable, heredada de `ADR-015` y conservada: **GitHub Actions no recibe acceso al VPS.** Su permiso máximo es publicar una imagen. El despliegue lo inicia el servidor, no el pipeline.
 
-**Infraestructura (Terraform)**
+**Provisión del servidor**
 
-- [ ] 9.1 Escribir `infra/terraform/staging/` provisionando el cluster de Kubernetes con disponibilidad multi-zona
-- [ ] 9.2 Provisionar con Terraform la red, la base gestionada, los buckets, el registry, el DNS y los certificados
-- [ ] 9.2.b Provisionar en la base gestionada **los dos roles** de [`ADR-020`](../../../docs/adr/ADR-020-rol-de-conexion-sin-bypass-de-rls.md): el propietario del esquema y el de aplicación (`NOSUPERUSER NOBYPASSRLS`), con su `ALTER DEFAULT PRIVILEGES`, y dos secretos distintos para `DATABASE_URL` y `DATABASE_MIGRATION_URL`
-- [ ] 9.2.c Verificar el rol provisionado corriendo `tests/integration/test_rol_de_conexion.py` contra staging — es lo que va a decir sin ambigüedad si la base gestionada del proveedor permite un rol de esquema sin `BYPASSRLS` (pregunta abierta del change)
-- [ ] 9.3 Instalar ArgoCD en el cluster y configurar su acceso de solo lectura al repositorio de manifests
+- [ ] 9.1 Provisionar el VPS en Hostinger: sistema operativo, actualizaciones de seguridad desatendidas, y reloj sincronizado
+- [ ] 9.2 Cerrar el servidor: firewall con solo 22, 80 y 443 abiertos, SSH **únicamente por clave** y sin acceso directo de `root`
+- [ ] 9.2.b Crear en el init de PostgreSQL **los dos roles** de [`ADR-020`](../../../docs/adr/ADR-020-rol-de-conexion-sin-bypass-de-rls.md): el propietario del esquema y el de aplicación (`NOSUPERUSER NOBYPASSRLS`), con su `ALTER DEFAULT PRIVILEGES`, y dos secretos distintos para `DATABASE_URL` y `DATABASE_MIGRATION_URL`
+- [ ] 9.2.c Verificar el rol corriendo `tests/integration/test_rol_de_conexion.py` contra staging — ⚠️ **su pregunta abierta desapareció**: preguntaba si la base gestionada del proveedor permitiría un rol de esquema sin `BYPASSRLS`, y con PostgreSQL autoalojado el `initdb` es nuestro (`ADR-023`). La tarea sobrevive, pero ahora solo confirma que el init se aplicó
+- [ ] 9.3 Instalar Docker y Docker Compose, y crear el usuario de despliegue sin privilegios fuera de Docker
+- [ ] 9.4 Configurar el reverse proxy (Caddy o Traefik) con TLS automático y los dos *upstreams* azul y verde
 
-**Cargas de trabajo (manifests)**
+**Secretos — SOPS + age (`ADR-023`)**
 
-- [ ] 9.4 Escribir en `infra/k8s/` los manifests de `backend`, `worker` y `frontend-web`: `Deployment`, `Service`, `Ingress` y `ConfigMap`
-- [ ] 9.5 Configurar los `Secret` desde el gestor de secretos del proveedor — **nunca en el repositorio** (regla dura 4)
-- [ ] 9.6 Configurar las sondas `readinessProbe` y `livenessProbe` de Kubernetes apuntando a `/ready` y `/health`
-- [ ] 9.7 Configurar la mecánica azul-verde: dos `ReplicaSet` y un `Service` cuyo selector determina el pool activo
+- [ ] 9.5 Generar el par de claves `age`. La privada vive **solo en el VPS** y no se versiona nunca
+- [ ] 9.6 Cifrar con SOPS los secretos de staging y versionarlos cifrados
+- [ ] 9.7 Verificar que `gitleaks` y `trufflehog` **no** marcan los archivos cifrados como filtración, y —lo que más importa— que **siguen detectando un secreto en claro** colocado junto a ellos. Un gate que se apaga para no molestar deja de ser un gate
+
+**Cargas de trabajo (Compose de producción)**
+
+- [ ] 9.8 Escribir el override de producción de `docker-compose` para `backend`, `worker` y `frontend-web` — **override, no un archivo paralelo** que se desincronice del local
+- [ ] 9.9 Configurar los `healthcheck` de Compose apuntando a `/ready` y `/health`
+- [ ] 9.10 Configurar la mecánica azul-verde: dos stacks conviviendo y el *upstream* del proxy determinando cuál recibe tráfico
 
 **Pipeline (GitHub Actions)**
 
-- [ ] 9.8 Escribir `.github/workflows/deploy-staging.yml` disparado por push a `main` tras CI en verde
-- [ ] 9.9 Configurar el build, la firma y el push de imágenes etiquetadas con el SHA del commit
-- [ ] 9.10 Configurar la actualización del tag en el repositorio de manifests — el pipeline **termina acá**
-- [ ] 9.11 Verificar que el pipeline no tiene ni necesita `kubeconfig` ni credenciales del cluster en sus secretos
+- [ ] 9.11 Escribir `.github/workflows/deploy-staging.yml` disparado por push a `main` tras CI en verde
+- [ ] 9.12 Configurar el build, la firma y el push de imágenes etiquetadas con el SHA del commit
+- [ ] 9.13 Publicar el tag de la imagen — el pipeline **termina acá**
+- [ ] 9.14 Verificar que el pipeline no tiene ni necesita clave SSH ni credenciales del VPS en sus secretos
 
-**Verificación y reversión**
+**Agente de despliegue (en el VPS)**
 
-- [ ] 9.12 Configurar las pruebas de humo contra el pool nuevo **antes** de conmutar el selector, durante cinco minutos
-- [ ] 9.13 Verificar que un fallo en las pruebas de humo deja el selector sin mover y el pool anterior sirviendo
-- [ ] 9.14 Configurar la notificación al equipo ante un despliegue fallido
-- [ ] 9.15 Verificar que ArgoCD detecta y reporta la deriva ante un cambio manual en el cluster
-- [ ] 9.16 Verificar el despliegue automático extremo a extremo y la reversión por `git revert` de los manifests
+- [ ] 9.15 Escribir el agente que detecta el tag nuevo y levanta el stack inactivo. El VPS **tira**; el pipeline no empuja
+- [ ] 9.16 Ajustar su intervalo de sondeo al presupuesto del escenario *"Integración exitosa a la rama principal"*: staging debe reflejar el cambio en **menos de 15 minutos**, y el sondeo consume parte de ese presupuesto
+- [ ] 9.17 Configurar las pruebas de humo contra el stack nuevo **antes** de conmutar el *upstream*, durante cinco minutos
+- [ ] 9.18 Verificar que un fallo en las pruebas de humo deja el *upstream* sin mover y el stack anterior sirviendo
+- [ ] 9.19 Configurar la notificación al equipo ante un despliegue fallido
+- [ ] 9.20 Verificar el despliegue automático extremo a extremo y la reversión
+
+**Backup y recuperación — trabajo propio desde ahora**
+
+> Sobre nube gestionada esto era una casilla del proveedor. Con `ADR-023` pasa a ser nuestro, y por eso son tareas y no supuestos.
+
+- [ ] 9.21 Configurar el archivado de WAL de PostgreSQL **fuera del VPS** — un backup en el mismo disco que la base no protege del escenario que más importa
+- [ ] 9.22 Ejecutar y fechar un **ejercicio real de restauración**. Sin restauración probada, el RPO de 5 minutos del plan de SRE es una intención, no una garantía
+
+> **Deriva silenciosa — pérdida asumida, no olvidada.** La tarea 9.15 anterior verificaba que ArgoCD detectara y reportara un cambio manual sobre el cluster. Sin GitOps esa detección **no existe**, y un cambio hecho a mano sobre el VPS no lo denuncia nadie. `ADR-023` lo registra entre sus contras asumidas. No se reemplaza por una tarea equivalente porque no la hay sin reintroducir la pieza que se descartó.
+
+> **Conflicto abierto con el plan de SRE.** Este bloque despliega sobre un nodo único, que no puede sostener el *"DR en región alternativa"* (RTO 4 h) ni el 99.9 % de Enterprise. Escalado a **Dirección + SRE** por `ADR-023` §Conflicto declarado con N3. **No se resuelve en este change.**
 
 ## 10. Verificación de cierre
 

@@ -58,6 +58,8 @@ El bucket de MinIO **no lleva archivo**: lo crea un servicio efímero `minio-ini
 
 **El nombre dice la frontera.** `design.md` D-7 fija que Docker Compose es el entorno de desarrollo y Kubernetes empieza en staging. Que el directorio se llame `local` hace visible esa línea: nadie va a confundir `infra/local/` con algo que se despliega.
 
+> ⚠️ **Nota del 17-ago-2026**: [`ADR-023`](ADR-023-despliegue-sobre-vps-con-docker-compose.md) eliminó Kubernetes — staging también corre Docker Compose. **La decisión de este ADR no cambia** (el directorio sigue llamándose `infra/local/`), pero su justificación sí: la frontera ya no es entre dos tecnologías, es entre dos entornos de la misma. El nombre pasa a valer más, no menos, porque ahora nada distingue local de staging salvo el nombre y el override.
+
 ## Consecuencias
 
 - **`docker-compose.yml` monta desde `infra/local/`.** Las rutas quedan explícitas en el compose, no escondidas en imágenes propias.

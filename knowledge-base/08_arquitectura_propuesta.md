@@ -109,8 +109,8 @@ Ver el detalle completo en [12_seguridad_y_compliance.md](12_seguridad_y_complia
 - **Aislamiento multi-tenant**: tres capas simultáneas — `tenant_id` en toda query de la aplicación, **RLS de PostgreSQL** (`tenant_isolation` sobre `current_setting('app.current_tenant')`), y tests de aislamiento bloqueantes en CI (incluido un test introspectivo sobre `pg_policies`).
 - **Validación de input**: **Pydantic v2** con validación estricta. `tenant_id` explícitamente excluido de todos los schemas de entrada. Nunca `pickle` de inputs externos.
 - **Protección OWASP Top 10**: ORM obligatorio con parámetros bindeados (nunca concatenación de SQL) · escape automático + CSP estricta (XSS) · tokens CSRF y cookies `SameSite=Strict` · lista blanca de dominios para fetch saliente (SSRF) · scanner de dependencias en pipeline · `audit_logs` estructurados con `trace_id`.
-- **Cifrado**: TLS 1.2+ en tránsito (preferentemente 1.3), incluso entre containers. AES-256 en reposo vía KMS del cloud provider. Cifrado de campo con **AES-GCM** y clave derivada por tenant para secretos sensibles (API keys de WhatsApp, webhook tokens, semillas MFA), rotada cada 12 meses.
-- **Secrets management**: AWS Secrets Manager / Google Secret Manager según el proveedor. **Nunca en el repositorio** — solo `.env.example` sin valores reales. Detección con `gitleaks` + `trufflehog` en pre-commit y CI.
+- **Cifrado**: TLS 1.2+ en tránsito (preferentemente 1.3), incluso entre containers. AES-256 en reposo ⚠️ ~~vía KMS del cloud provider~~ — **sin resolver** desde [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md): un VPS no tiene KMS gestionado. El cifrado en reposo del disco queda pendiente de decidir (cifrado a nivel de volumen del proveedor, o `pgcrypto` por campo). `ADR-023` no lo cubre. Cifrado de campo con **AES-GCM** y clave derivada por tenant para secretos sensibles (API keys de WhatsApp, webhook tokens, semillas MFA), rotada cada 12 meses.
+- **Secrets management**: ⛔ ~~AWS Secrets Manager / Google Secret Manager según el proveedor~~ → **SOPS + age** desde [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md): los secretos de despliegue se versionan **cifrados**, y la clave privada vive solo en el VPS. **Nunca en claro en el repositorio** — solo `.env.example` sin valores reales. Detección con `gitleaks` + `trufflehog` en pre-commit y CI, que deben seguir detectando un secreto en claro colocado junto a los cifrados.
 - **Webhooks entrantes**: validación **HMAC**, persistencia para idempotencia, respuesta 200 OK en < 300 ms, procesamiento asincrónico.
 - **Headers**: HSTS (max-age 1 año, includeSubDomains, preload), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, Permissions-Policy restrictiva, CSP estricta en producción.
 - **Rate limiting**: 60 req/min por usuario y 1.000 req/min por tenant (spec) / 100 req/s por IP en el LB (plan de seguridad) · login 10/min · reset de password 3/hora · republish 1/min por vehículo. ⚠️ Ver `IN-19`.
@@ -127,10 +127,16 @@ Ver el detalle completo en [12_seguridad_y_compliance.md](12_seguridad_y_complia
 
 ## Infraestructura y despliegue
 
-- **Contenedores** Docker, orquestados con **Kubernetes** ⚠️ (declarado en `mejoras-y-saas`; el plan de implementación lo marca como condicional y no menciona ArgoCD — ver `IN-16`).
-- **IaC**: Terraform.
+> ⛔ **Sección superada el 17-ago-2026** por [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md). Lo que sigue es lo que declaraba el corpus; abajo, lo vigente.
+
+- ~~**Contenedores** Docker, orquestados con **Kubernetes**~~ (declarado en `mejoras-y-saas`, N4 y no normativo; el plan de implementación lo marcaba como condicional y no mencionaba ArgoCD).
+- ~~**IaC**: Terraform.~~
 - **CI/CD**: GitHub Actions. Tres workflows: `pr-validation` (< 15 min), `main-deploy-staging` (< 20 min), `release-production` (< 60 min).
-- **Cloud**: AWS o GCP, multi-zona dentro de una región sudamericana (São Paulo o Santiago) para minimizar latencia hacia Argentina. **Single-region** es un riesgo aceptado, con revisión cada 12 meses.
+- ~~**Cloud**: AWS o GCP, multi-zona dentro de una región sudamericana (São Paulo o Santiago)~~. **Single-region** era un riesgo aceptado con revisión cada 12 meses.
+
+**Vigente (`ADR-023`)**: **VPS único en Hostinger con Docker Compose**, reverse proxy con TLS automático, y servicios de datos autoalojados. Sin Terraform, sin Kubernetes, sin ArgoCD y sin nube gestionada.
+
+⚠️ El riesgo de *single-region* **se agravó y cambió de naturaleza**: ya no es una región sin réplica, es un **nodo único**. Los compromisos de *"DR en región alternativa"* (RTO 4 h) y el 99.9 % de Enterprise quedan sin sustento. Escalado a **Dirección + SRE** por `ADR-023` §Conflicto declarado con N3.
 - **Ambientes**: Local (Docker Compose, todo el entorno en < 3 min) · CI (efímeros, se descartan al finalizar) · Staging (persistente, datos sintéticos, espejo de producción) · Producción (solo accesible vía pipeline).
 - **Autoscaling**: API backend con HPA por CPU + RPS custom, **min 2 / max 10** réplicas. Workers con HPA por lag de cola, min 1 por consumer group. PostgreSQL y Redis con scaling manual planificado.
 - **Failover de PostgreSQL**: Patroni o equivalente.
