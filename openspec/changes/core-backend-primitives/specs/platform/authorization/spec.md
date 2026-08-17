@@ -41,7 +41,7 @@ Una operación sin declaración de acceso MUST comportarse como denegada para to
 
 El sistema SHALL ofrecer dos niveles de verificación: por **rol**, y por **permiso** cuando el rol no alcance para expresar la regla.
 
-El nivel fino MUST poder expresar que un sujeto acceda a un recurso en lectura pero solo pueda modificar un subconjunto de sus campos, y que su alcance quede acotado a los recursos que tiene asignados.
+El nivel fino MUST poder expresar que el acceso de un sujeto a un recurso quede acotado a un subconjunto de sus campos —**tanto para modificarlos como para verlos**— y que su alcance quede acotado a los recursos que tiene asignados.
 
 #### Scenario: Rol suficiente
 
@@ -59,10 +59,43 @@ El nivel fino MUST poder expresar que un sujeto acceda a un recurso en lectura p
 - **THEN** la petición es rechazada por falta de permisos
 - **AND** ningún campo del recurso queda modificado
 
+#### Scenario: Lectura acotada a ciertos campos
+
+- **WHEN** un sujeto autorizado a leer un recurso, pero no todos sus campos, lo consulta
+- **THEN** la respuesta no incluye los campos excluidos
+- **AND** el resto del recurso se devuelve normalmente
+
+#### Scenario: Campo excluido pedido explícitamente
+
+- **WHEN** ese mismo sujeto pide el recurso filtrando, ordenando o proyectando por un campo que no puede ver
+- **THEN** el valor del campo no se revela por ningún medio
+
 #### Scenario: Alcance acotado a lo asignado
 
 - **WHEN** un sujeto cuyo alcance son los recursos que tiene asignados pide uno que no lo está
 - **THEN** la petición es rechazada por falta de permisos
+
+#### Scenario: El alcance sigue a la asignación vigente
+
+- **WHEN** un recurso deja de estar asignado a un sujeto cuyo alcance son los recursos asignados
+- **THEN** ese sujeto deja de acceder al recurso
+- **AND** haberlo creado no le conserva el acceso
+
+### Requirement: Los roles no acumulan permisos entre sí
+
+El sistema SHALL definir los permisos de cada rol de forma independiente, **sin herencia ni contención** entre roles.
+
+Conceder un permiso a un rol MUST NOT concederlo a ningún otro. Ningún rol puede definirse como extensión de otro, y la verificación de cobertura MUST recorrer cada rol por separado en lugar de asumir que uno contiene a otro.
+
+#### Scenario: Permiso concedido a un solo rol
+
+- **WHEN** se concede un permiso a un rol
+- **THEN** ningún otro rol queda autorizado para esa operación
+
+#### Scenario: Verificación sin asumir contención
+
+- **WHEN** se verifica la cobertura de autorización
+- **THEN** cada rol se evalúa contra cada operación por separado
 
 ### Requirement: El catálogo de roles es único y consultable
 

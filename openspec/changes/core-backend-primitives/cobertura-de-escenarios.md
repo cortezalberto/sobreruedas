@@ -1,8 +1,8 @@
 # Auditoría de escenarios — C-02, tarea 7.4
 
-> **Qué es esto.** Las cinco capabilities de C-02 declaran **72 escenarios**. Este documento dice cuáles tienen test ejecutable y **cuáles no, con el motivo**. Sin él, "los tests pasan" no dice nada sobre lo que quedó afuera.
+> **Qué es esto.** Las cinco capabilities de C-02 declaran **77 escenarios**. Este documento dice cuáles tienen test ejecutable y **cuáles no, con el motivo**. Sin él, "los tests pasan" no dice nada sobre lo que quedó afuera.
 >
-> Medido el **16-ago-2026** sobre 232 tests en verde.
+> Medido el **16-ago-2026** sobre 232 tests en verde. **Actualizado el 17-ago-2026**: `platform/authorization` pasó de 16 a **21 escenarios** por [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md) — ver abajo. Ninguno de los 5 nuevos tiene test, por el mismo bloqueo.
 
 ## Resumen
 
@@ -12,24 +12,36 @@
 | `platform/domain-events` | 14 | **13** | 1 |
 | `platform/tenant-isolation` | 14 | **13** | 1 |
 | `platform/identity` | 13 | **11** | 2 |
-| `platform/authorization` | 16 | **0** | 16 |
-| **Total** | **72** | **52** | **20** |
+| `platform/authorization` | 21 | **0** | 21 |
+| **Total** | **77** | **52** | **25** |
 
-**52 de 72.** Los 20 que faltan se agrupan en tres causas, y ninguna es "no se hizo":
+**52 de 77.** Los 25 que faltan se agrupan en tres causas, y ninguna es "no se hizo":
 
 | Causa | Escenarios | Se resuelve en |
 |---|---:|---|
-| El bloque 6 está bloqueado por `E-001` | 16 | C-02, tras la ratificación (cierre mínimo: 20-ago-2026) |
+| El bloque 6 está bloqueado por `E-001` | 21 | C-02, tras la ratificación (cierre mínimo: 20-ago-2026) |
 | No existe todavía un endpoint de dominio ni un esquema de entrada | 3 | **C-05** |
 | No existe todavía ningún receptor de notificaciones externas | 2 | **C-29** / **C-30** |
 
 ---
 
-## `platform/authorization` — 0 de 16
+## `platform/authorization` — 0 de 21
 
 **Bloqueado por `E-001`.** El bloque 6 no se implementó y la regla dura 12 lo prohíbe expresamente: no se escribe sobre un bloqueante sin resolver. `E-001` cierra su discusión el **20-ago-2026** y todavía le faltan los pasos (c), (d) y (e) del Artículo 8.
 
-Agravado por `R-2`: la matriz RBAC canónica no existe en ningún documento del corpus, así que aun ratificada `E-001`, los escenarios de permisos finos siguen sin tener contra qué testear. `design.md` lo trata como riesgo, no como pendiente.
+~~Agravado por `R-2`~~ — **`R-2` se cerró el 17-ago-2026** con [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md). Los escenarios de permisos finos ya tienen contra qué testear: la matriz canónica. Lo que queda es un bloqueo único, `E-001`, y no dos.
+
+Al escribir el ADR apareció un **hueco en esta misma spec**, y por eso la capability creció de 16 a 21 escenarios:
+
+| Escenario nuevo | Por qué faltaba |
+|---|---|
+| **Lectura acotada a ciertos campos** | La spec solo cubría **modificación** acotada a campos. `RN-ST-12` obliga lo contrario: `acquisition_cost_ars` es invisible para `salesperson` sobre un recurso que **sí puede leer**. Sin este escenario, el mecanismo se habría construido solo para escritura. |
+| **Campo excluido pedido explícitamente** | Ocultar un campo en la respuesta no alcanza si se lo puede inferir filtrando u ordenando por él. |
+| **El alcance sigue a la asignación vigente** | `ADR-024` §4 define `own` como `assigned_user_id` **en el momento de la petición**. Es lo que hace que `RN-CR-13` (*solo el `manager` reasigna*) sea un control y no un adorno. |
+| **Permiso concedido a un solo rol** | `S3` (plan de seguridad, N3) prohíbe la herencia entre roles y la spec no lo decía. |
+| **Verificación sin asumir contención** | Corolario del anterior sobre la verificación automática: los tres roles de tenant se recorren por separado. |
+
+Los cinco están bloqueados por lo mismo que los otros 16, así que el conteo de "sin test" sube pero la causa no cambia.
 
 ## `platform/identity` — 11 de 13
 
@@ -70,6 +82,6 @@ Al hacer esta auditoría aparecieron dos escenarios que no dependían de ningún
 
 ## Qué significa esto para archivar C-02
 
-**C-02 no se puede archivar todavía**: por los 16 de `authorization`. El change declara la capability y no la implementó.
+**C-02 no se puede archivar todavía**: por los 21 de `authorization`. El change declara la capability y no la implementó.
 
-Cuando `E-001` ratifique, el bloque 6 cierra esos 16. Los 4 restantes son de C-05 y C-29/C-30 por construcción, y quedan registrados acá para que se cubran cuando esos changes lleguen — no para que se olviden.
+Cuando `E-001` ratifique, el bloque 6 cierra esos 21. Los 4 restantes son de C-05 y C-29/C-30 por construcción, y quedan registrados acá para que se cubran cuando esos changes lleguen — no para que se olviden.

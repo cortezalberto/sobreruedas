@@ -94,11 +94,13 @@
 - [ ] 6.2 Definir el catálogo de roles en un único lugar consultable, con la equivalencia al glosario que `ADR-017` documenta
 - [ ] 6.3 Escribir el test de que declarar un rol fuera del catálogo falla de forma detectable antes de atender peticiones, y no se interpreta como "nadie" ni como "cualquiera"
 - [ ] 6.4 Implementar `require_role(...)` devolviendo rechazo por falta de permisos, distinguible del rechazo por falta de autenticación
-- [ ] 6.5 Implementar `require_permission(...)` con la definición de permisos **vacía pero consultable** — la matriz no existe en el corpus (riesgo `R-2`)
-- [ ] 6.6 Escribir los tests de alcance fino: modificación acotada a ciertos campos deja el recurso intacto al rechazar; alcance acotado a lo asignado rechaza lo no asignado
+- [ ] 6.5 Implementar `require_permission(...)` y transcribir la definición de permisos **literalmente** de las tablas de [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md) §6 y §7: permiso `recurso:acción`, alcance `all`/`own`, conjunto de campos opcional. Los 9 módulos que el ADR no declara **quedan denegados por denegar-por-defecto** — no se les inventa una entrada
+- [ ] 6.6 Escribir los tests de alcance fino: modificación acotada a ciertos campos deja el recurso intacto al rechazar; **lectura** acotada a ciertos campos no devuelve los excluidos (`RN-ST-12`, `acquisition_cost_ars`); alcance acotado a lo asignado rechaza lo no asignado
 - [ ] 6.7 Implementar la separación cross-tenant: rol de tenant nunca accede a otro tenant; rol de plataforma solo bajo el espacio administrativo; rol de tenant rechazado en ese espacio
 - [ ] 6.8 Escribir el test de denegar por defecto: una operación sin declaración de acceso no autoriza a nadie
-- [ ] 6.9 Escribir la verificación automática que recorre las operaciones realmente expuestas contra cada rol del catálogo, detecta una operación que se abre de más e incluye las operaciones nuevas sin lista a mano
+- [ ] 6.9 Escribir la verificación automática que recorre las operaciones realmente expuestas contra cada rol del catálogo, detecta una operación que se abre de más e incluye las operaciones nuevas sin lista a mano. **Son dos recorridos disjuntos** (`ADR-024` §2): los tres roles de tenant contra `/api/v1`, y el rol de plataforma contra `/admin/api/v1`
+- [ ] 6.10 Escribir el test de que **`own` es `assigned_user_id` en el momento de la petición**: reasignar un recurso le quita el acceso al sujeto anterior aunque lo haya creado (`ADR-024` §4 — es lo que le da sentido a `RN-CR-13`)
+- [ ] 6.11 Escribir el test de que **no hay herencia entre roles** (`S3`): un permiso concedido a un rol no queda concedido a ningún otro, y 6.9 recorre los tres roles de tenant por separado sin asumir contención
 
 ## 7. Cierre
 
