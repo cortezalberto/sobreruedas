@@ -11,7 +11,7 @@
 > |---|---|
 > | `IN-01` · `IN-02` · `PA-02` | [`ADR-017`](../docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md) + [`E-001`](../docs/adr/E-001-enmienda-glosario-super-admin.md) |
 > | `IN-15` · `PA-20` (trazas) | [`ADR-016`](../docs/adr/ADR-016-trazas-distribuidas-tempo.md) |
-> | `IN-16` · `PA-20` (orquestación) | [`ADR-015`](../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) |
+> | `IN-16` · `PA-20` (orquestación) | [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) — supersede a [`ADR-015`](../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) desde el 17-ago-2026 |
 > | **`IN-22`** · `PA-08` | [`ADR-014`](../docs/adr/ADR-014-umbrales-de-cobertura.md) |
 > | **`PA-06`** · **`R-3`** | [`ADR-013`](../docs/adr/ADR-013-variables-de-entorno.md) |
 > | **`IN-29`** · `PA-14` | [`ADR-018`](../docs/adr/ADR-018-anclas-de-adr-del-plan-de-implementacion.md) |
@@ -20,7 +20,7 @@
 > ⚠️ Las secciones de `IN-01`, `IN-02` e `IN-31` más abajo **todavía no llevan su marca de resuelto** — están cerradas por ADR, pero el texto de la Parte 1 conserva la redacción original. Leer siempre esta tabla primero.
 >
 > ⚠️ **Defectos de este mismo archivo** (registrados para no repetir el patrón que `IN-37` le denuncia al plan de implementación):
-> - `IN-15` (Jaeger vs Tempo) e `IN-16` (Kubernetes con o sin ArgoCD) **se referencian en las Partes 3 y 4 pero nunca se documentan como entradas** en la Parte 2. Eran referencias colgadas. ✅ **Ambas resueltas el 13-ago-2026** — `IN-15` por [`ADR-016`](../docs/adr/ADR-016-trazas-distribuidas-tempo.md) (gana **Tempo**, competencia de dominio de SRE sobre N1) e `IN-16` por [`ADR-015`](../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) (**Kubernetes + ArgoCD**, decisión que llena un vacío: N1 no menciona orquestación).
+> - `IN-15` (Jaeger vs Tempo) e `IN-16` (Kubernetes con o sin ArgoCD) **se referencian en las Partes 3 y 4 pero nunca se documentan como entradas** en la Parte 2. Eran referencias colgadas. ✅ **Ambas resueltas el 13-ago-2026** — `IN-15` por [`ADR-016`](../docs/adr/ADR-016-trazas-distribuidas-tempo.md) (gana **Tempo**, competencia de dominio de SRE sobre N1) e `IN-16` por [`ADR-015`](../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) (**Kubernetes + ArgoCD**, decisión que llena un vacío: N1 no menciona orquestación). ⛔ **`IN-16` se reabrió y volvió a cerrarse el 17-ago-2026** por [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md): el despliegue va a un **VPS único con Docker Compose**, sin Kubernetes ni ArgoCD. `ADR-015` queda superado.
 > - Los identificadores `IN-55` e `IN-56` no existen: la serie salta de `IN-54` a `IN-57`. Es un hueco de numeración, no información faltante.
 >
 > Criterio de clasificación:

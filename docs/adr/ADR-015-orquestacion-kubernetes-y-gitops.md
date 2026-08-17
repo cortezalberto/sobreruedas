@@ -1,6 +1,7 @@
 # ADR-015 — Orquestación con Kubernetes y despliegue GitOps con ArgoCD
 
-- **Estado**: Aceptado
+- **Estado**: ⛔ **Superado** por [`ADR-023`](ADR-023-despliegue-sobre-vps-con-docker-compose.md) el 2026-08-17 — el despliegue va a un VPS único con Docker Compose, sin Kubernetes ni ArgoCD. `IN-16` queda reabierta y cerrada de nuevo por `ADR-023`.
+- **Estado original**: Aceptado
 - **Fecha**: 2026-08-13
 - **Decisores**: Tech Lead
 - **Resuelve**: `IN-16` (ambas mitades) · `PA-20` (parcial — la mitad de trazas la cierra [`ADR-016`](ADR-016-trazas-distribuidas-tempo.md))
