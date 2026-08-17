@@ -1,4 +1,4 @@
-﻿# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # deRuedas Gestion — entorno de desarrollo local completo (T-002)
 #
 #   docker compose up -d        levanta todo
@@ -88,7 +88,20 @@ services:
       # sola vez. Ubicacion fijada por ADR-019.
       - ./infra/local/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-deruedas} -d ${POSTGRES_DB:-deruedas}"]
+      # ⚠️ `-h 127.0.0.1` NO es decorativo: fuerza el chequeo por TCP.
+      #
+      # Sin el, pg_isready consulta por SOCKET UNIX. Durante la inicializacion,
+      # el entrypoint de PostgreSQL levanta un servidor temporal que escucha
+      # SOLO por socket —sin TCP— para correr los scripts de initdb. En esa
+      # ventana el healthcheck da OK y el contenedor se reporta `healthy`
+      # mientras sigue rechazando conexiones de red.
+      #
+      # Cualquier servicio con `depends_on: condition: service_healthy` arranca
+      # ahi y muere con "Connection refused". Paso el 17-ago-2026 con
+      # keycloak-db-init, sobre un volumen recien creado. En desarrollo no se
+      # notaba porque el backend tarda mas en arrancar que la ventana de initdb:
+      # la carrera existia igual, y la ganaba por casualidad.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-deruedas} -d ${POSTGRES_DB:-deruedas}"]
       interval: 5s
       timeout: 5s
       retries: 12

@@ -1,10 +1,23 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Base y rol propios para Keycloak — ADR-025 Decision 4
 --
--- Corre UNA SOLA VEZ, al crear el volumen de PostgreSQL, despues de los init
--- del entorno base (01-extensions, 02-rol-de-aplicacion) porque el prefijo `10`
--- ordena despues. Docker ejecuta /docker-entrypoint-initdb.d en orden
--- alfabetico y monta este directorio en el subdirectorio `vps`.
+-- Lo ejecuta el servicio efimero `keycloak-db-init` del override de produccion,
+-- NO el mecanismo de initdb de PostgreSQL.
+--
+-- POR QUE NO ES UN SCRIPT DE initdb
+--
+-- Los scripts de /docker-entrypoint-initdb.d corren UNA sola vez, y solo cuando
+-- el directorio de datos esta VACIO. La base de Keycloak es un requisito nuevo
+-- (ADR-025, 17-ago-2026): sobre una instalacion que ya tiene datos, ese
+-- mecanismo no correria nunca y Keycloak arrancaria contra una base inexistente.
+--
+-- Ademas el montaje era imposible: el archivo base ya monta el directorio
+-- /docker-entrypoint-initdb.d de solo lectura, y Docker no puede crear un punto
+-- de montaje adentro de un montaje read-only. Detectado el 17-ago-2026
+-- reproduciendo la topologia en la maquina local.
+--
+-- Por eso es idempotente y corre en CADA arranque del stack de datos: la
+-- primera vez crea, las siguientes no hace nada. Mismo patron que `minio-init`.
 --
 -- POR QUE EN LA MISMA INSTANCIA Y NO EN UN POSTGRESQL APARTE
 --
@@ -18,28 +31,47 @@
 -- acceso al esquema de la aplicacion.
 -- ─────────────────────────────────────────────────────────────────────────────
 
-\set keycloak_user `echo "$KEYCLOAK_DB_USER"`
-\set keycloak_password `echo "$KEYCLOAK_DB_PASSWORD"`
-\set keycloak_db `echo "${KEYCLOAK_DB_NAME:-keycloak}"`
+\set ON_ERROR_STOP on
 
--- Rol de Keycloak. NOSUPERUSER y NOBYPASSRLS por el mismo criterio que ADR-020
--- le aplica al rol de aplicacion: ningun rol de servicio necesita saltear RLS,
--- y el que puede hacerlo termina haciendolo por accidente.
-CREATE ROLE :"keycloak_user"
-    LOGIN
-    PASSWORD :'keycloak_password'
-    NOSUPERUSER
-    NOCREATEDB
-    NOCREATEROLE
-    NOBYPASSRLS;
+\set kc_user  `echo "${KEYCLOAK_DB_USER:?falta KEYCLOAK_DB_USER}"`
+\set kc_pass  `echo "${KEYCLOAK_DB_PASSWORD:?falta KEYCLOAK_DB_PASSWORD}"`
+\set kc_db    `echo "${KEYCLOAK_DB_NAME:-keycloak}"`
 
-CREATE DATABASE :"keycloak_db" OWNER :"keycloak_user";
+-- El rol. NOSUPERUSER y NOBYPASSRLS por el mismo criterio que ADR-020 le aplica
+-- al rol de aplicacion: ningun rol de servicio necesita saltear RLS, y el que
+-- puede hacerlo termina haciendolo por accidente.
+--
+-- `\gexec` ejecuta el texto que devuelve la consulta. Es la forma de tener un
+-- "CREATE ROLE IF NOT EXISTS", que PostgreSQL no ofrece.
+SELECT format(
+    'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS',
+    :'kc_user', :'kc_pass'
+)
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'kc_user')
+\gexec
 
-COMMENT ON DATABASE :"keycloak_db" IS
+-- La clave se re-aplica siempre: si rota en el archivo de secretos, esta linea
+-- la sincroniza sin que haya que borrar nada.
+SELECT format('ALTER ROLE %I PASSWORD %L', :'kc_user', :'kc_pass')
+\gexec
+
+-- CREATE DATABASE no puede ir adentro de una transaccion ni de un bloque DO.
+SELECT format('CREATE DATABASE %I OWNER %I', :'kc_db', :'kc_user')
+WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'kc_db')
+\gexec
+
+SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', :'kc_db')
+\gexec
+
+SELECT format('GRANT ALL PRIVILEGES ON DATABASE %I TO %I', :'kc_db', :'kc_user')
+\gexec
+
+SELECT format(
+    'COMMENT ON DATABASE %I IS %L',
+    :'kc_db',
     'Identidad de Keycloak (ADR-025). Separada de la base de negocio; comparte '
-    'instancia para quedar cubierta por el archivado de WAL de la tarea 9.21.';
+    'instancia para quedar cubierta por el archivado de WAL de la tarea 9.21.'
+)
+\gexec
 
--- Keycloak es dueno de SU base y de nada mas. Sin esto, el rol podria leer el
--- catalogo de la base de negocio.
-REVOKE ALL ON DATABASE :"keycloak_db" FROM PUBLIC;
-GRANT ALL PRIVILEGES ON DATABASE :"keycloak_db" TO :"keycloak_user";
+\echo 'keycloak-db-init: rol y base verificados'

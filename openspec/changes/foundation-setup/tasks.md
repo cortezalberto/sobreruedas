@@ -1,4 +1,4 @@
-﻿# Tareas — `foundation-setup` (C-01)
+# Tareas — `foundation-setup` (C-01)
 
 > **Governance: ALTO.** Se propone y se espera revisión humana antes de escribir código.
 > Cobertura de tests aplicable desde el primer commit: **80 % líneas / 60 % ramas** (ver `design.md` D-3).

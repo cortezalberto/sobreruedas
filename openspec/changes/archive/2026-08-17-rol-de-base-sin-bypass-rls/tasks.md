@@ -1,4 +1,4 @@
-﻿# Tareas — `rol-de-base-sin-bypass-rls`
+# Tareas — `rol-de-base-sin-bypass-rls`
 
 > **Gobernanza CRÍTICA.** Esto es la capa 2 del aislamiento multi-tenant, que el plan de seguridad llama *"el control más crítico del sistema"*. Implementación aprobada por el usuario el 16-ago-2026; el rol de aplicación se llama **`mitutu`**.
 >

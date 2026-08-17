@@ -16,6 +16,18 @@
 # para poder tener el entorno de desarrollo levantado y correr los tests de
 # integracion al mismo tiempo, sin que se peleen por el puerto.
 #
+# Y CONFIGURABLES, por la misma razon que en docker-compose.yml: el
+# desplazamiento resuelve el choque con NUESTRO entorno de desarrollo, no con lo
+# que cada uno tenga corriendo en su maquina. Si otro proyecto ya ocupa uno de
+# estos puertos, se override en el .env sin tocar este archivo:
+#
+#   TEST_REDIS_PORT=6390
+#
+# Verificado el 17-ago-2026: en la maquina de desarrollo el 6380 estaba tomado
+# por el Redis de otro proyecto, y el compose de test no levantaba.
+#
+# Los defaults NO cambian, asi que CI y quien no tenga conflictos siguen igual.
+#
 # No estan ni `keycloak` ni `mailhog`: los tests de integracion no los tocan.
 # Lo que se prueba de autenticacion se hace con tokens firmados por una clave de
 # prueba, sin levantar un servidor de identidad entero.
@@ -50,7 +62,7 @@ services:
       -c full_page_writes=off
       -c synchronous_commit=off
     ports:
-      - "5433:5432"
+      - "${TEST_POSTGRES_PORT:-5433}:5432"
     tmpfs:
       - /var/lib/postgresql/data
     volumes:
@@ -58,7 +70,11 @@ services:
       # corre contra un PostgreSQL sin pg_trgm, prueba algo que no existe.
       - ./infra/local/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U deruedas_test -d deruedas_test"]
+      # `-h 127.0.0.1` fuerza el chequeo por TCP. Sin el, pg_isready consulta por
+      # socket y da OK durante la ventana de initdb, cuando el servidor temporal
+      # todavia no escucha en red. Ver el comentario extenso en
+      # docker-compose.yml — misma causa, mismo arreglo.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U deruedas_test -d deruedas_test"]
       interval: 3s
       timeout: 3s
       retries: 20
@@ -69,7 +85,7 @@ services:
     # Sin appendonly: no hay nada que persistir entre corridas.
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     ports:
-      - "6380:6379"
+      - "${TEST_REDIS_PORT:-6380}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 3s
@@ -85,7 +101,7 @@ services:
       DISABLE_SECURITY_PLUGIN: "true"
       DISABLE_INSTALL_DEMO_CONFIG: "true"
     ports:
-      - "9201:9200"
+      - "${TEST_OPENSEARCH_PORT:-9201}:9200"
     # `mode=1777` no es decorativo: sin el, docker monta el tmpfs como root y
     # OpenSearch --que corre como uid 1000-- no puede crear `data/nodes`. El
     # contenedor muere con AccessDeniedException, el healthcheck agota sus 30
@@ -107,7 +123,7 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9002:9000"
+      - "${TEST_MINIO_PORT:-9002}:9000"
     tmpfs:
       - /data
     healthcheck:

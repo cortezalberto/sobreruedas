@@ -75,10 +75,23 @@ set +a
 
 : "${REGISTRY:?falta REGISTRY en $ENV_FILE}"
 
-compose() {
-    local proyecto="$1"; shift
-    docker compose -p "$proyecto" \
+# Dos invocaciones distintas, y la diferencia NO es cosmetica.
+#
+# El stack de datos NO lleva docker-compose.app.yml: ese archivo exige
+# STACK_COLOR, y Compose interpola el archivo entero antes de elegir servicios.
+# Incluirlo obligaria a inventarle un color a una base que no lo tiene.
+compose_datos() {
+    docker compose -p deruedas-datos \
         -f docker-compose.yml -f docker-compose.prod.yml \
+        --env-file "$ENV_FILE" "$@"
+}
+
+# Los stacks de aplicacion SI lo llevan: es lo que les da el alias con color por
+# el que Caddy los distingue.
+compose_app() {
+    local color="$1"; shift
+    STACK_COLOR="$color" docker compose -p "deruedas-${color}" \
+        -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml \
         --env-file "$ENV_FILE" "$@"
 }
 
@@ -148,7 +161,7 @@ docker pull --quiet "${REGISTRY}/frontend-web:${SHA_NUEVO}" >/dev/null \
 # obliga a que sean compatibles hacia atras. Ese es todo el argumento.
 
 log "aplicando migraciones"
-if ! compose "deruedas-migracion" run --rm --no-deps \
+if ! compose_datos run --rm --no-deps \
         -e DATABASE_URL="${DATABASE_MIGRATION_URL:?falta DATABASE_MIGRATION_URL}" \
         backend alembic upgrade head; then
     morir "fallaron las migraciones. El stack ${COLOR_ACTUAL} sigue sirviendo."
@@ -159,12 +172,12 @@ fi
 # ═════════════════════════════════════════════════════════════════════════════
 
 log "levantando ${COLOR_NUEVO} (worker en 0 replicas)"
-STACK_COLOR="$COLOR_NUEVO" WORKER_REPLICAS=0 \
-    compose "deruedas-${COLOR_NUEVO}" up -d --wait --wait-timeout 180 \
+WORKER_REPLICAS=0 \
+    compose_app "$COLOR_NUEVO" up -d --wait --wait-timeout 180 \
         backend frontend-web \
     || {
-        STACK_COLOR="$COLOR_NUEVO" compose "deruedas-${COLOR_NUEVO}" logs --tail 80 || true
-        STACK_COLOR="$COLOR_NUEVO" compose "deruedas-${COLOR_NUEVO}" down || true
+        compose_app "$COLOR_NUEVO" logs --tail 80 || true
+        compose_app "$COLOR_NUEVO" down || true
         morir "el stack ${COLOR_NUEVO} no llego a estado saludable"
     }
 
@@ -175,8 +188,8 @@ STACK_COLOR="$COLOR_NUEVO" WORKER_REPLICAS=0 \
 log "humo sobre ${COLOR_NUEVO} durante ${DURACION_HUMO}s"
 if ! "${RAIZ}/infra/vps/deploy/humo.sh" "$COLOR_NUEVO" "$DURACION_HUMO"; then
     log "el humo fallo; desmontando ${COLOR_NUEVO}"
-    STACK_COLOR="$COLOR_NUEVO" compose "deruedas-${COLOR_NUEVO}" logs --tail 80 || true
-    STACK_COLOR="$COLOR_NUEVO" compose "deruedas-${COLOR_NUEVO}" down || true
+    compose_app "$COLOR_NUEVO" logs --tail 80 || true
+    compose_app "$COLOR_NUEVO" down || true
     morir "humo fallido en ${SHA_NUEVO:0:12}. El upstream NO se movio; ${COLOR_ACTUAL} sigue sirviendo."
 fi
 
@@ -198,13 +211,13 @@ printf '%s\n' "$SHA_NUEVO" > "$ESTADO_SHA"
 # generaciones de codigo consumiendo la misma cola.
 
 log "apagando el worker de ${COLOR_ACTUAL}"
-STACK_COLOR="$COLOR_ACTUAL" WORKER_REPLICAS=0 \
-    compose "deruedas-${COLOR_ACTUAL}" up -d --no-recreate --scale worker=0 worker \
+WORKER_REPLICAS=0 \
+    compose_app "$COLOR_ACTUAL" up -d --no-recreate --scale worker=0 worker \
     2>/dev/null || true
 
 log "promoviendo el worker de ${COLOR_NUEVO}"
-STACK_COLOR="$COLOR_NUEVO" WORKER_REPLICAS="${WORKER_REPLICAS_OBJETIVO:-1}" \
-    compose "deruedas-${COLOR_NUEVO}" up -d --no-recreate worker \
+WORKER_REPLICAS="${WORKER_REPLICAS_OBJETIVO:-1}" \
+    compose_app "$COLOR_NUEVO" up -d --no-recreate worker \
     || notificar aviso "El trafico ya esta en ${COLOR_NUEVO} pero el worker no levanto"
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -215,7 +228,7 @@ STACK_COLOR="$COLOR_NUEVO" WORKER_REPLICAS="${WORKER_REPLICAS_OBJETIVO:-1}" \
 
 log "esperando ${GRACIA_APAGADO}s antes de apagar ${COLOR_ACTUAL}"
 sleep "$GRACIA_APAGADO"
-STACK_COLOR="$COLOR_ACTUAL" compose "deruedas-${COLOR_ACTUAL}" down || true
+compose_app "$COLOR_ACTUAL" down || true
 
 log "listo: ${COLOR_NUEVO} sirviendo ${SHA_NUEVO:0:12}"
 notificar ok "Desplegado \`${SHA_NUEVO:0:12}\` en *${COLOR_NUEVO}*. Humo OK, upstream conmutado."

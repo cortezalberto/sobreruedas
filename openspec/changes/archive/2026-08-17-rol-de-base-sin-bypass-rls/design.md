@@ -1,4 +1,4 @@
-﻿# Diseño — `rol-de-base-sin-bypass-rls`
+# Diseño — `rol-de-base-sin-bypass-rls`
 
 ## Context
 

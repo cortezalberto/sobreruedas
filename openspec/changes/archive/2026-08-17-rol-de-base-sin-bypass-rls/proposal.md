@@ -1,4 +1,4 @@
-﻿# `rol-de-base-sin-bypass-rls`
+# `rol-de-base-sin-bypass-rls`
 
 ## Why
 

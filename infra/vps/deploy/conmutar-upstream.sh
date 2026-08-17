@@ -58,21 +58,42 @@ if grep -q '__COLOR__' "$TMP"; then
     morir "quedaron marcadores __COLOR__ sin reemplazar"
 fi
 
-# Validar ANTES de pisar el archivo vivo. `caddy validate` carga la config
-# completa sin aplicarla.
-install -m 0644 "$TMP" "${RENDERIZADO}.nuevo"
-if ! docker exec "$CONTENEDOR_CADDY" caddy validate \
-        --config "${RENDERIZADO}.nuevo" --adapter caddyfile >/dev/null 2>&1; then
-    docker exec "$CONTENEDOR_CADDY" caddy validate \
-        --config "${RENDERIZADO}.nuevo" --adapter caddyfile || true
-    rm -f "${RENDERIZADO}.nuevo"
-    morir "la configuracion renderizada no valida; el upstream NO se movio"
+# ── Validar ANTES de pisar el archivo vivo ──────────────────────────────────
+#
+# La config candidata se COPIA DENTRO del contenedor por stdin, no se referencia
+# por ruta del host.
+#
+# Es la diferencia entre andar y no andar: `docker exec` resuelve las rutas
+# ADENTRO del contenedor. El archivo `.nuevo` se escribe en el host, y ahi
+# adentro no existe — el bind-mount es del ARCHIVO `Caddyfile`, no del
+# directorio, asi que ningun hermano suyo es visible. La validacion fallaba
+# siempre y el upstream nunca se movia.
+#
+# Fallaba CERRADO, que es lo correcto. Pero fallaba. Detectado el 17-ago-2026
+# reproduciendo la conmutacion en local.
+CANDIDATA_EN_CONTENEDOR="/tmp/Caddyfile.candidata"
+
+if ! docker exec -i "$CONTENEDOR_CADDY" \
+        sh -c "cat > '$CANDIDATA_EN_CONTENEDOR'" < "$TMP"; then
+    morir "no se pudo copiar la configuracion candidata al contenedor"
 fi
 
-mv "${RENDERIZADO}.nuevo" "$RENDERIZADO"
+if ! docker exec "$CONTENEDOR_CADDY" caddy validate \
+        --config "$CANDIDATA_EN_CONTENEDOR" --adapter caddyfile >/dev/null 2>&1; then
+    log "la configuracion candidata NO valida. Detalle:"
+    docker exec "$CONTENEDOR_CADDY" caddy validate \
+        --config "$CANDIDATA_EN_CONTENEDOR" --adapter caddyfile || true
+    morir "configuracion invalida; el upstream NO se movio"
+fi
 
+# Recien con la config validada se pisa el archivo del host, que es el registro
+# de que esta sirviendo y lo que Caddy leeria si el contenedor se recrea.
+install -m 0644 "$TMP" "$RENDERIZADO"
+
+# La recarga es GRACEFUL: no corta conexiones establecidas ni descarta
+# peticiones en vuelo.
 if ! docker exec "$CONTENEDOR_CADDY" caddy reload \
-        --config "$RENDERIZADO" --adapter caddyfile; then
+        --config "$CANDIDATA_EN_CONTENEDOR" --adapter caddyfile; then
     morir "fallo la recarga de Caddy. La config anterior sigue activa en memoria."
 fi
 

@@ -1,0 +1,103 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# deRuedas Gestion — capa AZUL/VERDE (C-01 bloque 9, ADR-025 Decision 1)
+#
+# Tercer archivo de la cadena, y solo para los stacks de APLICACION:
+#
+#   datos  →  -f docker-compose.yml -f docker-compose.prod.yml
+#   azul   →  -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml
+#   verde  →  idem, con STACK_COLOR=verde
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# POR QUE EXISTE ESTE ARCHIVO Y NO ESTA TODO EN docker-compose.prod.yml
+#
+# Porque Compose INTERPOLA EL ARCHIVO ENTERO antes de elegir que servicios
+# levantar. Con `${STACK_COLOR:?...}` dentro de prod.yml, arrancar el stack de
+# DATOS —que no tiene color y nunca va a tenerlo— fallaba pidiendo una variable
+# de aplicacion:
+#
+#   error while interpolating services.backend.networks.default.aliases.[]:
+#   required variable STACK_COLOR is missing a value
+#
+# Detectado el 17-ago-2026 reproduciendo la topologia en la maquina local, antes
+# de tocar ningun servidor. Habria roto el PRIMER arranque en el VPS.
+#
+# Separarlo conserva las dos propiedades que importan:
+#   - el stack de datos arranca sin saber nada de colores;
+#   - un stack de aplicacion sin STACK_COLOR sigue fallando FUERTE y temprano,
+#     en vez de levantar con un alias que el proxy nunca va a encontrar.
+#
+# No es un archivo paralelo de los que ADR-023 prohibe: no redefine servicios,
+# solo agrega el alias de red a los tres que alternan.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ⚠️ Compose agrega el nombre del servicio como alias de red. Con azul y verde
+  # levantados a la vez, `backend` resuelve a LOS DOS por round-robin. Por eso
+  # cada stack suma su propio alias con color, y Caddy apunta SIEMPRE al alias
+  # con color. Nada en produccion debe usar el nombre pelado.
+  #
+  # ── Y SE CORTAN LOS depends_on ──────────────────────────────────────────────
+  #
+  # En el archivo base, `backend` depende de postgres, redis, minio y keycloak.
+  # Eso es correcto en desarrollo, donde todo vive en un solo proyecto.
+  #
+  # Aca NO: los servicios de datos son otro proyecto de Compose, con su propio
+  # ciclo de vida. Si se dejan los depends_on, un `up backend` arrastra las
+  # dependencias y Compose CREA SU PROPIO postgres, redis, minio y keycloak
+  # dentro del proyecto azul — duplicando exactamente los cinco servicios con
+  # estado que ADR-025 Decision 1 dice que NO se pueden duplicar. Dos PostgreSQL
+  # sobre el mismo volumen no es azul-verde, es corrupcion de datos.
+  #
+  # Paso el 17-ago-2026 levantando el stack azul en local: se crearon los siete
+  # servicios en vez de dos.
+  #
+  # `--no-deps` en la linea de comandos lo taparia, pero depende de que alguien
+  # se acuerde de escribirlo cada vez. Cortarlo en la topologia lo vuelve
+  # imposible de olvidar. Compose no puede expresar dependencias entre proyectos
+  # de todos modos: quien garantiza el orden es el agente de despliegue, que
+  # levanta el stack de datos primero.
+
+  # ── Y NO PUBLICAN NINGUN PUERTO EN EL HOST ──────────────────────────────────
+  #
+  # El archivo base publica 8000 y 3000. Con azul y verde vivos a la vez —que es
+  # el punto entero del azul-verde— los dos intentan bindear el MISMO puerto y el
+  # segundo stack no arranca:
+  #
+  #   Bind for 127.0.0.1:8020 failed: port is already allocated
+  #
+  # Paso el 17-ago-2026 levantando verde con azul ya arriba. Con esto, el
+  # azul-verde era imposible: nunca podian convivir.
+  #
+  # Y no hacen falta: Caddy los alcanza por la red de Docker usando el alias con
+  # color. Un puerto en el host seria ademas una via para saltearse el proxy y
+  # sus cabeceras de seguridad.
+  #
+  # HOST_BIND_ADDR sigue siendo util para el stack de DATOS, donde hay una sola
+  # instancia y a veces conviene poder consultarla por loopback.
+
+  backend:
+    depends_on: !reset {}
+    ports: !reset []
+    networks:
+      default:
+        aliases:
+          - backend-${STACK_COLOR:?falta STACK_COLOR (azul|verde)}
+      observability: {}
+
+  worker:
+    depends_on: !reset {}
+    ports: !reset []
+    networks:
+      default:
+        aliases:
+          - worker-${STACK_COLOR:?falta STACK_COLOR (azul|verde)}
+      observability: {}
+
+  frontend-web:
+    depends_on: !reset {}
+    ports: !reset []
+    networks:
+      default:
+        aliases:
+          - web-${STACK_COLOR:?falta STACK_COLOR (azul|verde)}
