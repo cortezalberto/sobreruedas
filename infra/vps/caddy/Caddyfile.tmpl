@@ -1,0 +1,99 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# deRuedas Gestion — reverse proxy (C-01 tareas 9.4 y 9.10)
+#
+# ADR-023 dejo la eleccion abierta ("Caddy o Traefik"); ADR-025 eligio Caddy.
+#
+# ⚠️ ESTO ES UNA PLANTILLA. No la edites renderizada.
+#    __COLOR__ lo reemplaza conmutar-upstream.sh y el resultado va a
+#    /etc/caddy/Caddyfile. Si editas el archivo renderizado, la proxima
+#    conmutacion lo pisa.
+#
+# POR QUE PLANTILLA Y RECARGA, Y NO UN PATCH A LA API DE ADMINISTRACION
+#
+# La recarga de Caddy es GRACEFUL: no corta conexiones establecidas ni descarta
+# peticiones en vuelo. Eso es todo lo que el azul-verde necesita. Un PATCH por
+# indice contra /config/apps/http/servers/... seria mas "quirurgico" pero se
+# rompe ante cualquier reordenamiento de rutas, y el cambio no quedaria visible
+# en ningun diff. Acá el estado activo se lee en un archivo.
+# ─────────────────────────────────────────────────────────────────────────────
+{
+	email {$ACME_EMAIL}
+
+	# Solo loopback: la API de administracion NUNCA se expone. Quien la alcance
+	# puede reescribir el enrutamiento entero.
+	admin 127.0.0.1:2019
+}
+
+# ── Snippet compartido de cabeceras de seguridad ─────────────────────────────
+# knowledge-base/08 §Seguridad. Caddy ya pone algunas por defecto; estas son las
+# que el proyecto exige explicitamente.
+(seguridad) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		-Server
+	}
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# STACK DE APLICACION — conmutable. El color lo fija el agente de despliegue.
+# ═════════════════════════════════════════════════════════════════════════════
+
+{$DOMINIO_APP} {
+	import seguridad
+	encode gzip zstd
+
+	reverse_proxy web-__COLOR__:3000 {
+		# Si el stack activo deja de responder, Caddy lo saca de rotacion. Con un
+		# solo upstream esto no da failover —no hay a donde ir— pero evita colgar
+		# peticiones contra un contenedor muerto.
+		health_uri /
+		health_interval 10s
+		health_timeout 5s
+	}
+}
+
+{$DOMINIO_API} {
+	import seguridad
+	encode gzip zstd
+
+	reverse_proxy backend-__COLOR__:8000 {
+		# /ready, no /health: /health dice "el proceso vive", /ready dice "puede
+		# atender trafico". Lo que decide si recibe peticiones es lo segundo.
+		health_uri /ready
+		health_interval 10s
+		health_timeout 5s
+
+		# El backend arma URLs absolutas y decide sobre HTTPS con esto.
+		header_up X-Forwarded-Proto https
+	}
+}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# STACK DE DATOS — NO conmutable. Uno solo, sin color (ADR-025 Decision 1).
+# ═════════════════════════════════════════════════════════════════════════════
+
+{$DOMINIO_AUTH} {
+	import seguridad
+
+	reverse_proxy keycloak:8080 {
+		# Sin esto Keycloak arma las URLs de los tokens con el host interno y el
+		# flujo OIDC se rompe en el navegador. Va de la mano con KC_PROXY_HEADERS
+		# y KC_HOSTNAME del override de produccion.
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Port 443
+	}
+}
+
+{$DOMINIO_MEDIA} {
+	import seguridad
+
+	# Las URLs prefirmadas de S3 tienen que ser alcanzables desde el navegador.
+	# Solo la API S3 (9000); la consola de administracion (9001) NO se expone.
+	reverse_proxy minio:9000 {
+		header_up X-Forwarded-Proto https
+	}
+}

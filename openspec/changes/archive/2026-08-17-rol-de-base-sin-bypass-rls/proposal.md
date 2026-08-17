@@ -1,4 +1,4 @@
-# `rol-de-base-sin-bypass-rls`
+﻿# `rol-de-base-sin-bypass-rls`
 
 ## Why
 
@@ -12,7 +12,7 @@ Se descubrió implementando los tests del bloque 2 de C-02, contra PostgreSQL re
 | `prueba_rls` | establecido | **1** ✅ |
 | `deruedas` (superusuario) | irrelevante | **26** ❌ |
 
-La política es correcta; el rol la anula. Decidido en [`ADR-020`](../../../docs/adr/ADR-020-rol-de-conexion-sin-bypass-de-rls.md).
+La política es correcta; el rol la anula. Decidido en [`ADR-020`](../../../../docs/adr/ADR-020-rol-de-conexion-sin-bypass-de-rls.md).
 
 **Por qué ahora y no cuando aparezca la primera tabla de negocio**: porque para entonces el agujero deja de ser teórico. Hoy la única tabla con `tenant_id` es la testigo que creó C-02; el día que existan `users`, `vehicles` y `leads`, lo mismo es una filtración entre agencias — incidente P0 con notificación a la AAIP (`RN-MT-07`).
 

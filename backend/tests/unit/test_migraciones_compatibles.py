@@ -1,0 +1,402 @@
+"""Toda migracion deja funcionando a la version anterior — regla dura 13.
+
+POR QUE ESTA REGLA EXISTE — ADR-025
+────────────────────────────────────
+El despliegue azul-verde levanta el stack nuevo al lado del viejo y conmuta el
+trafico recien cuando el humo pasa. `ADR-023` decia que revertir no hace falta,
+que *"basta con no conmutar"*. **Eso vale para el codigo, no para la base.**
+
+Los dos stacks comparten UNA SOLA base de datos: PostgreSQL tiene estado y no se
+puede duplicar (`ADR-025` Decision 1). Entonces una migracion que rompa hacia
+atras inutiliza el stack VIEJO en el momento en que corre — y el stack viejo es
+justamente la red de seguridad del azul-verde. El humo puede pasar, la
+conmutacion puede hacerse, y el camino de vuelta ya no existe.
+
+Ademas el agente de despliegue corre las migraciones ANTES de levantar el stack
+nuevo, con todo el trafico todavia en el viejo. Ese orden es seguro *solo* si
+esta regla se cumple.
+
+POR QUE SOLO SE MIRA `upgrade()`
+─────────────────────────────────
+`downgrade()` esta LLENO de DDL destructivo, y ahi es correcto: un downgrade
+debe borrar lo que su upgrade creo. Mirar el archivo entero marcaria las cuatro
+migraciones que ya existen. Lo que se analiza es exclusivamente el cuerpo de
+`upgrade()`.
+
+QUE ES DESTRUCTIVO Y QUE NO
+───────────────────────────
+No toda operacion de borrado rompe hacia atras. El criterio es si la version
+ANTERIOR de la aplicacion sigue funcionando:
+
+  ROMPE      borrar columna o tabla · renombrar · SET NOT NULL · agregar una
+             constraint que el dato existente pueda violar · estrechar un tipo
+  NO ROMPE   crear tabla · agregar columna nullable · crear indice ·
+             BORRAR un indice o una constraint (afloja, no apreta)
+
+LA VALVULA
+──────────
+La fase *contract* de expand/contract es legitima y necesaria: en algun
+despliegue posterior hay que borrar lo viejo. Se habilita con un marcador
+explicito en la migracion:
+
+    # migracion-contract: la columna quedo sin uso desde la revision <xxx>
+
+El marcador no debilita el gate. Lo vuelve **deliberado y visible en el diff**,
+que es exactamente el punto.
+"""
+
+from __future__ import annotations
+
+import ast
+import re
+from pathlib import Path
+
+import pytest
+
+RAIZ_BACKEND = Path(__file__).resolve().parents[2]
+VERSIONES = RAIZ_BACKEND / "alembic" / "versions"
+
+MARCADOR_CONTRACT = re.compile(r"#\s*migracion-contract:", re.IGNORECASE)
+
+# Operaciones de Alembic que rompen hacia atras por si solas.
+OPERACIONES_DESTRUCTIVAS = {
+    "drop_column": "borra una columna que la version anterior puede seguir escribiendo",
+    "drop_table": "borra una tabla que la version anterior puede seguir usando",
+    "rename_table": "renombrar no es aditivo: la version anterior busca el nombre viejo",
+}
+
+# En que argumento posicional viaja el nombre de la tabla. Lo que no figura acá
+# la trae primera, que es el caso comun.
+POSICION_DE_LA_TABLA = {
+    "create_unique_constraint": 1,  # (nombre_constraint, tabla, columnas)
+    "create_check_constraint": 1,  # (nombre_constraint, tabla, condicion)
+    "create_index": 1,  # (nombre_indice, tabla, columnas)
+}
+
+# SQL crudo dentro de op.execute(). Se mira el texto porque no hay AST de SQL.
+SQL_DESTRUCTIVO = (
+    (re.compile(r"\bDROP\s+(?:TABLE|COLUMN)\b", re.IGNORECASE), "DROP TABLE/COLUMN"),
+    (re.compile(r"\bRENAME\s+(?:TO|COLUMN)\b", re.IGNORECASE), "RENAME"),
+    (re.compile(r"\bSET\s+NOT\s+NULL\b", re.IGNORECASE), "SET NOT NULL"),
+    (re.compile(r"\bADD\s+CONSTRAINT\b", re.IGNORECASE), "ADD CONSTRAINT"),
+)
+
+
+def _texto_literal(nodo: ast.AST) -> str:
+    """Texto de un `str` o de las partes literales de un f-string.
+
+    Las migraciones de este proyecto arman el SQL con f-strings sobre constantes
+    (`op.execute(f"ALTER TABLE {TABLA} ...")`), asi que mirar solo `ast.Constant`
+    dejaria pasar casi todo.
+    """
+    if isinstance(nodo, ast.Constant) and isinstance(nodo.value, str):
+        return nodo.value
+    if isinstance(nodo, ast.JoinedStr):
+        return " ".join(
+            parte.value
+            for parte in nodo.values
+            if isinstance(parte, ast.Constant) and isinstance(parte.value, str)
+        )
+    return ""
+
+
+def _operacion(llamada: ast.Call) -> str:
+    """Nombre de la operacion en `op.<algo>(...)`, o cadena vacia."""
+    funcion = llamada.func
+    if isinstance(funcion, ast.Attribute) and isinstance(funcion.value, ast.Name):
+        if funcion.value.id == "op":
+            return funcion.attr
+    return ""
+
+
+def _kwarg(llamada: ast.Call, nombre: str) -> ast.AST | None:
+    for palabra in llamada.keywords:
+        if palabra.arg == nombre:
+            return palabra.value
+    return None
+
+
+def _constantes_de_modulo(arbol: ast.Module) -> dict[str, str]:
+    """Constantes `NOMBRE = "texto"` del nivel de modulo.
+
+    Las migraciones de este proyecto nombran la tabla con una constante
+    (`TABLA = "claves_de_idempotencia"`) y se la pasan a cada `op.*`. Sin
+    resolverlas, el analisis no puede saber a que tabla apunta una operacion.
+    """
+    constantes: dict[str, str] = {}
+    for nodo in arbol.body:
+        if isinstance(nodo, ast.Assign) and isinstance(nodo.value, ast.Constant):
+            if isinstance(nodo.value.value, str):
+                for destino in nodo.targets:
+                    if isinstance(destino, ast.Name):
+                        constantes[destino.id] = nodo.value.value
+    return constantes
+
+
+def _tabla(nodo: ast.AST | None, constantes: dict[str, str]) -> str | None:
+    """Nombre de tabla a partir de un literal o de una constante de modulo."""
+    if isinstance(nodo, ast.Constant) and isinstance(nodo.value, str):
+        return nodo.value
+    if isinstance(nodo, ast.Name):
+        return constantes.get(nodo.id)
+    return None
+
+
+def infracciones(fuente: str) -> list[str]:
+    """Operaciones de `upgrade()` que rompen hacia atras.
+
+    Publica a proposito: los tests negativos la usan contra migraciones
+    sinteticas para probar que este control detecta algo de verdad.
+    """
+    if MARCADOR_CONTRACT.search(fuente):
+        # Fase contract declarada. La decision ya quedo visible en el diff.
+        return []
+
+    arbol = ast.parse(fuente)
+
+    upgrade = next(
+        (
+            nodo
+            for nodo in arbol.body
+            if isinstance(nodo, ast.FunctionDef) and nodo.name == "upgrade"
+        ),
+        None,
+    )
+    if upgrade is None:
+        return []
+
+    constantes = _constantes_de_modulo(arbol)
+
+    # Tablas que NACEN en este upgrade. Apretar una restriccion sobre una tabla
+    # recien creada es seguro: no hay dato previo que pueda violarla, y ninguna
+    # version anterior de la aplicacion le escribia. La distincion importa —
+    # sin ella el gate marca `003_claves_de_idempotencia`, que crea la tabla y
+    # su constraint unica en la misma operacion, y es correcta.
+    nacidas: set[str] = set()
+    for nodo in ast.walk(upgrade):
+        if isinstance(nodo, ast.Call) and _operacion(nodo) == "create_table":
+            nombre = _tabla(nodo.args[0] if nodo.args else None, constantes)
+            if nombre:
+                nacidas.add(nombre)
+
+    problemas: list[str] = []
+
+    for nodo in ast.walk(upgrade):
+        if not isinstance(nodo, ast.Call):
+            continue
+
+        operacion = _operacion(nodo)
+        # No todas las operaciones reciben la tabla en el mismo lugar:
+        # `create_unique_constraint(nombre, tabla, cols)` la trae SEGUNDA.
+        posicion = POSICION_DE_LA_TABLA.get(operacion, 0)
+        objetivo = _tabla(nodo.args[posicion] if len(nodo.args) > posicion else None, constantes)
+        sobre_tabla_nueva = objetivo is not None and objetivo in nacidas
+
+        if operacion in OPERACIONES_DESTRUCTIVAS:
+            problemas.append(
+                f"linea {nodo.lineno}: op.{operacion}() — " f"{OPERACIONES_DESTRUCTIVAS[operacion]}"
+            )
+
+        # alter_column es ambiguo: aflojar es seguro, apretar no.
+        if operacion == "alter_column" and not sobre_tabla_nueva:
+            nullable = _kwarg(nodo, "nullable")
+            if isinstance(nullable, ast.Constant) and nullable.value is False:
+                problemas.append(
+                    f"linea {nodo.lineno}: op.alter_column(nullable=False) — "
+                    "la version anterior puede insertar NULL. Backfill primero, "
+                    "y NOT NULL en un despliegue posterior."
+                )
+            if _kwarg(nodo, "new_column_name") is not None:
+                problemas.append(
+                    f"linea {nodo.lineno}: op.alter_column(new_column_name=...) — "
+                    "renombrar no es aditivo. Agregar la nueva, backfillear, "
+                    "conmutar la lectura, y borrar la vieja despues."
+                )
+
+        # Constraints que el dato existente puede violar. Sobre una tabla que
+        # nace en este mismo upgrade no hay dato existente: es seguro.
+        if (
+            operacion in {"create_check_constraint", "create_unique_constraint"}
+            and not sobre_tabla_nueva
+        ):
+            problemas.append(
+                f"linea {nodo.lineno}: op.{operacion}() sobre "
+                f"'{objetivo or '?'}' — el dato que ya escribio la version "
+                "anterior puede violarla. Validar y limpiar primero, y agregarla "
+                "en un despliegue posterior."
+            )
+
+        # SQL crudo.
+        if operacion == "execute" and nodo.args:
+            sql = _texto_literal(nodo.args[0])
+            for patron, etiqueta in SQL_DESTRUCTIVO:
+                if patron.search(sql):
+                    problemas.append(f"linea {nodo.lineno}: op.execute() con {etiqueta}")
+
+    return problemas
+
+
+def _migraciones() -> list[Path]:
+    return sorted(p for p in VERSIONES.glob("*.py") if p.name != "__init__.py")
+
+
+def test_hay_migraciones_que_revisar() -> None:
+    """Si el glob deja de encontrar archivos, el gate pasa vacio.
+
+    Sin esto, mover el directorio de migraciones apagaria el control en silencio.
+    """
+    assert _migraciones(), f"no se encontro ninguna migracion en {VERSIONES}"
+
+
+@pytest.mark.parametrize("migracion", _migraciones(), ids=lambda p: p.name)
+def test_la_migracion_no_rompe_hacia_atras(migracion: Path) -> None:
+    """Regla dura 13: `upgrade()` deja funcionando a la version anterior."""
+    problemas = infracciones(migracion.read_text(encoding="utf-8"))
+    assert not problemas, (
+        f"{migracion.name} rompe hacia atras (regla dura 13, ADR-025):\n  "
+        + "\n  ".join(problemas)
+        + "\n\nEl azul-verde comparte UNA base entre los dos stacks: esto deja "
+        "al stack viejo sin funcionar y la reversion deja de existir.\n"
+        "Si es la fase *contract* de un expand/contract ya desplegado, "
+        "declaralo con:\n\n    # migracion-contract: <por que ya es seguro>\n"
+    )
+
+
+# ── Que el control detecta de verdad ─────────────────────────────────────────
+# Sin estos casos, `infracciones()` podria devolver siempre [] y los tests de
+# arriba pasarian igual.
+
+
+def test_detecta_drop_column_en_upgrade() -> None:
+    malo = """
+from alembic import op
+
+def upgrade() -> None:
+    op.drop_column("vehiculos", "patente_vieja")
+
+def downgrade() -> None:
+    pass
+"""
+    problemas = infracciones(malo)
+    assert any("drop_column" in p for p in problemas), problemas
+
+
+def test_detecta_set_not_null() -> None:
+    malo = """
+from alembic import op
+import sqlalchemy as sa
+
+def upgrade() -> None:
+    op.alter_column("vehiculos", "dominio", nullable=False)
+"""
+    problemas = infracciones(malo)
+    assert any("nullable=False" in p for p in problemas), problemas
+
+
+def test_detecta_sql_crudo_destructivo_en_fstring() -> None:
+    """El SQL crudo con f-string es la forma que usan las migraciones de acá."""
+    malo = """
+from alembic import op
+
+TABLA = "vehiculos"
+
+def upgrade() -> None:
+    op.execute(f"ALTER TABLE {TABLA} ALTER COLUMN dominio SET NOT NULL")
+"""
+    problemas = infracciones(malo)
+    assert any("SET NOT NULL" in p for p in problemas), problemas
+
+
+def test_el_ddl_destructivo_de_downgrade_no_cuenta() -> None:
+    """Es el falso positivo que marcaria las cuatro migraciones existentes."""
+    correcto = """
+from alembic import op
+
+TABLA = "claves"
+
+def upgrade() -> None:
+    op.create_table(TABLA)
+    op.create_index("ix_claves", TABLA, ["tenant_id"])
+
+def downgrade() -> None:
+    op.drop_index("ix_claves", table_name=TABLA)
+    op.drop_table(TABLA)
+    op.execute(f"DROP POLICY IF EXISTS pol ON {TABLA}")
+"""
+    assert infracciones(correcto) == []
+
+
+def test_apretar_una_tabla_que_nace_en_el_mismo_upgrade_es_seguro() -> None:
+    """Es el caso real de `003_claves_de_idempotencia`.
+
+    No hay dato previo que pueda violar la constraint, ni version anterior de la
+    aplicacion escribiendo en esa tabla: nace acá.
+    """
+    correcto = """
+from alembic import op
+
+TABLA = "claves_de_idempotencia"
+
+def upgrade() -> None:
+    op.create_table(TABLA)
+    op.create_unique_constraint(f"uq_{TABLA}_tenant_key", TABLA, ["tenant_id", "key"])
+"""
+    assert infracciones(correcto) == []
+
+
+def test_apretar_una_tabla_PREEXISTENTE_si_se_marca() -> None:
+    """La exencion de arriba no puede volverse un agujero.
+
+    Misma operacion, tabla que NO nace en este upgrade: el dato que ya escribio
+    la version anterior puede violarla.
+    """
+    malo = """
+from alembic import op
+
+def upgrade() -> None:
+    op.create_unique_constraint("uq_vehiculos_dominio", "vehiculos", ["dominio"])
+"""
+    problemas = infracciones(malo)
+    assert any("create_unique_constraint" in p for p in problemas), problemas
+    assert any("vehiculos" in p for p in problemas), problemas
+
+
+def test_not_null_sobre_tabla_preexistente_se_marca_igual() -> None:
+    """La exencion es por tabla, no por operacion."""
+    malo = """
+from alembic import op
+
+def upgrade() -> None:
+    op.create_table("otra")
+    op.alter_column("vehiculos", "dominio", nullable=False)
+"""
+    problemas = infracciones(malo)
+    assert any("nullable=False" in p for p in problemas), problemas
+
+
+def test_el_marcador_contract_habilita_la_fase_de_borrado() -> None:
+    contract = """
+from alembic import op
+
+# migracion-contract: la columna quedo sin uso desde la revision 007
+def upgrade() -> None:
+    op.drop_column("vehiculos", "patente_vieja")
+"""
+    assert infracciones(contract) == []
+
+
+def test_lo_aditivo_pasa() -> None:
+    """Crear y aflojar es seguro; el gate no debe estorbar el trabajo normal."""
+    aditivo = """
+from alembic import op
+import sqlalchemy as sa
+
+def upgrade() -> None:
+    op.create_table("nueva")
+    op.add_column("vehiculos", sa.Column("color", sa.String(), nullable=True))
+    op.create_index("ix_color", "vehiculos", ["color"])
+    op.drop_index("ix_viejo", table_name="vehiculos")
+    op.drop_constraint("uq_viejo", "vehiculos", type_="unique")
+    op.alter_column("vehiculos", "notas", nullable=True)
+"""
+    assert infracciones(aditivo) == []

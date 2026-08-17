@@ -10,9 +10,11 @@
 # el total es el del job mas lento, no la suma.
 #
 # LO QUE ESTE PIPELINE **NO** HACE: no despliega, no construye imagenes de
-# produccion y no toca el cluster. La frontera de ADR-015 es no negociable —
-# GitHub Actions nunca recibe credenciales de Kubernetes. Eso llega en el
-# bloque 9 y su permiso maximo sera escribir un tag en el repo de manifests.
+# produccion y no toca el servidor. La frontera que ADR-015 defendio sobrevive
+# intacta a ADR-023 y es no negociable — GitHub Actions nunca recibe
+# credenciales de produccion: antes era el kubeconfig del cluster, hoy es el
+# acceso SSH al VPS. Eso llega en el bloque 9, y su permiso maximo sera
+# publicar una imagen y escribir un tag. El VPS tira; el pipeline no empuja.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI
@@ -407,3 +409,98 @@ jobs:
         run: |
           docker run --rm -v "$RUNNER_TEMP/ooxml:/docs" zricethezav/gitleaks:v8.28.0 \
             detect --no-git --source /docs --redact --no-banner --verbose
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # GATE 2 DE LA REGLA DURA 13 — migraciones compatibles hacia atras
+  # ═══════════════════════════════════════════════════════════════════════════
+  #
+  # El gate 1 (lint de DDL destructivo) vive en tests/unit y corre siempre. Este
+  # es el caro y el que dice EXACTAMENTE lo que la regla afirma: se aplican las
+  # migraciones NUEVAS y se corren los tests de integracion de la version
+  # ANTERIOR contra ese esquema.
+  #
+  # POR QUE HACE FALTA (ADR-025)
+  #
+  # El azul-verde comparte UNA sola base entre los dos stacks: PostgreSQL tiene
+  # estado y no se puede duplicar. Una migracion que rompa hacia atras inutiliza
+  # el stack VIEJO en el momento en que corre, y el stack viejo es justamente la
+  # red de seguridad de la reversion. Ademas el agente del VPS corre las
+  # migraciones ANTES de levantar el stack nuevo, con todo el trafico todavia en
+  # el viejo: ese orden es seguro solo si esta regla se cumple.
+  #
+  # EL TRUCO DEL WORKTREE
+  #
+  # Los tests del commit base traen su propio fixture `esquema`, que corre
+  # `alembic upgrade head`. Desde el worktree base eso aplicaria las migraciones
+  # VIEJAS y el gate no probaria nada. Por eso al worktree se le pisa el
+  # directorio `alembic/` con el de HEAD: queda codigo de aplicacion VIEJO con
+  # esquema NUEVO, que es precisamente lo que hay que probar.
+  migraciones-compatibles:
+    name: migraciones-compatibles
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # hace falta el commit base para comparar
+
+      - name: Hay migraciones nuevas?
+        id: cambios
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "sin commit base con que comparar; se salta"
+            echo "correr=no" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          if git diff --name-only "$BASE" HEAD -- backend/alembic/versions | grep -q .; then
+            echo "correr=si" >> "$GITHUB_OUTPUT"
+          else
+            echo "no cambio ninguna migracion; se salta"
+            echo "correr=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.cambios.outputs.correr == 'si'
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Preparar el arbol de la version anterior
+        if: steps.cambios.outputs.correr == 'si'
+        run: |
+          git worktree add ../anterior "${{ steps.cambios.outputs.base }}"
+          # Codigo de aplicacion VIEJO, migraciones NUEVAS.
+          rm -rf ../anterior/backend/alembic
+          cp -r backend/alembic ../anterior/backend/alembic
+
+      - name: Instalar las dependencias de la version anterior
+        if: steps.cambios.outputs.correr == 'si'
+        working-directory: ../anterior/backend
+        run: pip install --editable ".[dev]"
+
+      - name: Levantar los servicios efimeros
+        if: steps.cambios.outputs.correr == 'si'
+        run: docker compose -f docker-compose.test.yml up -d --wait postgres redis opensearch minio
+
+      - name: Crear el bucket de MinIO
+        if: steps.cambios.outputs.correr == 'si'
+        run: docker compose -f docker-compose.test.yml run --rm minio-init
+
+      - name: La suite anterior contra el esquema nuevo
+        if: steps.cambios.outputs.correr == 'si'
+        working-directory: ../anterior/backend
+        env:
+          TEST_DATABASE_URL: postgresql+asyncpg://mitutu:mitutu@localhost:5433/deruedas_test
+          TEST_DATABASE_OWNER_URL: postgresql+asyncpg://deruedas_test:deruedas_test@localhost:5433/deruedas_test
+          TEST_REDIS_URL: redis://localhost:6380/0
+        run: |
+          if ! python -m pytest tests/integration -q; then
+            echo "::error::La suite de la version ANTERIOR falla contra el esquema NUEVO."
+            echo "::error::Rompe la regla dura 13 (ADR-025): el azul-verde pierde su red de seguridad."
+            echo "::error::Usa expand/contract — agregar ahora, borrar en un despliegue posterior."
+            exit 1
+          fi
+
+      - name: Apagar y borrar los volumenes
+        if: always() && steps.cambios.outputs.correr == 'si'
+        run: docker compose -f docker-compose.test.yml down -v

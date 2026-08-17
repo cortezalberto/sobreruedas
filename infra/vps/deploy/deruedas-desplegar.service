@@ -1,0 +1,38 @@
+[Unit]
+# Agente de despliegue — C-01 tarea 9.15
+Description=deRuedas — detectar imagen nueva y desplegar
+Documentation=file:///opt/deruedas/infra/vps/README.md
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+
+# Sin timeout de systemd: el humo solo ya se lleva 5 minutos, y el apagado con
+# gracia otro minuto. Quien acota la corrida es el flock del script, no systemd.
+TimeoutStartSec=0
+
+ExecStart=/opt/deruedas/infra/vps/deploy/desplegar.sh
+
+# El token del bot vive en su propio archivo, con permisos propios: no tiene por
+# que estar en el mismo lugar que los secretos de la aplicacion.
+EnvironmentFile=-/etc/deruedas/notificaciones.env
+
+# El usuario de despliegue no tiene privilegios fuera de Docker (tarea 9.3).
+User=deploy
+Group=docker
+
+# Endurecimiento. El script necesita escribir el estado en /etc/deruedas y el
+# lock en /var/lock, y nada mas.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/etc/deruedas /var/lock
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=deruedas-desplegar
+
+[Install]
+WantedBy=multi-user.target

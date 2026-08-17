@@ -76,10 +76,9 @@ deruedas-gestion/
 │       └── types/                   # generados con openapi-typescript
 ├── frontend-mobile/                 # React Native + Expo (Expo Router)
 ├── frontend-admin/                  # backoffice deRuedas (Next.js)
-├── infra/
-│   ├── terraform/
-│   ├── k8s/                         # ⚠️ marcado como condicional ("si aplica")
-│   └── docker/
+├── infra/                           # sin terraform/ ni k8s/ — ADR-023 §Notas: "no se crean"
+│   ├── local/                       # soporte del entorno local (ADR-019)
+│   └── observability/
 ├── docs/
 │   ├── adr/
 │   └── runbooks/

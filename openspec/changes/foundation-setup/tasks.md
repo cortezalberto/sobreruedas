@@ -1,4 +1,4 @@
-# Tareas — `foundation-setup` (C-01)
+﻿# Tareas — `foundation-setup` (C-01)
 
 > **Governance: ALTO.** Se propone y se espera revisión humana antes de escribir código.
 > Cobertura de tests aplicable desde el primer commit: **80 % líneas / 60 % ramas** (ver `design.md` D-3).
@@ -485,24 +485,24 @@ Cubre la capability `platform/delivery-pipeline`.
 
 **Cargas de trabajo (Compose de producción)**
 
-- [ ] 9.8 Escribir el override de producción de `docker-compose` para `backend`, `worker` y `frontend-web` — **override, no un archivo paralelo** que se desincronice del local
-- [ ] 9.9 Configurar los `healthcheck` de Compose apuntando a `/ready` y `/health`
-- [ ] 9.10 Configurar la mecánica azul-verde: dos stacks conviviendo y el *upstream* del proxy determinando cuál recibe tráfico
+- [x] 9.8 Escribir el override de producción de `docker-compose` para `backend`, `worker` y `frontend-web` — **override, no un archivo paralelo** que se desincronice del local
+- [x] 9.9 Configurar los `healthcheck` de Compose apuntando a `/ready` y `/health`
+- [x] 9.10 Configurar la mecánica azul-verde: dos stacks conviviendo y el *upstream* del proxy determinando cuál recibe tráfico
 
 **Pipeline (GitHub Actions)**
 
-- [ ] 9.11 Escribir `.github/workflows/deploy-staging.yml` disparado por push a `main` tras CI en verde
-- [ ] 9.12 Configurar el build, la firma y el push de imágenes etiquetadas con el SHA del commit
-- [ ] 9.13 Publicar el tag de la imagen — el pipeline **termina acá**
-- [ ] 9.14 Verificar que el pipeline no tiene ni necesita clave SSH ni credenciales del VPS en sus secretos
+- [x] 9.11 Escribir `.github/workflows/deploy-staging.yml` disparado por push a `main` tras CI en verde
+- [x] 9.12 Configurar el build, la firma y el push de imágenes etiquetadas con el SHA del commit
+- [x] 9.13 Publicar el tag de la imagen — el pipeline **termina acá**
+- [x] 9.14 Verificar que el pipeline no tiene ni necesita clave SSH ni credenciales del VPS en sus secretos
 
 **Agente de despliegue (en el VPS)**
 
-- [ ] 9.15 Escribir el agente que detecta el tag nuevo y levanta el stack inactivo. El VPS **tira**; el pipeline no empuja
-- [ ] 9.16 Ajustar su intervalo de sondeo al presupuesto del escenario *"Integración exitosa a la rama principal"*: staging debe reflejar el cambio en **menos de 15 minutos**, y el sondeo consume parte de ese presupuesto
-- [ ] 9.17 Configurar las pruebas de humo contra el stack nuevo **antes** de conmutar el *upstream*, durante cinco minutos
+- [x] 9.15 Escribir el agente que detecta el tag nuevo y levanta el stack inactivo. El VPS **tira**; el pipeline no empuja
+- [x] 9.16 Ajustar su intervalo de sondeo al presupuesto del escenario *"Integración exitosa a la rama principal"*: staging debe reflejar el cambio en **menos de 15 minutos**, y el sondeo consume parte de ese presupuesto
+- [x] 9.17 Configurar las pruebas de humo contra el stack nuevo **antes** de conmutar el *upstream*, durante cinco minutos
 - [ ] 9.18 Verificar que un fallo en las pruebas de humo deja el *upstream* sin mover y el stack anterior sirviendo
-- [ ] 9.19 Configurar la notificación al equipo ante un despliegue fallido
+- [x] 9.19 Configurar la notificación al equipo ante un despliegue fallido
 - [ ] 9.20 Verificar el despliegue automático extremo a extremo y la reversión
 
 **Backup y recuperación — trabajo propio desde ahora**
@@ -512,9 +512,24 @@ Cubre la capability `platform/delivery-pipeline`.
 - [ ] 9.21 Configurar el archivado de WAL de PostgreSQL **fuera del VPS** — un backup en el mismo disco que la base no protege del escenario que más importa
 - [ ] 9.22 Ejecutar y fechar un **ejercicio real de restauración**. Sin restauración probada, el RPO de 5 minutos del plan de SRE es una intención, no una garantía
 
+### Lo que `ADR-025` destapó y las 22 tareas originales no cubrían
+
+> **Reescrito por segunda vez el 17-ago-2026.** Al bajar `ADR-023` al `docker-compose.yml` real aparecieron cuatro huecos. No son refinamientos: dos de ellos rompen producción el primer día. Los cierra [`ADR-025`](../../../docs/adr/ADR-025-topologia-de-produccion-y-migraciones-compatibles.md).
+
+- [x] 9.23 **Keycloak en producción con base propia** — hoy corre con `start-dev` y una **H2 embebida en el contenedor**: usuarios, realms y credenciales **se pierden en el primer reinicio**. Pasa a `start` con `KC_DB=postgres` sobre base y rol propios en la misma instancia, de modo que quede cubierto por el archivado de WAL de 9.21 sin trabajo extra (`ADR-025` Decisión 4)
+- [x] 9.24 **Sacar `mailhog` de producción y apuntar a un SMTP real** — es un capturador de correo de prueba: si levantara, producción **no enviaría un solo mail** —ni recuperación de cuenta ni notificaciones— y fallaría en silencio. Proveedor elegido: **Resend**. ⚠️ Falta verificar el dominio con SPF, DKIM y DMARC, sin lo cual el mail transaccional va a spam
+- [x] 9.25 **OpenSearch con el plugin de seguridad activo** — el base lo desactiva, que es correcto solo en local. El override lo revierte y usa `OPENSEARCH_USER` / `OPENSEARCH_PASSWORD` de `ADR-013`
+- [x] 9.26 **Los dos gates de la regla dura 13** — lint de DDL destructivo sobre `upgrade()` con la válvula `# migracion-contract:` ([`test_migraciones_compatibles.py`](../../../backend/tests/unit/test_migraciones_compatibles.py)), y el job `migraciones-compatibles` de CI, que corre la suite de integración del commit anterior contra el esquema nuevo
+
+> **Por qué el azul-verde no aplica a todo el stack.** `ADR-023` decía *"dos stacks de Compose conviviendo"*. De los diez servicios, **cinco tienen estado y no se pueden duplicar**: levantar un segundo PostgreSQL sobre el mismo volumen no es azul-verde, es corrupción de datos. Solo alternan `backend`, `worker` y `frontend-web`. La consecuencia —la base es compartida, así que **la reversión deja de ser gratis**— es lo que obliga a la regla dura 13.
+
+> **El worker del stack inactivo va en cero réplicas.** Durante los cinco minutos de humo el stack nuevo está levantado pero el proxy no conmutó. Si su worker se conectara al broker compartido, **consumiría trabajo real de producción antes de ser promovido**, y el humo —que solo mira HTTP— no lo vería.
+
+> **Deuda preexistente detectada, fuera del alcance de este bloque**: el servicio `worker` invoca `celery -A app.core.events`, pero `app/core/events.py` es el publisher de Redis Streams y **no define ninguna app de Celery** — solo existe el campo `celery_broker_url` en `config.py:138`. Ese servicio hoy no arranca. Se trata aparte.
+
 > **Deriva silenciosa — pérdida asumida, no olvidada.** La tarea 9.15 anterior verificaba que ArgoCD detectara y reportara un cambio manual sobre el cluster. Sin GitOps esa detección **no existe**, y un cambio hecho a mano sobre el VPS no lo denuncia nadie. `ADR-023` lo registra entre sus contras asumidas. No se reemplaza por una tarea equivalente porque no la hay sin reintroducir la pieza que se descartó.
 
-> **Conflicto abierto con el plan de SRE.** Este bloque despliega sobre un nodo único, que no puede sostener el *"DR en región alternativa"* (RTO 4 h) ni el 99.9 % de Enterprise. Escalado a **Dirección + SRE** por `ADR-023` §Conflicto declarado con N3. **No se resuelve en este change.**
+> **Conflicto abierto con el plan de SRE.** Este bloque despliega sobre un nodo único, que no puede sostener el *"DR en región alternativa"* (RTO 4 h) ni el 99.9 % de Enterprise. Escalado a **Dirección + SRE** el 17-ago-2026 por [`ESC-001`](../../../docs/escalaciones/ESC-001-sla-sobre-nodo-unico.md), registrado como `PA-30`. **No se resuelve en este change** y **no lo bloquea**: las dos tareas que sí protegen (9.21 archivado de WAL fuera del VPS, 9.22 restauración probada y fechada) están dentro del alcance. Lo que espera decisión es el compromiso comercial, no el despliegue.
 
 ## 10. Verificación de cierre
 

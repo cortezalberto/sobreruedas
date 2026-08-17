@@ -158,6 +158,12 @@ Cada change de `CHANGES.md` declara: scope, nivel de gobernanza, dependencias, r
 11. **Conventional commits** (`tipo(scope): descripción`) + firma `Co-Authored-By` en los commits generados por agente.
 12. **NUNCA implementar sobre un bloqueante sin resolver** → si el change declara un `IN-XX`, se resuelve **al arrancar**, antes de escribir el código que depende de él. Sin esto, "bloqueantes distribuidos" se convierte en "bloqueantes olvidados".
 
+### De despliegue
+
+13. **NUNCA una migración que rompa hacia atrás** → toda migración debe dejar funcionando a la versión **inmediatamente anterior** de la aplicación. Prohibido en un solo paso: renombrar, borrar columna o tabla, `SET NOT NULL` sin default, quitar un valor de enum, o agregar una constraint que el dato existente no cumpla. Se hace en tres despliegues: **expand → migrar → contract**.
+    *`ADR-025`. No es preferencia de estilo: el despliegue azul-verde comparte una sola base entre los dos stacks, así que una migración destructiva **inutiliza el stack viejo**, que es justamente la red de seguridad de la reversión.*
+    > Lo hacen cumplir dos gates de CI: un lint de DDL destructivo —que se levanta solo con el marcador explícito `# migracion-contract:` en la migración— y la suite de integración del commit anterior corrida contra el esquema nuevo.
+
 ---
 
 ## Flujo de Trabajo

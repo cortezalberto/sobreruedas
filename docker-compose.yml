@@ -1,4 +1,4 @@
-# ─────────────────────────────────────────────────────────────────────────────
+﻿# ─────────────────────────────────────────────────────────────────────────────
 # deRuedas Gestion — entorno de desarrollo local completo (T-002)
 #
 #   docker compose up -d        levanta todo
@@ -6,9 +6,10 @@
 #   docker compose down         apaga, CONSERVANDO los datos
 #   docker compose down -v      apaga y DESTRUYE los volumenes
 #
-# Kubernetes empieza en staging; en local es Docker Compose y nada mas
-# (design.md D-7). Levantar un cluster para desarrollar seria complejidad sin
-# contrapartida.
+# Compose es el orquestador en TODOS los entornos, no solo en local: ADR-023
+# superó a ADR-015 y el despliegue va a un VPS unico con Docker Compose. Este
+# archivo es la base; produccion es un OVERRIDE, no un archivo paralelo que se
+# desincroniza (ADR-023 §Notas de implementacion).
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # SOBRE LAS DIRECCIONES Y EL .env
@@ -41,6 +42,20 @@
 #
 # NO van en .env.example: son ergonomia de tu maquina, no configuracion de la
 # aplicacion. .env.example refleja ADR-013 y solo eso (tarea 4.8).
+#
+# ── HOST_BIND_ADDR — por que existe ──────────────────────────────────────────
+#
+# Vacia por defecto: el comportamiento local no cambia en nada.
+#
+# Existe porque Docker Compose CONCATENA las listas `ports` al mergear archivos,
+# no las reemplaza. Un override NO PUEDE quitar un puerto publicado por el base.
+# Sin esta variable, produccion no tendria forma de dejar de exponer PostgreSQL,
+# Redis, MinIO y OpenSearch al host salvo duplicando las definiciones en un
+# archivo paralelo — justo lo que ADR-023 prohibe.
+#
+# En produccion se setea a `127.0.0.1:` (CON los dos puntos finales) y los
+# puertos quedan solo en loopback. El trafico real entra por Caddy, que alcanza
+# a los contenedores por la red de Docker y no necesita puertos en el host.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: deruedas
@@ -66,7 +81,7 @@ services:
       APP_DB_USER: ${APP_DB_USER:-mitutu}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:-mitutu}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${HOST_BIND_ADDR:-}${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
       # Las extensiones y el rol de aplicacion se crean al CREAR el volumen, una
@@ -86,7 +101,7 @@ services:
     # appendonly: la cola de Celery sobrevive a un reinicio del contenedor.
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${HOST_BIND_ADDR:-}${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -113,7 +128,7 @@ services:
       memlock: { soft: -1, hard: -1 }
       nofile: { soft: 65536, hard: 65536 }
     ports:
-      - "${OPENSEARCH_PORT:-9200}:9200"
+      - "${HOST_BIND_ADDR:-}${OPENSEARCH_PORT:-9200}:9200"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
       interval: 10s
@@ -133,8 +148,8 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HTTP_PORT: 8080
     ports:
-      - "${KEYCLOAK_PORT:-8080}:8080"
-      - "${KEYCLOAK_MGMT_PORT:-9010}:9000"   # management: /health/ready
+      - "${HOST_BIND_ADDR:-}${KEYCLOAK_PORT:-8080}:8080"
+      - "${HOST_BIND_ADDR:-}${KEYCLOAK_MGMT_PORT:-9010}:9000"   # management: /health/ready
     volumes:
       # Realm deruedas-dev versionado (ADR-019). C-05 lo va a modificar, y ese
       # cambio se revisa en un diff, no en clicks de una consola web.
@@ -157,8 +172,8 @@ services:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
     ports:
-      - "${MINIO_PORT:-9000}:9000"   # API S3
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"   # consola web
+      - "${HOST_BIND_ADDR:-}${MINIO_PORT:-9000}:9000"   # API S3
+      - "${HOST_BIND_ADDR:-}${MINIO_CONSOLE_PORT:-9001}:9001"   # consola web
     volumes:
       - minio_data:/data
     healthcheck:
@@ -190,8 +205,8 @@ services:
   mailhog:
     image: mailhog/mailhog:latest
     ports:
-      - "${MAILHOG_SMTP_PORT:-1025}:1025"   # SMTP
-      - "${MAILHOG_WEB_PORT:-8025}:8025"   # interfaz web
+      - "${HOST_BIND_ADDR:-}${MAILHOG_SMTP_PORT:-1025}:1025"   # SMTP
+      - "${HOST_BIND_ADDR:-}${MAILHOG_WEB_PORT:-8025}:8025"   # interfaz web
     healthcheck:
       # Imagen minima sin curl: wget de BusyBox es lo que hay.
       test: ["CMD-SHELL", "wget -q -O - http://localhost:8025/ > /dev/null || exit 1"]
@@ -250,7 +265,7 @@ services:
       OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1.0}
       SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "${HOST_BIND_ADDR:-}${BACKEND_PORT:-8000}:8000"
     volumes:
       # Hot reload: el codigo del host tapa al de la imagen.
       - ./backend:/app
@@ -303,7 +318,7 @@ services:
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-cambiame}
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${HOST_BIND_ADDR:-}${FRONTEND_PORT:-3000}:3000"
     volumes:
       - ./frontend-web:/app
       # node_modules vive en la imagen: montar el arbol del host lo taparia y

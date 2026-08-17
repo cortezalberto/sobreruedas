@@ -4,7 +4,7 @@
 - **Fecha**: 2026-08-13
 - **Decisores**: Tech Lead
 - **Resuelve**: `R-3` · `PA-06`
-- **Afecta**: `C-01` (T-004, T-002, T-001), `backend/app/config.py`, `.env.example`, `docker-compose.yml`, `infra/k8s/`
+- **Afecta**: `C-01` (T-004, T-002, T-001), `backend/app/config.py`, `.env.example`, `docker-compose.yml`, ⛔ ~~`infra/k8s/`~~ → el override de producción de Compose ([`ADR-023`](ADR-023-despliegue-sobre-vps-con-docker-compose.md): `infra/k8s/` no se crea)
 - **Naturaleza**: **decisión sin fuente en el corpus.** No es un desvío: ningún documento de los 11 contiene una tabla canónica de variables de entorno. Se registra como ADR porque el Principio 5 de la constitución exige que las decisiones sean explícitas para ser vinculantes.
 - **Enmendado**: 16-ago-2026 — se agrega `DATABASE_MIGRATION_URL` por [`ADR-020`](ADR-020-rol-de-conexion-sin-bypass-de-rls.md). La tabla pasa de 35 a **36 variables** y de 15 a **16 sensibles**. Solo por adición: ninguna variable existente cambia de nombre, de significado ni de clasificación.
 

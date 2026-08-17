@@ -1,10 +1,10 @@
-# Diseño — `rol-de-base-sin-bypass-rls`
+﻿# Diseño — `rol-de-base-sin-bypass-rls`
 
 ## Context
 
 C-02 dejó el mecanismo de aislamiento multi-tenant escrito y probado contra PostgreSQL real: `app/db/session.py` establece `app.current_tenant` como primera sentencia de la transacción, la migración `002` creó `platform_probe` con su política `tenant_isolation` y `FORCE ROW LEVEL SECURITY`, y hay 13 tests de integración que lo ejercitan.
 
-Cinco de esos tests están en **fallo esperado estricto**. No porque el código esté mal, sino porque el rol con el que la aplicación se conecta —`deruedas`, el `POSTGRES_USER` del compose— es superusuario con `rolbypassrls`, y un rol así ignora toda política RLS. Diagnóstico completo y evidencia medida en [`ADR-020`](../../../docs/adr/ADR-020-rol-de-conexion-sin-bypass-de-rls.md).
+Cinco de esos tests están en **fallo esperado estricto**. No porque el código esté mal, sino porque el rol con el que la aplicación se conecta —`deruedas`, el `POSTGRES_USER` del compose— es superusuario con `rolbypassrls`, y un rol así ignora toda política RLS. Diagnóstico completo y evidencia medida en [`ADR-020`](../../../../docs/adr/ADR-020-rol-de-conexion-sin-bypass-de-rls.md).
 
 Motivación en [`proposal.md`](proposal.md). La decisión ya está tomada y aceptada; este documento define **cómo** se implementa.
 

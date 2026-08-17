@@ -1,0 +1,150 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# deRuedas Gestion — publicacion de imagenes (C-01 bloque 9, tareas 9.11 a 9.14)
+#
+# LO QUE ESTE PIPELINE HACE: construir, firmar y publicar imagenes etiquetadas
+# con el SHA del commit. NADA MAS.
+#
+# LO QUE NO HACE — Y NO PUEDE HACER: desplegar.
+#
+# El nombre "deploy-staging" viene de T-008 y del plan de implementacion; se
+# conserva por trazabilidad, pero es enganoso: este workflow NO despliega. El
+# despliegue lo inicia el VPS tirando de la imagen nueva (infra/vps/deploy/).
+#
+# LA FRONTERA DE SEGURIDAD — no negociable
+#
+# ADR-015 puso como control explicito que el pipeline NO reciba credenciales de
+# produccion, y descarto `kubectl apply` desde CI justamente por obligar a
+# guardar un kubeconfig en los secretos. ADR-023 cambio la infraestructura y
+# CONSERVO el control: hoy lo prohibido es la clave SSH del VPS.
+#
+# Un `ssh` desde aca seria mas simple de escribir y regalaria el unico control
+# de seguridad que ADR-015 defendio con argumentos concretos. Por eso el VPS
+# TIRA y el pipeline no EMPUJA.
+#
+# La tarea 9.14 pide verificar que este pipeline no tiene ni necesita
+# credenciales del VPS. Esta implementada como TEST AUTOMATIZADO
+# (backend/tests/unit/test_pipeline_sin_credenciales.py), no como revision
+# manual: un gate que depende de que alguien se acuerde de mirar no es un gate.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Publicar imagenes
+
+on:
+  workflow_run:
+    # Se encadena a CI en vez de dispararse por push: publicar una imagen de un
+    # commit que no paso los tests es exactamente lo que no queremos.
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publicar-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  publicar:
+    # El disparador workflow_run se ejecuta aunque CI haya FALLADO. Sin este
+    # guard, un CI rojo publicaria imagen igual.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write      # publicar en GHCR
+      id-token: write      # firma keyless de cosign (OIDC), sin claves guardadas
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - componente: backend
+            contexto: ./backend
+          - componente: frontend-web
+            contexto: ./frontend-web
+
+    steps:
+      - name: Resolver el commit a publicar
+        id: commit
+        env:
+          SHA_CI: ${{ github.event.workflow_run.head_sha }}
+          SHA_MANUAL: ${{ github.sha }}
+        run: |
+          SHA="${SHA_CI:-$SHA_MANUAL}"
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "corto=${SHA:0:12}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          # El checkout tiene que ser del commit que aprobo CI, no de la punta
+          # de main: entre que CI termino y esto arranca pudo entrar otro push.
+          ref: ${{ steps.commit.outputs.sha }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Autenticarse contra GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # GITHUB_TOKEN, no un PAT. Su alcance muere con el job.
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Construir y publicar ${{ matrix.componente }}
+        id: construir
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.contexto }}
+          push: true
+          # El SHA ES el tag (ADR-023 §Notas). `main` es una comodidad para
+          # inspeccionar a mano; el agente de despliegue usa SIEMPRE el SHA.
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.componente }}:${{ steps.commit.outputs.sha }}
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.componente }}:main
+          # El agente del VPS sondea `:main` y lee esta etiqueta para saber QUE
+          # commit trae la imagen. Sin ella tendria que adivinar el SHA, o el
+          # pipeline tendria que empujarselo — que es justo lo prohibido.
+          labels: |
+            org.opencontainers.image.revision=${{ steps.commit.outputs.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.componente }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.componente }}
+
+      - name: Instalar cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Firmar la imagen
+        env:
+          IMAGEN: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.componente }}
+          DIGEST: ${{ steps.construir.outputs.digest }}
+        run: |
+          # Firma keyless: la identidad la da el OIDC de Actions y no hay ninguna
+          # clave privada que guardar ni rotar. Se firma por DIGEST, no por tag:
+          # un tag se puede mover, un digest no.
+          cosign sign --yes "${IMAGEN}@${DIGEST}"
+
+      - name: Resumen
+        env:
+          IMAGEN: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.componente }}
+          SHA: ${{ steps.commit.outputs.sha }}
+          DIGEST: ${{ steps.construir.outputs.digest }}
+        run: |
+          {
+            echo "### ${{ matrix.componente }}"
+            echo ""
+            echo "- Imagen: \`${IMAGEN}:${SHA}\`"
+            echo "- Digest: \`${DIGEST}\`"
+            echo "- Firmada: si (cosign keyless)"
+            echo ""
+            echo "El pipeline TERMINA aca. El despliegue lo inicia el VPS."
+          } >> "$GITHUB_STEP_SUMMARY"

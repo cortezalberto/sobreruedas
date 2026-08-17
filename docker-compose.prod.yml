@@ -1,0 +1,270 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# deRuedas Gestion — OVERRIDE de produccion (C-01 bloque 9, T-008)
+#
+# ADR-023: VPS unico con Docker Compose. ADR-025: topologia de produccion.
+#
+# Esto es un OVERRIDE de docker-compose.yml, no un archivo paralelo. Todo lo que
+# no se redefine aca se hereda del base, y por eso el base y produccion no se
+# pueden desincronizar (ADR-023 §Notas de implementacion).
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# EL STACK ESTA PARTIDO EN DOS — ADR-025 Decision 1
+#
+# De los diez servicios, CINCO tienen estado y NO se pueden duplicar. Levantar
+# un segundo PostgreSQL sobre el mismo volumen no es azul-verde: es corrupcion
+# de datos.
+#
+#   deruedas-datos    postgres, redis, minio, opensearch, keycloak
+#                     UNO SOLO, permanente. Un despliegue no lo toca.
+#
+#   deruedas-azul     backend, worker, frontend-web
+#   deruedas-verde    idem. DOS, alternandose. Es lo unico que el proxy conmuta.
+#
+# No se levantan con `up` a secas: cada stack nombra SUS servicios. Ver
+# infra/vps/deploy/ y infra/vps/README.md.
+#
+#   docker compose -p deruedas-datos -f docker-compose.yml -f docker-compose.prod.yml \
+#     --env-file /etc/deruedas/produccion.env up -d postgres redis minio opensearch keycloak
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# LA RED ES EXTERNA
+#
+# Los tres proyectos de Compose comparten `deruedas_default`, que se crea UNA
+# VEZ fuera de Compose (runbook 03). Si fuera una red por proyecto, los stacks
+# de aplicacion no alcanzarian a la base.
+#
+# ⚠️ Compose agrega el nombre del servicio como alias de red. Con azul y verde
+# levantados a la vez, `backend` resuelve a LOS DOS por round-robin. Por eso
+# cada stack agrega su propio alias con color (`backend-azul`, `web-verde`) y
+# Caddy apunta SIEMPRE al alias con color. Nada en produccion debe usar el
+# nombre pelado.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # STACK DE DATOS — uno solo, permanente
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  postgres:
+    restart: unless-stopped
+    environment:
+      # Sin defaults de desarrollo: en produccion faltar una variable tiene que
+      # ROMPER, no arrancar con `deruedas/deruedas` (Constitucion Art. 3).
+      POSTGRES_USER: ${POSTGRES_USER:?falta POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?falta POSTGRES_DB}
+      APP_DB_USER: ${APP_DB_USER:?falta APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?falta APP_DB_PASSWORD}
+      # Keycloak vive en la MISMA instancia con base y rol propios (ADR-025
+      # Decision 4): asi queda cubierto por el archivado de WAL de la tarea 9.21
+      # sin trabajo extra. Perder la identidad es tan grave como perder el
+      # negocio.
+      KEYCLOAK_DB_USER: ${KEYCLOAK_DB_USER:?falta KEYCLOAK_DB_USER}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?falta KEYCLOAK_DB_PASSWORD}
+    volumes:
+      # El init del base crea extensiones y el rol de aplicacion (ADR-020).
+      # Este agrega la base de Keycloak. Ambos corren UNA SOLA VEZ, al crear el
+      # volumen.
+      - ./infra/vps/postgres/init:/docker-entrypoint-initdb.d/vps:ro
+    command:
+      # Archivado de WAL continuo hacia fuera del VPS (tarea 9.21). El comando
+      # de archive lo provee pgBackRest, instalado en el host.
+      - "postgres"
+      - "-c"
+      - "wal_level=replica"
+      - "-c"
+      - "archive_mode=on"
+      - "-c"
+      - "archive_command=pgbackrest --stanza=deruedas archive-push %p"
+      - "-c"
+      - "max_wal_senders=3"
+    logging: &logging_produccion
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  redis:
+    restart: unless-stopped
+    logging: *logging_produccion
+
+  opensearch:
+    restart: unless-stopped
+    environment:
+      # ⚠️ El base desactiva el plugin de seguridad, que es correcto SOLO en
+      # local. Aca se revierte: sin esto OpenSearch queda abierto a cualquiera
+      # que alcance la red de Docker.
+      DISABLE_SECURITY_PLUGIN: "false"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_PASSWORD:?falta OPENSEARCH_PASSWORD}
+      OPENSEARCH_JAVA_OPTS: ${OPENSEARCH_JAVA_OPTS:--Xms1g -Xmx1g}
+    healthcheck:
+      # Con seguridad activa el health responde por HTTPS y pide credenciales.
+      test:
+        - "CMD-SHELL"
+        - "curl -fsS -k -u admin:$${OPENSEARCH_PASSWORD} https://localhost:9200/_cluster/health || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    logging: *logging_produccion
+
+  keycloak:
+    restart: unless-stopped
+    # ⚠️ CAMBIO CRITICO — ADR-025 Decision 4.
+    # El base usa `start-dev`, que guarda TODO en una H2 embebida dentro del
+    # contenedor. En local esta bien. En produccion significa que usuarios,
+    # realms y credenciales SE PIERDEN en el primer reinicio del contenedor.
+    # No es un riesgo teorico: pasa la primera vez que se reinicia.
+    command: ["start", "--optimized"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?falta KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?falta KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB_NAME:-keycloak}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER:?falta KEYCLOAK_DB_USER}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?falta KEYCLOAK_DB_PASSWORD}
+      # TLS termina en Caddy. Sin estas dos, Keycloak arma las URLs de los
+      # tokens con el host interno y el flujo OIDC se rompe en el navegador.
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:?falta KEYCLOAK_HOSTNAME}
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      # El realm de produccion se importa UNA VEZ (runbook 03), no en cada
+      # arranque: `start` sin --import-realm.
+      - ./infra/vps/keycloak:/opt/keycloak/data/import:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+    logging: *logging_produccion
+
+  minio:
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?falta S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?falta S3_SECRET_KEY}
+      # Las URLs prefirmadas tienen que ser alcanzables desde el navegador, asi
+      # que se emiten contra el dominio publico que sirve Caddy.
+      MINIO_BROWSER_REDIRECT_URL: ${CDN_BASE_URL:?falta CDN_BASE_URL}
+    logging: *logging_produccion
+
+  minio-init:
+    restart: "no"
+
+  # ── mailhog NO EXISTE en produccion ────────────────────────────────────────
+  # Es un capturador de correo de prueba: se traga todo y no envia nada. Si
+  # llegara a levantar, produccion no mandaria un solo mail — ni recuperacion de
+  # cuenta ni notificaciones — y fallaria EN SILENCIO, que es la peor forma.
+  #
+  # El profile lo deja inerte: los scripts de despliegue nombran sus servicios y
+  # nunca activan este profile. Se declara solo en el override, asi el `docker
+  # compose up -d` de local sigue levantando mailhog como siempre.
+  mailhog:
+    profiles: ["nunca-en-produccion"]
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # STACK DE APLICACION — dos, alternandose (azul / verde)
+  # ═══════════════════════════════════════════════════════════════════════════
+  #
+  # STACK_COLOR lo fija el agente de despliegue. Sin el, el alias de red queda
+  # sin color y Caddy no puede distinguir los stacks: por eso rompe a proposito.
+
+  backend:
+    # Imagen publicada por el pipeline, etiquetada con el SHA del commit
+    # (ADR-023: el SHA ES el tag). `build` desaparece: el VPS no compila.
+    image: ${REGISTRY:?falta REGISTRY}/backend:${IMAGE_TAG:?falta IMAGE_TAG}
+    build: !reset null
+    restart: unless-stopped
+    volumes: !reset []          # sin hot-reload: el codigo viene en la imagen
+    environment:
+      APP_ENV: ${APP_ENV:?falta APP_ENV}
+      API_BASE_URL: ${API_BASE_URL:?falta API_BASE_URL}
+      CORS_ORIGINS: ${CORS_ORIGINS:?falta CORS_ORIGINS}
+      OPENSEARCH_URL: https://opensearch:9200
+      OPENSEARCH_USER: ${OPENSEARCH_USER:?falta OPENSEARCH_USER}
+      OPENSEARCH_PASSWORD: ${OPENSEARCH_PASSWORD:?falta OPENSEARCH_PASSWORD}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:?falta KEYCLOAK_URL}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:?falta KEYCLOAK_REALM}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?falta KEYCLOAK_CLIENT_SECRET}
+      KEYCLOAK_JWKS_URL: ${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
+      TENANT_SECRETS_MASTER_KEY: ${TENANT_SECRETS_MASTER_KEY:?falta TENANT_SECRETS_MASTER_KEY}
+      # mailhog no existe aca: SMTP real (ADR-025, proveedor Resend).
+      SMTP_HOST: ${SMTP_HOST:?falta SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:?falta SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?falta SMTP_PASSWORD}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    healthcheck:
+      # /ready, no /health. /health dice "el proceso vive"; /ready dice "puede
+      # atender trafico", que es lo que decide si este stack merece el upstream.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      default:
+        aliases:
+          - backend-${STACK_COLOR:?falta STACK_COLOR (azul|verde)}
+      observability: {}
+    logging: *logging_produccion
+
+  worker:
+    image: ${REGISTRY:?falta REGISTRY}/backend:${IMAGE_TAG:?falta IMAGE_TAG}
+    build: !reset null
+    restart: unless-stopped
+    volumes: !reset []
+    # ⚠️ CERO REPLICAS POR DEFECTO — ADR-025 Decision 2.
+    #
+    # Durante los 5 minutos de humo el stack nuevo esta levantado pero el proxy
+    # todavia no conmuto. Si su worker se conectara al broker COMPARTIDO,
+    # empezaria a consumir trabajo real de produccion ANTES de ser promovido: un
+    # despliegue malo afectaria los trabajos en segundo plano aunque el upstream
+    # nunca se mueva, y el humo —que solo mira HTTP— no lo veria.
+    #
+    # El agente lo escala a 1 al promover, y baja el del stack saliente.
+    deploy:
+      replicas: ${WORKER_REPLICAS:-0}
+    environment:
+      APP_ENV: ${APP_ENV:?falta APP_ENV}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?falta KEYCLOAK_CLIENT_SECRET}
+      TENANT_SECRETS_MASTER_KEY: ${TENANT_SECRETS_MASTER_KEY:?falta TENANT_SECRETS_MASTER_KEY}
+      SMTP_HOST: ${SMTP_HOST:?falta SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:?falta SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?falta SMTP_PASSWORD}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    networks:
+      default:
+        aliases:
+          - worker-${STACK_COLOR:?falta STACK_COLOR (azul|verde)}
+      observability: {}
+    logging: *logging_produccion
+
+  frontend-web:
+    image: ${REGISTRY:?falta REGISTRY}/frontend-web:${IMAGE_TAG:?falta IMAGE_TAG}
+    build: !reset null
+    restart: unless-stopped
+    volumes: !reset []
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?falta NEXT_PUBLIC_API_BASE_URL}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:?falta NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?falta NEXTAUTH_SECRET}
+    networks:
+      default:
+        aliases:
+          - web-${STACK_COLOR:?falta STACK_COLOR (azul|verde)}
+    logging: *logging_produccion
+
+# ─────────────────────────────────────────────────────────────────────────────
+networks:
+  # Externa: la crea el runbook 03, no Compose. Es lo que permite que los tres
+  # proyectos se vean entre si.
+  default:
+    name: deruedas_default
+    external: true
+  observability:
+    name: deruedas_observability
+    external: true

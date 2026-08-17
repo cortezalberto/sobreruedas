@@ -78,6 +78,12 @@ dev = [
     # concretas todavia: la primera entidad de negocio es `users` y nace en
     # C-05. Ver el bloque 5 de openspec/changes/core-backend-primitives/tasks.md.
     "factory_boy>=3.3,<4",
+    # Para los gates que leen los workflows de CI y las migraciones (C-01 bloque
+    # 9, tareas 9.14 y regla dura 13). Hace falta PARSEAR, no matchear texto: los
+    # propios workflows mencionan `ssh` en comentarios para explicar por que esta
+    # prohibido, y un `grep` se rompería contra el archivo que debe aprobar.
+    "pyyaml>=6.0,<7",
+    "types-PyYAML>=6.0,<7",   # mypy --strict no acepta yaml sin stubs
 ]
 
 [tool.setuptools.packages.find]

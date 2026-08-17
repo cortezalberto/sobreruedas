@@ -1,4 +1,4 @@
-# Tareas — `rol-de-base-sin-bypass-rls`
+﻿# Tareas — `rol-de-base-sin-bypass-rls`
 
 > **Gobernanza CRÍTICA.** Esto es la capa 2 del aislamiento multi-tenant, que el plan de seguridad llama *"el control más crítico del sistema"*. Implementación aprobada por el usuario el 16-ago-2026; el rol de aplicación se llama **`mitutu`**.
 >
@@ -6,7 +6,7 @@
 >
 > **Sin mocks de base** (regla dura 8). Todo lo de acá se probó contra PostgreSQL real.
 >
-> Decisiones en [`design.md`](design.md) · Diagnóstico en [`ADR-020`](../../../docs/adr/ADR-020-rol-de-conexion-sin-bypass-de-rls.md)
+> Decisiones en [`design.md`](design.md) · Diagnóstico en [`ADR-020`](../../../../docs/adr/ADR-020-rol-de-conexion-sin-bypass-de-rls.md)
 
 ## 1. RED — el guardián, antes del arreglo · D-9
 
@@ -45,7 +45,7 @@
 - [x] 4.2 Agregar `DATABASE_MIGRATION_URL` a `DatabaseSettings` como `SecretStr | None`, con la misma validación de forma de DSN que `url`
 - [x] 4.3 Escribir el test de que `alembic/env.py` **muere** si las dos URLs difieren en host, puerto o base, y de que el mensaje no incluye las URLs (llevan credenciales)
 - [x] 4.4 Implementar esa verificación en `env.py`, actualizando su encabezado: la garantía de "migraciones y runtime nunca apuntan a bases distintas" ahora se **verifica** en vez de derivarse de usar una sola variable
-- [x] 4.5 Registrar `DATABASE_MIGRATION_URL` en [`ADR-013`](../../../docs/adr/ADR-013-variables-de-entorno.md): 35 → **36 variables**, 15 → **16 sensibles**, citando `ADR-020`. `tools/check-config-parity.py` da **0 divergencias**
+- [x] 4.5 Registrar `DATABASE_MIGRATION_URL` en [`ADR-013`](../../../../docs/adr/ADR-013-variables-de-entorno.md): 35 → **36 variables**, 15 → **16 sensibles**, citando `ADR-020`. `tools/check-config-parity.py` da **0 divergencias**
 - [x] 4.6 Actualizar `.env.example` con las dos URLs y la nota de por qué son dos
 - [x] 4.7 Verificar el target de migración del `Makefile` — **no requiere cambio**: corre alembic dentro del servicio `backend`, que ya recibe las dos URLs, y `env.py` elige la correcta
 
@@ -88,7 +88,7 @@
 
 - [x] 9.1 Escribir el delta de `platform/tenant-isolation` en `specs/` — 3 requisitos, 9 escenarios. `openspec validate --strict` pasa
 - [x] 9.2 Anotar en el bloque 9 de C-01 que Terraform debe provisionar **los dos roles** (tareas 9.2.b y 9.2.c), y que el guardián es lo que lo va a verificar contra el entorno gestionado
-- [x] 9.3 Verificar cobertura contra [`ADR-014`](../../../docs/adr/ADR-014-umbrales-de-cobertura.md): **98.83 % líneas · 95.45 % ramas**, sin decrecimiento
+- [x] 9.3 Verificar cobertura contra [`ADR-014`](../../../../docs/adr/ADR-014-umbrales-de-cobertura.md): **98.83 % líneas · 95.45 % ramas**, sin decrecimiento
 - [x] 9.4 Verificar `ruff`, `black` y `mypy --strict` — los tres en verde
 - [x] 9.5 Dejar registrado en `ADR-020` que la fricción de mantener `GRANT` por tabla quedó resuelta por default privileges, y no como el ADR la había asumido
 
