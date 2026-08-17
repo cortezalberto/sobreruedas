@@ -105,6 +105,7 @@ Se someten a discusión junto con la propuesta:
 | Fecha | Participante | Postura | Comentario |
 |---|---|---|---|
 | 2026-08-13 | Tech Lead | Propone | Apertura de la discusión |
+| 2026-08-17 | Tech Lead | Aclara | **No hay equipo**: el proyecto lo lleva una sola persona. El paso (c) se registrará como decisión unipersonal, no como mayoría calificada. El plazo de cinco días hábiles **no se acorta** — es período de enfriamiento, y acortarlo exigiría enmendar el Artículo 8. |
 
 ---
 
@@ -116,20 +117,43 @@ Se someten a discusión junto con la propuesta:
 
 ## Dos obstáculos que hay que resolver ANTES del 20, no ese día
 
-### Obstáculo 1 — El registro de discusión tiene una sola entrada, y es la del proponente
+### ✅ Obstáculo 1 — RESUELTO el 17-ago-2026: la decisión es unipersonal
 
-El paso (b) exige *"discusión abierta del equipo durante al menos cinco días hábiles"*. El plazo se cumple el 20-ago. La **apertura** también: el documento existe desde el 13-ago. Pero el registro no tiene ninguna intervención que no sea la del propio proponente.
+El paso (c) pide *"aprobación por **mayoría calificada** del equipo técnico y de producto"*. El registro de discusión tenía una sola entrada, la del propio proponente, y eso planteaba si el paso (c) se iba a firmar sobre una discusión que no ocurrió.
 
-Eso importa por el paso siguiente: el paso (c) pide **"aprobación por mayoría calificada del equipo técnico y de producto"**. Una mayoría calificada necesita un cuerpo que vote.
+**Confirmado por el Tech Lead: hoy no hay equipo. El proyecto lo lleva una sola persona.**
 
-Dos caminos, y hay que elegir uno explícitamente:
+Entonces el paso (c) se registra como **decisión unipersonal del Tech Lead**, con esas palabras. Es perfectamente válido: una enmienda constitucional aprobada por una persona en un proyecto de una persona no tiene ningún defecto. Lo que **no** sería válido es llamarla *"mayoría calificada"* — el Principio 5 es terminante con las decisiones implícitas, y una mayoría ficticia es peor que una decisión unipersonal declarada.
 
-- **Si hay equipo**: que se pronuncie antes del 20-ago y quede asentado en la tabla de arriba. Sin eso, el paso (c) se firma sobre una discusión que no ocurrió.
-- **Si hoy la decisión es efectivamente unipersonal**: registrarlo así, con esas palabras. Una enmienda constitucional aprobada por una persona es perfectamente válida en un proyecto de una persona; lo que no es válido es **llamarla "mayoría calificada"**. El Principio 5 es terminante con las decisiones implícitas, y una mayoría ficticia es peor que una decisión unipersonal declarada.
+#### El plazo de cinco días hábiles se respeta igual
 
-**No lo decido yo.** Es gobernanza del proyecto y le corresponde al usuario.
+Podría argumentarse que discutir con uno mismo no requiere una semana. **No se acorta**, por dos razones:
 
-### Obstáculo 2 — El paso (d) no tiene dónde aterrizar
+1. El plazo no es solo para juntar opiniones: es un **período de enfriamiento** antes de tocar la norma más alta del proyecto. Eso conserva todo su valor con una sola persona — probablemente más, porque no hay nadie que frene un impulso.
+2. Acortarlo sería modificar el Artículo 8, y eso exige su propio procedimiento de enmienda. No se puede saltar el trámite invocando el trámite.
+
+**`E-001` cierra el jueves 20-ago, como estaba previsto.**
+
+#### ⚠️ Esto excede a `E-001` — el Artículo 8 tiene un supuesto que no se cumple
+
+El Artículo 8 asume un equipo técnico y de producto que pueda formar mayoría. **Ese cuerpo no existe hoy**, y no va a existir para la próxima enmienda tampoco.
+
+No se arregla acá: cada enmienda futura va a chocar con lo mismo, y va a resolverse igual de a una, o alguien va a terminar escribiendo "mayoría calificada" sin pensarlo. Corresponde una **enmienda al propio Artículo 8** que contemple el caso de decisor único —y qué pasa cuando el equipo crece—, tramitada con su propio procedimiento. Queda registrado como trabajo pendiente, no como defecto de esta enmienda.
+
+### ✅ Obstáculo 2 — RESUELTO el 17-ago-2026: opción A
+
+**Decidido por el Tech Lead: la enmienda va como apéndice al final de `docs/sdd/deRuedas-constitucion.md`**, que es lo que el Artículo 8 pide literalmente.
+
+Con eso, la inmutabilidad de `docs/sdd/` admite **una excepción, y una sola**: el historial de enmiendas de la constitución, en modo *append-only*, tramitado por el Artículo 8. Ningún otro documento del corpus se toca, y de la constitución no se reescribe ni una palabra — solo se agrega al final.
+
+> ⚠️ **Esto NO se ejecuta todavía.** `E-001` está en el paso (b) hasta el 20-ago. Lo decidido es **dónde** va a escribirse, no que ya se escribió. El texto está listo más abajo y se pega el día del cierre, después del paso (c).
+
+Queda pendiente reflejar la excepción en la regla de inmutabilidad de `CLAUDE.md`/`AGENTS.md`, para que la próxima vez no vuelva a leerse como una contradicción. Va junto con el cierre del jueves.
+
+<details>
+<summary>Razonamiento original (las dos opciones que se evaluaron)</summary>
+
+### El planteo
 
 El Artículo 8 cierra diciendo:
 
@@ -143,6 +167,8 @@ Pero `CLAUDE.md` declara `docs/sdd/` **corpus fuente inmutable**. Las dos reglas
 | **B — Archivo aparte** (`docs/sdd/deRuedas-constitucion-enmiendas.md`) con puntero desde `E-001` | Preserva el corpus intacto. El historial queda igual de rastreable. | El Artículo 8 dice *"al final del documento"*, y esto no lo es. Requiere asumir el desvío. |
 
 **Recomendación: opción A.** El Artículo 8 es N0 y la inmutabilidad de `docs/sdd/` es una convención operativa que no está en la jerarquía de `ADR-000`. Además el propósito de la inmutabilidad —que nada se reescriba en silencio— lo cumple igual un apéndice append-only, que es exactamente la forma que el artículo pide. Si se elige **B**, hay que registrarlo como desvío explícito.
+
+</details>
 
 ---
 
@@ -158,7 +184,10 @@ Pero `CLAUDE.md` declara `docs/sdd/` **corpus fuente inmutable**. Las dos reglas
 - **Fecha de registro**: [FECHA]
 - **Propuesta**: E-001, abierta el 13-ago-2026
 - **Discusión**: del 13 al 20-ago-2026 (cinco días hábiles, Artículo 8 paso b)
-- **Aprobación**: [mayoría calificada del equipo técnico y de producto | decisión unipersonal del Tech Lead — completar según lo que corresponda]
+- **Aprobación**: decisión unipersonal del Tech Lead. El Artículo 8 prevé
+  "mayoría calificada del equipo técnico y de producto"; ese cuerpo no existe
+  hoy — el proyecto lo lleva una sola persona. Se registra lo que efectivamente
+  ocurrió, no la forma prevista para un equipo que no hay.
 - **Consulta a Dirección**: no requerida. La enmienda no afecta principios
   fundamentales: agrega una definición a la Parte IV sin modificar ninguna existente.
 - **Motivo**: el corpus define once endpoints de administración de plataforma para un
@@ -252,8 +281,10 @@ Texto completo de la enmienda: docs/adr/E-001-enmienda-glosario-super-admin.md
 
 ## Checklist del 20-ago
 
-- [ ] Resolver el **obstáculo 1**: que el equipo se pronuncie, o registrar que la decisión es unipersonal
-- [ ] Resolver el **obstáculo 2**: elegir opción A o B para dónde vive el historial
+- [x] ~~Resolver el **obstáculo 1**~~ — ✅ 17-ago-2026: decisión unipersonal del Tech Lead
+- [x] ~~Resolver el **obstáculo 2**~~ — ✅ 17-ago-2026: **opción A**, apéndice al final de la constitución
+- [ ] Registrar en `CLAUDE.md`/`AGENTS.md` la **única excepción** a la inmutabilidad de `docs/sdd/`: el historial de enmiendas de la constitución, append-only, por el Artículo 8
+- [ ] Anotar como pendiente la **enmienda al Artículo 8** para contemplar el decisor único (no es de este trámite, pero se descubrió acá)
 - [ ] Paso (c) — aprobación, asentada en la tabla de discusión
 - [ ] Paso (d) — pegar el texto de la enmienda con la fecha y el decisor reales
 - [ ] Paso (e) — enviar la comunicación

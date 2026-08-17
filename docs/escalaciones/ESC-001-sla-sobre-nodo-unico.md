@@ -3,7 +3,8 @@
 - **Estado**: 🔴 **ABIERTA** — requiere decisión
 - **Fecha**: 2026-08-17
 - **Eleva**: Tech Lead
-- **Decide**: **Dirección + SRE** (decisor registrado para el dominio de disponibilidad)
+- **Decide**: **Dirección + SRE** — el decisor registrado para el dominio de disponibilidad (`PA-09`)
+  > ⚠️ **Aclarado el 17-ago-2026: hoy Dirección, SRE y Tech Lead son la misma persona.** Eso **no vacía la escalación, le cambia el sentido**. Deja de ser "pasarle el problema a otro" y pasa a ser: *esta decisión no se toma con el sombrero de Tech Lead*. No es una elección técnica que se resuelve eligiendo bien la infraestructura — es una decisión de negocio sobre qué se promete por contrato y con qué exposición. Que la tome la misma persona no la convierte en técnica, y por eso queda escrita y fechada acá en vez de resolverse implícitamente al elegir un servidor.
 - **Origen**: [`ADR-023`](../adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) §Conflicto declarado con N3 — trabajo derivado 4
 - **Registrada como**: `PA-30` en [`knowledge-base/10_preguntas_abiertas.md`](../../knowledge-base/10_preguntas_abiertas.md)
 - **Bloquea**: nada en el corto plazo. **No frena la implementación.** Frena la *venta* de lo que no se puede cumplir.
