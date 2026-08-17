@@ -4,15 +4,25 @@
 
 ## SLAs públicos por plan
 
-🔴 **Contradicción bloqueante con la spec técnica** — ver `IN-31`.
+> ⚠️ **Ajustados a la baja el 17-ago-2026** por decisión de Dirección + SRE, cerrando [`ESC-001`](../docs/escalaciones/ESC-001-sla-sobre-nodo-unico.md) / `PA-30`. La infraestructura elegida por [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) —**un VPS único, sin redundancia de ninguna clase**— no sostiene los números anteriores. Se baja lo publicado en vez de prometer lo que no se puede cumplir.
 
 | Plan | Disponibilidad | Downtime aceptable/mes | Crédito |
 |---|---|---|---|
 | Starter | **99.0 %** | 7 h 12 min | 5 % de la suscripción |
 | Pro | **99.5 %** | 3 h 36 min | 10 % de la suscripción |
-| Enterprise | **99.9 %** | 43 min | 25 % de la suscripción |
+| Enterprise | **99.5 %** ⬇️ *(era 99.9 %)* | 3 h 36 min | 25 % de la suscripción |
 
-La `spec-tecnica.md` §6.2 y §9.7 dicen en cambio **99.9 % para Starter y Pro, 99.95 % para Enterprise** — cifras que además son **superiores al SLO interno** de 99.7 %, lo cual es matemáticamente insostenible.
+**Enterprise deja de diferenciarse por disponibilidad.** Es una consecuencia asumida, no un descuido: 99.9 % son **43 minutos al mes**, y sobre un nodo único una sola ventana de mantenimiento del proveedor consume el presupuesto entero. Enterprise sigue diferenciándose por lo que sí se puede cumplir — usuarios y stock ilimitados, multi-sucursal, SSO, CSM dedicado, soporte 24/7 para críticos, retención de auditoría.
+
+El crédito de Enterprise **se mantiene en 25 %**: es un plan más caro y el incumplimiento le cuesta más al cliente. Lo que se ajustó es la promesa, no la penalidad.
+
+> **Se sube de nuevo cuando haya redundancia**, no antes. Requiere segundo nodo y réplica de PostgreSQL — ver las consecuencias asumidas de `ADR-023`.
+
+### Contexto histórico de esta cifra
+
+`IN-31` registraba una contradicción bloqueante: la `spec-tecnica.md` §6.2 y §9.7 decían **99.9 % para Starter y Pro, 99.95 % para Enterprise** — cifras además **superiores al SLO interno** de 99.7 %, lo cual es matemáticamente insostenible. [`ADR-000`](../docs/adr/ADR-000-precedencia-documental.md) la resolvió a favor de `plan-sre` (**99.0 / 99.5 / 99.9**) por competencia de dominio, cerrando `PA-09`.
+
+Esta rebaja **no contradice a `ADR-000`**: la toma el mismo decisor que `PA-09` tenía registrado —Dirección + SRE—, ejerciendo su autoridad sobre su propio dominio. No es un ADR pisando a N3; es N3 actualizándose a sí mismo ante un hecho nuevo, que es la infraestructura que `ADR-023` eligió.
 
 ## SLOs internos
 
@@ -163,7 +173,7 @@ Los runbooks se mantienen vivos: se actualizan cada vez que se aprende algo de u
 | API backend | 15 min | 0 |
 | Frontend Next.js | 5 min | 0 |
 | **PostgreSQL primary** | **1 hora** | **5 min** |
-| PostgreSQL replicas | 30 min | 5 min |
+| ~~PostgreSQL replicas~~ ⛔ | ~~30 min~~ | ~~5 min~~ |
 | Redis | 10 min | 1 min (AOF) |
 | OpenSearch | 4 horas | Reconstruible |
 | Object storage | 1 hora | 0 |
@@ -171,9 +181,19 @@ Los runbooks se mantienen vivos: se actualizan cada vez que se aprende algo de u
 | Eventos Redis Streams | 1 hora | 5 min |
 | `audit_logs` | 4 horas | 0 |
 | Pipeline CI/CD | 8 horas | — |
-| **Sistema completo (DR en región alternativa)** | **4 horas** | **1 hora** |
+| ~~**Sistema completo (DR en región alternativa)**~~ ⛔ | ~~4 horas~~ | ~~1 hora~~ |
 
-Esta tabla es **idéntica** en el plan de SRE y en el plan de seguridad ✅. ⚠️ Pero la spec técnica declara *"RTO de una hora ante caída total"* — ver `IN-34`.
+> ⛔ **Dos filas retiradas el 17-ago-2026**, junto con la rebaja del SLA de Enterprise (`ESC-001` / `PA-30`).
+>
+> **`PostgreSQL replicas`**: presupone una réplica, y sobre un nodo único no hay ninguna. Vuelve el día que haya segundo nodo.
+>
+> **`Sistema completo (DR en región alternativa)`**: acá no se ajusta el número, **se elimina la promesa**.
+>
+> No existe región alternativa y no hay plan de que exista — [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) eligió un VPS único. Un RTO de 4 horas hacia un lugar que no existe no es un objetivo ambicioso, es una promesa vacía, y dejarla escrita era el riesgo contractual más grande de los dos.
+>
+> **Lo que sí queda comprometido y es alcanzable**: `PostgreSQL primary` con RTO 1 h y RPO 5 min, sostenido por el archivado de WAL **fuera del proveedor** (Backblaze B2, tarea 9.21) y por el **ejercicio de restauración fechado** de la tarea 9.22. Sin esa restauración probada, ese RPO también sería una intención — por eso la tarea existe y no se da por cumplida al escribir el procedimiento.
+
+Esta tabla era **idéntica** en el plan de SRE y en el plan de seguridad ✅. ⚠️ La spec técnica declara *"RTO de una hora ante caída total"* — ver `IN-34`.
 
 ### Estrategia de backup
 
@@ -275,3 +295,4 @@ Failover de PostgreSQL orquestado con **Patroni** o equivalente.
 
 - **Ola 2**: chaos testing mensual.
 - **Ola 3**: SLO de API elevado a **99.9 %** para Pro y Enterprise · **multi-región activo** con RTO < 30 min.
+  > ⚠️ **Incompatible por diseño con la infraestructura vigente.** `ADR-023` eligió un nodo único, y multi-región activo no es una mejora incremental sobre eso: es otra arquitectura. Este objetivo **no se retira** —es de Ola 3 y queda lejos— pero deja de ser una progresión natural y pasa a ser una **migración con su propia decisión y su propio costo**. Es la contracara de haber bajado el SLA hoy: subirlo de nuevo tiene un precio que ahora está a la vista en vez de escondido en un roadmap.

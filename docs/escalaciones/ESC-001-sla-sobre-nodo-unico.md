@@ -1,6 +1,11 @@
 # ESC-001 — La infraestructura elegida no sostiene los SLA publicados
 
-- **Estado**: 🔴 **ABIERTA** — requiere decisión
+- **Estado**: ✅ **CERRADA** el 2026-08-17 — **opción A: se ajusta lo publicado a lo que la infraestructura sostiene**
+  > **Qué se decidió**: Enterprise baja de **99.9 % a 99.5 %**, igualando a Pro. Se **retira** el compromiso de *"DR en región alternativa"* (RTO 4 h / RPO 1 h) y la fila de *PostgreSQL replicas* (RTO 30 min). Los créditos por incumplimiento **no cambian** (5 / 10 / 25 %): se ajustó la promesa, no la penalidad.
+  >
+  > **Por qué esta y no las otras dos**: hoy no hay ni un cliente Enterprise. Bajar el número cuesta un argumento de venta que todavía no se usó; el segundo servidor cuesta plata todos los meses desde ya. Se sube de nuevo cuando haya redundancia y alguien dispuesto a pagarla.
+  >
+  > **Consecuencia asumida**: Enterprise deja de diferenciarse por disponibilidad. Se diferencia por lo que sí se puede cumplir — ilimitados, multi-sucursal, SSO, API completa, CSM, soporte 24/7, 24 meses de auditoría.
 - **Fecha**: 2026-08-17
 - **Eleva**: Tech Lead
 - **Decide**: **Dirección + SRE** — el decisor registrado para el dominio de disponibilidad (`PA-09`)
@@ -80,3 +85,15 @@ Un segundo VPS y una réplica de PostgreSQL. Enterprise se sigue vendiendo como 
 | Fecha | Participante | Postura | Comentario |
 |---|---|---|---|
 | 2026-08-17 | Tech Lead | Eleva | Apertura de la escalación, derivada de `ADR-023` |
+| 2026-08-17 | Dirección + SRE | **Decide** | **Opción A.** Enterprise a 99.5 %; se retiran el DR en región alternativa y la réplica de PostgreSQL. Créditos sin cambios. Se revisa cuando exista redundancia. |
+
+## Barrido de lo derivado
+
+| Archivo | Qué cambió |
+|---|---|
+| [`knowledge-base/13_observabilidad_y_sre.md`](../../knowledge-base/13_observabilidad_y_sre.md) | Tabla de SLAs y tabla de RTO/RPO (dos filas retiradas) |
+| [`knowledge-base/14_pricing_y_gtm.md`](../../knowledge-base/14_pricing_y_gtm.md) | Fila *SLA contractual* de la Versión A |
+| [`knowledge-base/10_preguntas_abiertas.md`](../../knowledge-base/10_preguntas_abiertas.md) | `PA-30` cerrada |
+| [`CHANGES.md`](../../CHANGES.md) · [`tasks.md` de C-01](../../openspec/changes/foundation-setup/tasks.md) | El conflicto deja de estar abierto |
+
+**Lo que NO cambia**: `docs/sdd/` es corpus fuente inmutable y no se toca. Los planes de SRE y de GTM conservan sus cifras originales; lo vigente es lo derivado, y esta escalación es el registro de por qué difieren.

@@ -26,11 +26,17 @@ No existe un pricing canónico en el corpus. Lo que sigue documenta **ambas vers
 | API pública | No | Read-only | Completa |
 | SSO | No | No | Sí |
 | DPA | Estándar | Estándar | Personalizable |
-| **SLA contractual** | **99.0 %** | **99.5 %** | **99.9 %** |
+| **SLA contractual** | **99.0 %** | **99.5 %** | **99.5 %** ⬇️ |
 | Soporte | Email, día hábil | Email + WhatsApp, horas hábiles | Dedicado, 24/7 para críticos |
 | Onboarding | **Self-service** ⚠️ | 1 sesión guiada (60 min) | Plan completo (kickoff 90 min + 3 sesiones + CSM) |
 | Audit logs | 30 días | 12 meses | 24 meses ⚠️ |
 | Exports | Sí | Sí | Sí + API |
+
+> ⬇️ **El SLA de Enterprise bajó de 99.9 % a 99.5 % el 17-ago-2026** por decisión de Dirección + SRE, cerrando [`ESC-001`](../docs/escalaciones/ESC-001-sla-sobre-nodo-unico.md) / `PA-30`. La infraestructura de [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) —un VPS único sin redundancia— no sostiene 43 minutos de caída al mes. **También se retiró la promesa de recuperación en región alternativa**, que directamente no existía.
+>
+> **Consecuencia comercial asumida**: Enterprise y Pro tienen ahora **el mismo SLA**, así que la disponibilidad deja de ser diferencial de Enterprise. Se diferencia por lo que sí se puede cumplir: usuarios y stock ilimitados, multi-sucursal, SSO, API completa, CSM dedicado, soporte 24/7 para críticos y 24 meses de auditoría. Los créditos por incumplimiento **no** cambian (5 / 10 / 25 %).
+>
+> Se sube de nuevo cuando haya segundo nodo y réplica, no antes. Ver el detalle en [`13_observabilidad_y_sre.md`](13_observabilidad_y_sre.md) §SLAs públicos por plan.
 
 - Excedente de WhatsApp: **USD 0,012 por mensaje**.
 - **Trial: 14 días**, con todas las features de Pro, **sin tarjeta**. Los datos de un trial no convertido se eliminan a los 30 días, con aviso previo.

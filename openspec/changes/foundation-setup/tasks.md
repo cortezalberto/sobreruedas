@@ -529,7 +529,9 @@ Cubre la capability `platform/delivery-pipeline`.
 
 > **Deriva silenciosa — pérdida asumida, no olvidada.** La tarea 9.15 anterior verificaba que ArgoCD detectara y reportara un cambio manual sobre el cluster. Sin GitOps esa detección **no existe**, y un cambio hecho a mano sobre el VPS no lo denuncia nadie. `ADR-023` lo registra entre sus contras asumidas. No se reemplaza por una tarea equivalente porque no la hay sin reintroducir la pieza que se descartó.
 
-> **Conflicto abierto con el plan de SRE.** Este bloque despliega sobre un nodo único, que no puede sostener el *"DR en región alternativa"* (RTO 4 h) ni el 99.9 % de Enterprise. Escalado a **Dirección + SRE** el 17-ago-2026 por [`ESC-001`](../../../docs/escalaciones/ESC-001-sla-sobre-nodo-unico.md), registrado como `PA-30`. **No se resuelve en este change** y **no lo bloquea**: las dos tareas que sí protegen (9.21 archivado de WAL fuera del VPS, 9.22 restauración probada y fechada) están dentro del alcance. Lo que espera decisión es el compromiso comercial, no el despliegue.
+> ✅ **Conflicto con el plan de SRE — CERRADO el 17-ago-2026.** Este bloque despliega sobre un nodo único, que no podía sostener el *"DR en región alternativa"* (RTO 4 h) ni el 99.9 % de Enterprise. [`ESC-001`](../../../docs/escalaciones/ESC-001-sla-sobre-nodo-unico.md) / `PA-30` lo llevó a **Dirección + SRE**, que decidió **ajustar lo publicado**: Enterprise pasa a **99.5 %** y se retiran el DR en región alternativa y la réplica de PostgreSQL.
+>
+> Para este bloque eso significa que **las dos tareas que sostienen lo que quedó prometido son ahora las que más importan**: **9.21** (archivado de WAL fuera del proveedor) y **9.22** (restauración probada y fechada). El compromiso vigente de `PostgreSQL primary` —RTO 1 h, RPO 5 min— descansa entero sobre ellas. Sin la restauración ejecutada y fechada, ese RPO vuelve a ser una intención.
 
 ## 10. Verificación de cierre
 

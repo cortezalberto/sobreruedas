@@ -135,7 +135,7 @@ Ver el detalle completo en [12_seguridad_y_compliance.md](12_seguridad_y_complia
 
 **Vigente (`ADR-023`)**: **VPS único en Hostinger con Docker Compose**, reverse proxy con TLS automático, y servicios de datos autoalojados. Sin Terraform, sin Kubernetes, sin ArgoCD y sin nube gestionada.
 
-⚠️ El riesgo de *single-region* **se agravó y cambió de naturaleza**: ya no es una región sin réplica, es un **nodo único**. Los compromisos de *"DR en región alternativa"* (RTO 4 h) y el 99.9 % de Enterprise quedan sin sustento. Escalado a **Dirección + SRE** por `ADR-023` §Conflicto declarado con N3.
+⚠️ El riesgo de *single-region* **se agravó y cambió de naturaleza**: ya no es una región sin réplica, es un **nodo único**. Los compromisos de *"DR en región alternativa"* (RTO 4 h) y el 99.9 % de Enterprise quedaban sin sustento. ✅ **Resuelto el 17-ago-2026** por [`ESC-001`](../docs/escalaciones/ESC-001-sla-sobre-nodo-unico.md) / `PA-30`: Dirección + SRE decidió **ajustar lo publicado** en vez de dotar de redundancia — Enterprise baja a **99.5 %** y el DR en región alternativa **se retira**. El riesgo técnico no desaparece; lo que desaparece es la promesa que no lo cubría.
 - **Ambientes**: Local (Docker Compose, todo el entorno en < 3 min) · CI (efímeros, se descartan al finalizar) · Staging (persistente, datos sintéticos, espejo de producción) · Producción (solo accesible vía pipeline).
 - **Autoscaling**: API backend con HPA por CPU + RPS custom, **min 2 / max 10** réplicas. Workers con HPA por lag de cola, min 1 por consumer group. PostgreSQL y Redis con scaling manual planificado.
 - **Failover de PostgreSQL**: Patroni o equivalente.

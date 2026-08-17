@@ -95,6 +95,14 @@ Lo que corresponde hacer acá es dejar registrado que **la infraestructura elegi
 
 Hasta que ese decisor se pronuncie, **el conflicto queda abierto y visible**. Este ADR no lo cierra ni lo esconde.
 
+> ✅ **El decisor se pronunció el 17-ago-2026.** [`ESC-001`](../escalaciones/ESC-001-sla-sobre-nodo-unico.md) / `PA-30`: Dirección + SRE eligió **ajustar lo publicado** —la primera de las dos alternativas que este ADR planteaba— en vez de dotar de redundancia.
+>
+> **Enterprise baja de 99.9 % a 99.5 %**, igualando a Pro, y se **retiran** el compromiso de *DR en región alternativa* y la fila de *PostgreSQL replicas*. Los créditos por incumplimiento no cambian: se ajustó la promesa, no la penalidad.
+>
+> La tabla de arriba se conserva **tal como se escribió**, porque describe el conflicto que existía al tomar esta decisión de infraestructura. Lo vigente está en [`knowledge-base/13`](../../knowledge-base/13_observabilidad_y_sre.md) §SLAs públicos por plan.
+>
+> Queda una consecuencia que este ADR sí puede afirmar: **las tareas 9.21 y 9.22 del bloque 9 dejaron de ser higiene y pasaron a ser el sustento del único compromiso de recuperación que sobrevive** — `PostgreSQL primary`, RTO 1 h y RPO 5 min. Sin archivado de WAL fuera del proveedor y sin una restauración probada y fechada, ese número tampoco tendría con qué respaldarse.
+
 ## Consecuencias
 
 ### A favor
