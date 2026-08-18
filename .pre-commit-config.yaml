@@ -1,0 +1,70 @@
+# Hooks de pre-commit — ADR-027
+#
+# ESTO ES CONVENIENCIA, NO UN CONTROL. La distinción importa.
+#
+# Un hook local se saltea con `git commit --no-verify` y no existe en la máquina
+# de quien clona el repositorio por primera vez. Nada de lo que corre acá puede
+# ser la única barrera de nada: **el control es CI**, y todo lo de este archivo
+# se repite allá.
+#
+# Lo que sí aporta es el momento. Que `gitleaks` agarre un secreto ANTES del
+# commit evita reescribir la historia; agarrarlo en CI significa que el secreto
+# ya está en un objeto de git y hay que rotarlo igual aunque nadie lo haya visto.
+#
+# Hasta el 17-ago-2026 este archivo NO EXISTÍA, y tres documentos afirmaban que
+# sí — la regla dura 4, `knowledge-base/12` §88 y un comentario del propio
+# `ci.yml`. No era un agujero de seguridad, porque CI tenía el control de
+# verdad; era un documento que describía mal el sistema. Ver `ADR-027` §2.
+#
+# Instalación (una vez por clon):
+#     pip install pre-commit && pre-commit install
+
+repos:
+  # ── Secretos ───────────────────────────────────────────────────────────────
+  # Versión FIJADA, la misma que `ci.yml`. Un escáner en `latest` hace que el
+  # mismo commit pase hoy y falle mañana, y peor: que el hook local y CI midan
+  # cosas distintas, que es cómo se pierde la confianza en el hook.
+  #
+  # ⚠️ Este hook mira lo que se está por commitear. `ci.yml` escanea la HISTORIA
+  # COMPLETA y además el texto extraído de los `.docx`. No son el mismo control
+  # y este no reemplaza a aquel.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks
+
+  # ── Python: lo mismo que corre en el job `lint-backend` ────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  - repo: https://github.com/psf/black
+    rev: 26.3.1
+    hooks:
+      - id: black
+        files: ^backend/
+
+  # ── Higiene de archivos ────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+        # Los workflows de GitHub usan `on:`, que el parser de YAML 1.1
+        # interpreta como booleano. `check-yaml` no se queja, pero conviene
+        # tenerlo dicho por si alguien agrega un hook más estricto.
+        args: [--allow-multiple-documents]
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+
+# `mypy` NO está acá, a propósito. Necesita el entorno del proyecto instalado
+# para resolver los tipos de terceros, y un hook que falla por falta de entorno
+# —en vez de por un error real— es el que la gente desactiva primero. Corre en
+# CI, que sí tiene el entorno.

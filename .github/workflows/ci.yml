@@ -67,11 +67,22 @@ jobs:
       - name: black --check
         run: black --check app tests alembic
 
-      # `mypy app`, no `mypy .`: el strict de la regla dura 6 aplica al codigo
-      # de aplicacion. Las migraciones de alembic son generadas y su plantilla
-      # no tipa.
+      # `mypy .`, no `mypy app`. La regla dura 6 dice "TODO codigo Python pasa
+      # ruff y mypy --strict", y hasta el 17-ago-2026 este gate cubria solo
+      # `app/`: sobre el proyecto entero habia 28 errores que nadie veia.
+      #
+      # Que los tests queden fuera del tipado no es un detalle de comodidad. De
+      # esos 28, dos eran defectos de verdad y ninguna revision los habia visto:
+      #
+      #   - `assert sesion_de_plataforma is not sesion_de_tenant` — dos objetos
+      #     funcion distintos NUNCA son el mismo, asi que la asercion era
+      #     verdadera siempre y no probaba nada (`comparison-overlap`).
+      #   - `consulta_del_tenant() -> object` cuando devuelve un `Select`, que
+      #     dejaba sin verificar seis llamadas a `paginar`.
+      #
+      # Un test mal tipado es un test que puede estar probando otra cosa.
       - name: mypy --strict
-        run: mypy app
+        run: mypy .
 
   # ── 2. Calidad del frontend ────────────────────────────────────────────────
   lint-frontend:
@@ -354,9 +365,18 @@ jobs:
           cache-dependency-path: frontend-web/package-lock.json
 
       # pip-audit no expone la severidad de cada hallazgo, asi que bloquea ante
-      # CUALQUIER vulnerabilidad. Es MAS ESTRICTO que el "alta o critica" de
-      # D-6, y se deja asi a proposito: filtrar por severidad que la herramienta
-      # no reporta obligaria a mantener una lista a mano.
+      # CUALQUIER vulnerabilidad -- MAS ESTRICTO que el "alta o critica" que
+      # manda la constitucion, que fija un piso y no un techo.
+      #
+      # Esto NO es una decision de este comentario: la fija el requisito
+      # "Seguridad de dependencias y secretos" de platform/delivery-pipeline, y
+      # la sostiene tests/unit/test_auditoria_de_dependencias.py. Hasta el
+      # 17-ago-2026 vivia solo aca, y por el Principio 5 una decision implicita
+      # no es vinculante.
+      #
+      # NO agregar --ignore-vuln, ni "|| true", ni continue-on-error. El test
+      # los rechaza, y con razon: sin severidad expuesta, perdonar un hallazgo
+      # es perdonar a ciegas, y puede ser una critica.
       - name: pip-audit
         working-directory: backend
         run: |
@@ -365,14 +385,23 @@ jobs:
           pip-audit --desc
 
       # `--audit-level=high` sí distingue severidad: bloquea en alta y critica,
-      # informa el resto. Esto es literalmente lo que pide D-6.
+      # informa el resto. Es el piso de la constitucion, exacto -- y por eso
+      # bajarlo a `critical` deja el repositorio POR DEBAJO del piso. El test
+      # de auditoria tambien mira esto.
       - name: npm audit
         working-directory: frontend-web
         run: npm audit --audit-level=high
 
-      # gitleaks corre tambien en pre-commit (regla dura 4). Se repite aca
-      # porque un hook local es una cortesia: se saltea con --no-verify y no
-      # existe en la maquina de quien clona por primera vez.
+      # gitleaks corre tambien en pre-commit, y ESTE es el control: un hook
+      # local es una cortesia — se saltea con --no-verify y no existe en la
+      # maquina de quien clona por primera vez.
+      #
+      # Y no son el mismo alcance. El hook mira lo que se esta por commitear;
+      # aca se escanea la HISTORIA COMPLETA mas el texto extraido de los .docx.
+      #
+      # Hasta el 17-ago-2026 este comentario mentia a medias: afirmaba el hook
+      # de pre-commit cuando `.pre-commit-config.yaml` NO EXISTIA. Lo creo
+      # ADR-027, que ademas descarto `trufflehog` con motivo escrito.
       #
       # Version fijada, no `latest`: un escaner que cambia de reglas solo hace
       # que el mismo commit pase hoy y falle mañana sin que nadie toque nada.

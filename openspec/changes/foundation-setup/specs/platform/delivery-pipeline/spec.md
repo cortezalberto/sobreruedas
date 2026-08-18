@@ -63,6 +63,10 @@ El tipado MUST verificarse en modo estricto en ambos. Un error de tipos MUST tra
 
 El pipeline SHALL auditar las dependencias de backend y frontend en cada cambio, y MUST bloquear ante vulnerabilidades de severidad alta o crítica.
 
+Ese umbral es un **piso, no un techo**: un auditor MAY bloquear también por debajo de él. Lo que ningún auditor puede es quedar por encima — ni con una excepción puntual por hallazgo, ni neutralizando su código de salida, ni declarándose no bloqueante.
+
+Cuando un auditor no expone la severidad de sus hallazgos, MUST bloquear ante cualquiera. La alternativa —mantener a mano una lista de excepciones— convierte cada build rojo en una invitación a agregar una entrada, y no hay forma de saber si esa entrada tapaba una crítica.
+
 El pipeline MUST además escanear el cambio en busca de secretos filtrados y bloquear ante **cualquier** detección, sin umbral de severidad.
 
 #### Scenario: Dependencia con vulnerabilidad crítica
@@ -76,10 +80,17 @@ El pipeline MUST además escanear el cambio en busca de secretos filtrados y blo
 - **THEN** el pipeline falla
 - **AND** el cambio no puede integrarse
 
-#### Scenario: Vulnerabilidad de severidad baja
+#### Scenario: Severidad por debajo del piso
 
-- **WHEN** la auditoría solo encuentra vulnerabilidades de severidad baja o media
+- **WHEN** un auditor expone la severidad de sus hallazgos y solo encuentra vulnerabilidades de severidad baja o media
 - **THEN** el pipeline las reporta sin bloquear
+- **WHEN** un auditor no expone la severidad de sus hallazgos
+- **THEN** el pipeline bloquea ante cualquier hallazgo
+
+#### Scenario: Auditor que afloja por debajo del piso
+
+- **WHEN** un auditor de dependencias se configura con una excepción por hallazgo, con su código de salida neutralizado, o como no bloqueante
+- **THEN** la verificación del pipeline falla e identifica el auditor aflojado
 
 ### Requirement: Ejecución del pipeline en cada propuesta de cambio
 

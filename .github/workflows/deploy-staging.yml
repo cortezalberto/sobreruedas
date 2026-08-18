@@ -120,6 +120,47 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.componente }}
           cache-to: type=gha,mode=max,scope=${{ matrix.componente }}
 
+      # ── trivy va ACA, entre el build y la firma (ADR-027) ──────────────────
+      #
+      # El orden no es preferencia. Firmar una imagen sin escanearla es PEOR que
+      # no firmarla: la firma acredita procedencia, y quien la verifica lee eso
+      # como "esta imagen fue revisada". Escanear despues de firmar no arregla
+      # nada — la imagen firmada ya existe y ya es descargable.
+      #
+      # Y este control no se solapa con `pip-audit` ni con `npm audit` del job
+      # `security`: aquellos miran NUESTRAS dependencias declaradas. Trivy mira
+      # el sistema operativo de la imagen base y todo lo que el Dockerfile
+      # instale por fuera del gestor de paquetes del lenguaje. Era el unico
+      # hueco de los cinco de ADR-027 que llegaba a produccion.
+      #
+      # Se escanea por DIGEST y no por tag, igual que la firma: un tag se puede
+      # mover entre el escaneo y el despliegue, un digest no.
+      - name: Escanear la imagen — trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.componente }}@${{ steps.construir.outputs.digest }}
+          format: table
+          # CRITICAL bloqueante, literal de plan-seguridad §1415 ("bloqueante
+          # para vulnerabilidades criticas en imagen final"). HIGH se reporta y
+          # no frena: a diferencia de `pip-audit` —que bloquea ante cualquier
+          # severidad porque no la expone— trivy SI la expone, asi que aca se
+          # puede cumplir el piso de N0 sin ser mas estricto a ciegas.
+          severity: CRITICAL
+          exit-code: "1"
+          vuln-type: os,library
+          # `ignore-unfixed` NO es un flag de conveniencia, es la decision que
+          # evita repetir el problema que ADR-026 documento para `pip-audit`.
+          #
+          # Una CVE critica en la imagen base SIN parche disponible no se puede
+          # arreglar: no hay version a la que subir. Si bloqueara, la unica
+          # salida seria una lista de excepciones a mano — y esa lista es
+          # exactamente el mecanismo que ADR-026 se nego a habilitar, porque una
+          # vez que existe, la siguiente entrada entra sin que nadie la mire.
+          #
+          # Con esto, lo que bloquea es lo ACCIONABLE. Lo no parcheable no
+          # desaparece: sale en la tabla del log del step, que se lee.
+          ignore-unfixed: true
+
       - name: Instalar cosign
         uses: sigstore/cosign-installer@v3
 
