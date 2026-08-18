@@ -84,6 +84,31 @@ jobs:
       - name: mypy --strict
         run: mypy .
 
+      # `tools/` queda FUERA de los tres pasos de arriba, porque todos corren
+      # con `working-directory: backend`. Y `tools/` no es codigo accesorio:
+      # son los cuatro verificadores que hacen de gate en este mismo pipeline
+      # —cobertura, paridad de configuracion, enlaces markdown y extraccion de
+      # OOXML para gitleaks—. Hasta el 18-ago-2026 nadie los linteaba, asi que
+      # el codigo que controla la calidad del proyecto era el unico que no
+      # pasaba por el control.
+      #
+      # Se ejecutan desde la raiz y con la configuracion del backend, para que
+      # midan con la MISMA vara y no con los defaults de cada herramienta:
+      # ruff la toma de `ruff.toml` (que hace `extend` de `backend/pyproject`),
+      # y black y mypy por `--config`. Sin eso black formatea a 88 en vez de
+      # 100 y ruff aplica su seleccion por defecto en vez de la del proyecto.
+      - name: ruff · tools
+        working-directory: .
+        run: ruff check tools
+
+      - name: black --check · tools
+        working-directory: .
+        run: black --check --config backend/pyproject.toml tools
+
+      - name: mypy --strict · tools
+        working-directory: .
+        run: mypy --config-file backend/pyproject.toml tools
+
   # ── 2. Calidad del frontend ────────────────────────────────────────────────
   lint-frontend:
     name: lint-frontend
