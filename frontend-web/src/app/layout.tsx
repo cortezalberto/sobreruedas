@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 
+import { NavegacionPrincipal } from '@/components/NavegacionPrincipal';
+
 import './globals.css';
 
 /**
@@ -37,7 +39,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   // castellano y no se entiende nada.
   return (
     <html lang="es-AR">
-      <body className="min-h-screen bg-white text-slate-900 antialiased">{children}</body>
+      <body className="min-h-screen bg-white text-slate-900 antialiased">
+        <NavegacionPrincipal />
+        {children}
+      </body>
     </html>
   );
 }

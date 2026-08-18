@@ -12,9 +12,17 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('deRuedas Gestion');
   });
 
-  it('avisa que todavia no hay funcionalidad de negocio', () => {
+  it('sigue diciendo en que ola esta el producto', () => {
     render(<HomePage />);
     expect(screen.getByText(/Ola 0/i)).toBeInTheDocument();
+  });
+
+  it('lleva al catalogo de planes', () => {
+    // Hasta el 18-ago-2026 esta pagina afirmaba que "todavia no hay
+    // funcionalidad de negocio". Desde que existe `/planes` eso es falso, y
+    // este test fija que la home ofrezca lo que el sistema ya sabe hacer.
+    render(<HomePage />);
+    expect(screen.getByRole('link', { name: /planes/i })).toHaveAttribute('href', '/planes');
   });
 
   it('no ofrece inicio de sesion todavia', () => {
