@@ -47,8 +47,16 @@ const PESOS = new Intl.NumberFormat('es-AR', {
   maximumFractionDigits: 0,
 });
 
-function limite(valor: number, sustantivo: string): string {
-  return valor === SIN_TECHO ? `${sustantivo} ilimitados` : `${valor} ${sustantivo}`;
+/**
+ * `1 sucursales` no lo escribe nadie, y era lo que mostraba Starter.
+ *
+ * El singular se pide explicito en vez de sacarle la `s` al plural: en
+ * castellano no siempre alcanza —`sucursales` pierde `es`, no `s`— y una regla
+ * que acierta en tres casos de cuatro es peor que no tener regla.
+ */
+function limite(valor: number, singular: string, plural: string): string {
+  if (valor === SIN_TECHO) return `${plural} ilimitados`;
+  return valor === 1 ? `1 ${singular}` : `${valor} ${plural}`;
 }
 
 function TarjetaDePlan({ plan }: { plan: Plan }) {
@@ -62,10 +70,16 @@ function TarjetaDePlan({ plan }: { plan: Plan }) {
       </p>
 
       <ul className="mt-4 space-y-1 text-sm text-slate-700">
-        <li>{limite(plan.max_users, 'usuarios')}</li>
-        <li>{limite(plan.max_vehicles, 'vehiculos')}</li>
-        <li>{limite(plan.max_branches, 'sucursales')}</li>
-        <li>{limite(plan.max_whatsapp_messages_month, 'mensajes de WhatsApp por mes')}</li>
+        <li>{limite(plan.max_users, 'usuario', 'usuarios')}</li>
+        <li>{limite(plan.max_vehicles, 'vehiculo', 'vehiculos')}</li>
+        <li>{limite(plan.max_branches, 'sucursal', 'sucursales')}</li>
+        <li>
+          {limite(
+            plan.max_whatsapp_messages_month,
+            'mensaje de WhatsApp por mes',
+            'mensajes de WhatsApp por mes',
+          )}
+        </li>
       </ul>
 
       <p className="mt-4 text-xs uppercase tracking-wide text-slate-400">
