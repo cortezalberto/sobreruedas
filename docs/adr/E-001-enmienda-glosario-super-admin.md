@@ -140,6 +140,12 @@ El Artículo 8 asume un equipo técnico y de producto que pueda formar mayoría.
 
 No se arregla acá: cada enmienda futura va a chocar con lo mismo, y va a resolverse igual de a una, o alguien va a terminar escribiendo "mayoría calificada" sin pensarlo. Corresponde una **enmienda al propio Artículo 8** que contemple el caso de decisor único —y qué pasa cuando el equipo crece—, tramitada con su propio procedimiento. Queda registrado como trabajo pendiente, no como defecto de esta enmienda.
 
+> ✅ **Abierta el 17-ago-2026 como [`E-002`](E-002-enmienda-articulo-8-decisor-unico.md)**, con cierre mínimo el **lunes 24-ago-2026**.
+>
+> Se abrió sin esperar a que `E-001` cerrara, y por una razón operativa: el plazo de cinco días hábiles del Artículo 8 **corre desde la apertura**, así que demorarla solo corría el cierre. Abrirla el 17 en vez del 20 lo adelanta tres días.
+>
+> **`E-002` no bloquea nada** y **no condiciona a `E-001`**: son independientes. `E-001` cierra el 20-ago con su paso (c) registrado como decisión unipersonal —que es exactamente la práctica que `E-002` propone volver explícita— y no necesita esperarla.
+
 ### ✅ Obstáculo 2 — RESUELTO el 17-ago-2026: opción A
 
 **Decidido por el Tech Lead: la enmienda va como apéndice al final de `docs/sdd/deRuedas-constitucion.md`**, que es lo que el Artículo 8 pide literalmente.

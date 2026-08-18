@@ -26,22 +26,42 @@ Esta rebaja **no contradice a `ADR-000`**: la toma el mismo decisor que `PA-09` 
 
 ## SLOs internos
 
-Todos declarados "más estrictos que el SLA".
+Todos declarados "más estrictos que el SLA" — el más exigente de los SLA es **99.5 %** y estos van a **99.7 %**, así que la afirmación sigue en pie.
+
+> **Los cuatro SLO de disponibilidad son el mismo número, y eso es deliberado**: comparten la máquina, así que comparten su techo. Ver el bloque de `ESC-002` debajo de la tabla.
 
 | SLI | SLO | Ventana |
 |---|---|---|
 | Disponibilidad de la API principal | **99.7 %** | 30 días rolling |
 | Latencia p95, endpoints típicos | **< 300 ms** ⚠️ `IN-23` | 30 días rolling |
 | Latencia p95, búsqueda compleja | **< 2,0 s** ⚠️ `IN-23` | 30 días rolling |
-| Disponibilidad de webhooks entrantes (Meta) | 99.9 % | 30 días rolling |
+| Disponibilidad de webhooks entrantes (Meta) | **99.7 %** ⬇️ *(era 99.9 %)* | 30 días rolling |
 | Latencia de procesamiento de mensajes WhatsApp | p95 < 30 s (recepción → persistencia) | 7 días rolling |
-| Disponibilidad del frontend web | 99.8 % | 30 días rolling |
+| Disponibilidad del frontend web | **99.7 %** ⬇️ *(era 99.8 %)* | 30 días rolling |
 | Cumplimiento de RPO de PostgreSQL | 100 % de backups exitosos | 30 días |
-| Disponibilidad de la cola de eventos | 99.95 % | 30 días rolling |
+| Disponibilidad de la cola de eventos | **99.7 %** ⬇️ *(era 99.95 %)* | 30 días rolling |
 | Lag máximo de consumers | p99 < 60 s | 7 días rolling |
 | Tasa de eventos en DLQ | < 0,1 % del volumen total | 7 días rolling |
 
 ⚠️ La constitución y la spec exigen **p95 < 200 ms** en listados y **< 500 ms** en búsqueda. El SLO de SRE es más laxo en ambos casos (y **4× más laxo en búsqueda**). Ver `IN-23`.
+
+> ✅ **Tres SLO de disponibilidad alineados al techo del nodo — [`ESC-002`](../docs/escalaciones/ESC-002-slo-internos-sobre-nodo-unico.md) CERRADA el 17-ago-2026, opción A.**
+>
+> `ESC-001` bajó el SLA **público** porque un nodo único no sostiene 99.9 %. Esta tabla había quedado intacta y arrastraba el mismo defecto, con una regla que la rompía entera: **ningún componente puede estar más disponible que la máquina que lo hospeda**, y por [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) los nueve servicios corren en el mismo VPS.
+>
+> | SLI | Antes | Presupuesto que implicaba | Ahora |
+> |---|---|---|---|
+> | Frontend web | 99.8 % | 86 min/mes | **99.7 %** |
+> | Webhooks Meta | 99.9 % | 43 min/mes | **99.7 %** |
+> | Cola de eventos | 99.95 % | **21,6 min/mes** | **99.7 %** |
+>
+> La cola declaraba un presupuesto **6× más estricto** que el de la API que corre en la misma máquina: Redis y el backend se caen juntos cuando el nodo se reinicia. No era un número optimista, era aritméticamente imposible — el mismo error que `IN-31` (SLA por encima del SLO) rotado noventa grados.
+>
+> **Por qué importaba más que `ESC-001`**: aquella era una promesa a clientes que todavía no existen; esta **se aplicaba sola, todos los meses**. Con la cola en 99.95 % su presupuesto de error se agotaba siempre, y la política de abajo dejaba al proyecto en **freeze permanente por un número mal puesto**. El resultado previsible no era el freeze: era que **la política se dejara de mirar**, y que el día que el rojo fuera real nadie frenara.
+>
+> **Lo que NO se perdió.** El compromiso de que la cola sea más confiable que el resto **se movió, no se retiró**: `lag p99 < 60 s` y `DLQ < 0,1 %` ya estaban en esta tabla y miden su salud **sin depender de si el nodo estuvo prendido**. Son mejores SLI para una cola que su disponibilidad, justamente porque aíslan lo que la cola hace de lo que la máquina hace.
+>
+> **Consecuencia operativa**: los cuatro SLO de disponibilidad comparten ahora un único presupuesto de **130 min/mes**. Un solo número que mirar, y que se agota cuando se cae el nodo — que es la única forma en que se caen.
 
 ## Presupuesto de error
 
