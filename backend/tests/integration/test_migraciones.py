@@ -75,15 +75,29 @@ async def test_migrar_dos_veces_no_falla(base_migrada: None) -> None:
 async def test_migrar_con_el_rol_de_la_aplicacion_falla(base_migrada: None) -> None:
     """El rol de aplicacion no puede migrar, y eso es el punto.
 
-    Se corre `downgrade -1` y no `upgrade head`: sobre una base ya migrada un
+    Se corre un `downgrade` y no `upgrade head`: sobre una base ya migrada un
     upgrade no tiene nada que hacer, asi que pasaria sin intentar un solo DDL y
     el test no probaria nada. El downgrade si intenta tocar el esquema.
+
+    ⚠️ EL DESTINO ES EXPLICITO Y NO `-1`, Y ESO COSTO UN FALSO VERDE.
+
+    Con `-1` el test dependia de que la migracion que quede ARRIBA tuviera DDL
+    en su `downgrade()`. Eso fue cierto hasta la `010`, que solo revoca
+    permisos: su downgrade no crea ni borra nada, corrio sin problemas con el
+    rol de aplicacion, y el test fallo — no porque el rol pudiera modificar el
+    esquema, sino porque no se le pidio que lo intentara.
+
+    Bajar hasta la `008` cruza el `downgrade` de la `009`, que borra tablas. Eso
+    es DDL de verdad y es lo que el rol de aplicacion tiene prohibido. El destino
+    fijo acopla este test a que la `009` exista, que es un acoplamiento visible
+    y que falla ruidoso — a diferencia del anterior, que fallaba en silencio
+    cada vez que alguien agregara una migracion sin DDL.
 
     Que falle NO deja la base a medias: alembic corre cada migracion en su
     transaccion y el DDL de PostgreSQL es transaccional, asi que el rechazo por
     permisos revierte todo. Lo verifica el `upgrade head` del final.
     """
-    resultado = alembic("downgrade", "-1", url_de_migracion=DSN_APLICACION)
+    resultado = alembic("downgrade", "008", url_de_migracion=DSN_APLICACION)
 
     assert resultado.returncode != 0, (
         "el rol de la aplicacion pudo modificar el esquema: puede crear tablas "
