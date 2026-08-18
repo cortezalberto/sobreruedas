@@ -12,12 +12,22 @@ import nextCoreWebVitals from 'eslint-config-next/core-web-vitals';
 import nextTypeScript from 'eslint-config-next/typescript';
 import prettier from 'eslint-config-prettier';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
+import security from 'eslint-plugin-security';
 
 const config = [
   { ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts'] },
 
   ...nextCoreWebVitals,
   ...nextTypeScript,
+
+  // SAST del frontend (ADR-027). `plan-seguridad` §1415 pide "eslint con
+  // plugin seguridad", y hasta el 17-ago-2026 solo estaba `jsx-a11y`.
+  //
+  // Entra AHORA, con el frontend casi vacio, justamente por eso: agregarlo hoy
+  // es una linea; agregarlo despues de C-07 y C-08 es corregir codigo ya
+  // escrito. Mismo criterio con el que C-04 creo `max_whatsapp_messages_month`
+  // antes de que la usara nadie.
+  security.configs.recommended,
 
   // Va al final: apaga las reglas de formato que pisarian a Prettier.
   prettier,
