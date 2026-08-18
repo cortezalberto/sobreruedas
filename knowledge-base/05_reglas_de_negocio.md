@@ -156,7 +156,7 @@
 - **RN-AD-01**: Toda acción que afecte datos sensibles deja rastro en `audit_logs`, vía el decorador `@audit_action`.
 - **RN-AD-02**: El registro incluye: usuario, tenant, timestamp, IP, user-agent, tipo de acción, entidad afectada, valores anteriores y posteriores en JSON, y `trace_id`.
 - **RN-AD-03**: Los logs son **append-only**. `UPDATE` y `DELETE` están **revocados** al rol de aplicación. No existen endpoints para modificarlos.
-- **RN-AD-04**: ⚠️ **Retención**: 5 años (spec, "por obligaciones contables") vs 24 meses (plan de seguridad) vs escalonada por plan 30 días/12 meses/24 meses (GTM). Ver `IN-13` (bloqueante).
+- **RN-AD-04**: **Retención: 24 meses**, uniformes para todos los tenants — decidido por Dirección el 18-ago-2026, [`ADR-029`](../docs/adr/ADR-029-retencion-de-audit-logs.md). Lo que varía por plan es la **ventana de historia que el cliente ve en la UI** (Starter 30 días · Pro 12 meses · Enterprise 24), no lo que el sistema guarda: un mínimo de compliance no puede ser un feature de plan. ⛔ **El particionado NO está habilitado**: hay una pregunta legal abierta —si un asiento sobre una acción de facturación cuenta como respaldo contable ante AFIP— que va a asesoramiento antes de fijarlo.
 - **RN-AD-05**: Los accesos JIT de personal de deRuedas llevan tag `jit=true` en `audit_logs`. TTL máximo del acceso JIT: 4 horas.
 - **RN-AD-06**: La impersonación de un tenant por `super_admin` queda auditada.
 

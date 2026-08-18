@@ -33,8 +33,8 @@ Todos declarados "más estrictos que el SLA" — el más exigente de los SLA es 
 | SLI | SLO | Ventana |
 |---|---|---|
 | Disponibilidad de la API principal | **99.7 %** | 30 días rolling |
-| Latencia p95, endpoints típicos | **< 300 ms** ⚠️ `IN-23` | 30 días rolling |
-| Latencia p95, búsqueda compleja | **< 2,0 s** ⚠️ `IN-23` | 30 días rolling |
+| Latencia p95, endpoints típicos | **< 300 ms** (SLO) · objetivo de ingeniería **200 ms** | 30 días rolling |
+| Latencia p95, búsqueda compleja | **< 2,0 s** (SLO) · objetivo de ingeniería **500 ms** | 30 días rolling |
 | Disponibilidad de webhooks entrantes (Meta) | **99.7 %** ⬇️ *(era 99.9 %)* | 30 días rolling |
 | Latencia de procesamiento de mensajes WhatsApp | p95 < 30 s (recepción → persistencia) | 7 días rolling |
 | Disponibilidad del frontend web | **99.7 %** ⬇️ *(era 99.8 %)* | 30 días rolling |
@@ -43,7 +43,13 @@ Todos declarados "más estrictos que el SLA" — el más exigente de los SLA es 
 | Lag máximo de consumers | p99 < 60 s | 7 días rolling |
 | Tasa de eventos en DLQ | < 0,1 % del volumen total | 7 días rolling |
 
-⚠️ La constitución y la spec exigen **p95 < 200 ms** en listados y **< 500 ms** en búsqueda. El SLO de SRE es más laxo en ambos casos (y **4× más laxo en búsqueda**). Ver `IN-23`.
+✅ ~~**`IN-23`**~~ — **CERRADO el 18-ago-2026 por [`ADR-030`](../docs/adr/ADR-030-objetivo-de-ingenieria-y-slo-de-latencia.md): no medían lo mismo.**
+
+> La constitución (**N0**) exige p95 < **200 ms** en listados y < **500 ms** en búsqueda; el SLO de SRE dice 300 ms y 2,0 s. Por `ADR-000` regla 2 **N0 nunca pierde**, así que SRE no podía relajarlos — pero son magnitudes distintas: **objetivo de ingeniería bajo carga normal** contra **SLO sobre 30 días rolling**, que incluye picos y degradaciones. El Artículo 4 ya escribe esa distinción cuando dice *"en condiciones normales de carga"*.
+>
+> ⚠️ Para **búsqueda** N0 **no** trae ese calificador: los 500 ms son incondicionales, y los 2,0 s valen solo como umbral de página, nunca como "lo aceptable".
+>
+> **Y apareció un tercer número que `IN-23` no contaba**: la alerta `APILatencyHigh` dispara en **p95 > 500 ms**, que es *más permisiva que el propio SLO de 300 ms*. Hoy ese SLO no tiene ninguna alerta que lo defienda. `ADR-030` la parte en dos, una por SLO.
 
 > ✅ **Tres SLO de disponibilidad alineados al techo del nodo — [`ESC-002`](../docs/escalaciones/ESC-002-slo-internos-sobre-nodo-unico.md) CERRADA el 17-ago-2026, opción A.**
 >
