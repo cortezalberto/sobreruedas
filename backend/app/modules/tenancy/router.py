@@ -28,6 +28,8 @@ archivo sin esa pieza seria exponerlo sin control.
 
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, HTTPException
 
 from app.db.session import sesion_de_catalogo
@@ -60,7 +62,7 @@ async def listar_planes() -> list[PlanSalida]:
 
 
 @router.get(
-    "/vehicle-brands",
+    "/catalog/brands",
     response_model=list[MarcaSalida],
     summary="Marcas del catalogo",
     description="Catalogo cross-tenant de marcas, en orden alfabetico.",
@@ -73,7 +75,7 @@ async def listar_marcas() -> list[MarcaSalida]:
 
 
 @router.get(
-    "/vehicle-brands/{slug}/models",
+    "/catalog/brands/{marca_id}/models",
     response_model=list[ModeloSalida],
     summary="Modelos de una marca",
     description=(
@@ -82,11 +84,20 @@ async def listar_marcas() -> list[MarcaSalida]:
     ),
     responses={404: {"description": "La marca no existe o no esta publicada"}},
 )
-async def listar_modelos(slug: str) -> list[ModeloSalida]:
-    """Se busca por SLUG y no por id.
+async def listar_modelos(marca_id: uuid.UUID) -> list[ModeloSalida]:
+    """Se busca por ID, que es lo que el catalogo de endpoints documenta.
 
-    El id es un UUID que nadie escribe a mano; el slug es lo que va en la URL y
-    lo que el frontend ya tiene despues de listar las marcas.
+    ⚠️ La primera version de este endpoint uso el SLUG y vivia en
+    `/api/v1/vehicle-brands/{slug}/models`. Las dos cosas estaban mal: el
+    catalogo de `knowledge-base/02` —derivado de `spec-tecnica`, que es N1— ya
+    documentaba `GET /catalog/brands` y `/catalog/brands/{id}/models`. Se
+    invento un contrato que ya estaba escrito, por no cruzarlo antes de escribir
+    el router.
+
+    El slug seguia siendo mas lindo en una URL, pero eso no lo decide este
+    archivo: apartarse de N1 exige un ADR, y no hay ninguna razon de dominio
+    para pedirlo. El frontend mantiene sus URLs legibles resolviendo el slug
+    contra el listado de marcas, que ya tiene cargado.
 
     Una marca inexistente da 404 y no una lista vacia. Son cosas distintas:
     "esta marca no tiene modelos cargados" es un catalogo incompleto, y "esta
@@ -99,7 +110,7 @@ async def listar_modelos(slug: str) -> list[ModeloSalida]:
     # una excepcion sale a traves de un `async with`.
     async with sesion_de_catalogo() as sesion:
         repositorio = VehicleCatalogRepository(sesion)
-        marca = await repositorio.obtener_marca_por_slug(slug)
+        marca = await repositorio.obtener_marca(marca_id)
         modelos = await repositorio.listar_modelos_de(marca.id) if marca is not None else []
 
     if marca is None:
@@ -107,6 +118,6 @@ async def listar_modelos(slug: str) -> list[ModeloSalida]:
         # `StarletteHTTPException` ya la convierte al mismo problem+json que el
         # resto. Una clase propia solo agregaria una taxonomia para decir lo que
         # el 404 ya dice.
-        raise HTTPException(status_code=404, detail=f"no existe la marca '{slug}'")
+        raise HTTPException(status_code=404, detail=f"no existe la marca {marca_id}")
 
     return [ModeloSalida.model_validate(modelo) for modelo in modelos]

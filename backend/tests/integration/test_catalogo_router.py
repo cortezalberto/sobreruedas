@@ -24,6 +24,16 @@ from .soporte import DSN_APLICACION, reponer_entorno
 pytestmark = pytest.mark.integration
 
 
+def _id_de(cliente: TestClient, slug: str) -> str:
+    """El id de una marca por su slug.
+
+    El endpoint busca por ID —es lo que documenta `knowledge-base/02`— asi que
+    los tests resuelven el slug igual que lo hace el frontend: contra el listado.
+    """
+    marcas = cliente.get("/api/v1/catalog/brands").json()
+    return str(next(m["id"] for m in marcas if m["slug"] == slug))
+
+
 @pytest.fixture
 def cliente(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     """Igual que el de `test_planes_router.py` — ver su docstring.
@@ -50,7 +60,7 @@ def cliente(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
 
 
 def test_el_catalogo_devuelve_las_cuarenta_marcas(cliente: TestClient) -> None:
-    respuesta = cliente.get("/api/v1/vehicle-brands")
+    respuesta = cliente.get("/api/v1/catalog/brands")
 
     assert respuesta.status_code == 200
     assert len(respuesta.json()) == 40
@@ -62,13 +72,13 @@ def test_las_marcas_llegan_en_orden_alfabetico(cliente: TestClient) -> None:
     El orden de insercion es del seed, no del que mira la pantalla — y sin
     `ORDER BY` explicito PostgreSQL puede devolverlas en cualquier orden.
     """
-    nombres = [marca["name"] for marca in cliente.get("/api/v1/vehicle-brands").json()]
+    nombres = [marca["name"] for marca in cliente.get("/api/v1/catalog/brands").json()]
 
     assert nombres == sorted(nombres)
 
 
 def test_la_marca_no_expone_columnas_internas(cliente: TestClient) -> None:
-    marca = cliente.get("/api/v1/vehicle-brands").json()[0]
+    marca = cliente.get("/api/v1/catalog/brands").json()[0]
 
     assert set(marca) == {"id", "name", "slug", "origin_country"}
 
@@ -77,9 +87,9 @@ def test_la_marca_no_expone_columnas_internas(cliente: TestClient) -> None:
 
 
 def test_los_modelos_de_una_marca_son_solo_de_esa_marca(cliente: TestClient) -> None:
-    marcas = {m["slug"]: m["id"] for m in cliente.get("/api/v1/vehicle-brands").json()}
+    marcas = {m["slug"]: m["id"] for m in cliente.get("/api/v1/catalog/brands").json()}
 
-    modelos = cliente.get("/api/v1/vehicle-brands/toyota/models").json()
+    modelos = cliente.get(f"/api/v1/catalog/brands/{marcas['toyota']}/models").json()
 
     assert modelos, "Toyota tiene modelos en el seed"
     assert {m["brand_id"] for m in modelos} == {marcas["toyota"]}
@@ -90,7 +100,10 @@ def test_los_modelos_llegan_del_mas_nuevo_al_mas_viejo(cliente: TestClient) -> N
 
     Dejarlo al final de una lista alfabetica obliga a recorrerla entera.
     """
-    anios = [m["year_from"] for m in cliente.get("/api/v1/vehicle-brands/toyota/models").json()]
+    anios = [
+        m["year_from"]
+        for m in cliente.get(f"/api/v1/catalog/brands/{_id_de(cliente, 'toyota')}/models").json()
+    ]
 
     assert anios == sorted(anios, reverse=True)
 
@@ -101,7 +114,7 @@ def test_un_modelo_vigente_viaja_con_year_to_nulo(cliente: TestClient) -> None:
     Es una distincion que el cliente necesita hacer, y si el schema omitiera el
     campo cuando esta vacio, las dos situaciones llegarian iguales.
     """
-    modelo = cliente.get("/api/v1/vehicle-brands/toyota/models").json()[0]
+    modelo = cliente.get(f"/api/v1/catalog/brands/{_id_de(cliente, 'toyota')}/models").json()[0]
 
     assert "year_to" in modelo
     assert modelo["year_to"] is None
@@ -114,7 +127,7 @@ def test_una_marca_inexistente_da_404_y_no_una_lista_vacia(cliente: TestClient) 
     marca no existe" es un error del que pregunta. Un `[]` para las dos esconde
     la segunda, y el frontend no puede avisar de lo que no ve.
     """
-    respuesta = cliente.get("/api/v1/vehicle-brands/marca-que-no-existe/models")
+    respuesta = cliente.get("/api/v1/catalog/brands/00000000-0000-0000-0000-000000000000/models")
 
     assert respuesta.status_code == 404
 
@@ -125,7 +138,7 @@ def test_el_404_llega_como_problem_json(cliente: TestClient) -> None:
     Que el 404 salga por `HTTPException` no lo exime: el manejador de la
     aplicacion lo convierte a RFC 7807 igual que a los errores de dominio.
     """
-    respuesta = cliente.get("/api/v1/vehicle-brands/marca-que-no-existe/models")
+    respuesta = cliente.get("/api/v1/catalog/brands/00000000-0000-0000-0000-000000000000/models")
 
     assert respuesta.headers["content-type"].startswith("application/problem+json")
     assert respuesta.json()["status"] == 404

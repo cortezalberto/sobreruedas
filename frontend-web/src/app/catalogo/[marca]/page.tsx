@@ -9,7 +9,13 @@
 import { notFound } from 'next/navigation';
 
 import { EstadoVacio, Migas, Tabla } from '@/components/ui';
-import { ErrorDeApi, obtenerModelos, type Modelo } from '@/lib/api';
+import {
+  ErrorDeApi,
+  idDeMarcaPorSlug,
+  obtenerMarcas,
+  obtenerModelos,
+  type Modelo,
+} from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,9 +43,15 @@ export default async function ModelosDeMarcaPage({
   // Sin esto, pedir /catalogo/ferrari mostraba "el servicio no respondio", y el
   // servicio habia respondido perfectamente: con un 404. Es la misma distincion
   // que el endpoint se tomo el trabajo de hacer, perdida en la pantalla.
+  // El slug de la URL se resuelve a id contra el catalogo de marcas, porque el
+  // backend busca por id (`knowledge-base/02`). Si el slug no existe, `notFound`
+  // sin siquiera pedir los modelos: no hay marca que consultar.
+  const marcaId = idDeMarcaPorSlug(await obtenerMarcas(), marca);
+  if (marcaId === undefined) notFound();
+
   let modelos: Modelo[];
   try {
-    modelos = await obtenerModelos(marca);
+    modelos = await obtenerModelos(marcaId);
   } catch (error) {
     if (error instanceof ErrorDeApi && error.estado === 404) notFound();
     throw error;

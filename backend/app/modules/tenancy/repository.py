@@ -148,9 +148,9 @@ class VehicleCatalogRepository:
         )
         return (await self._sesion.execute(consulta)).scalars().all()
 
-    async def obtener_marca_por_slug(self, slug: str) -> VehicleBrand | None:
+    async def obtener_marca(self, marca_id: uuid.UUID) -> VehicleBrand | None:
         consulta = select(VehicleBrand).where(
-            VehicleBrand.slug == slug, VehicleBrand.is_active.is_(True)
+            VehicleBrand.id == marca_id, VehicleBrand.is_active.is_(True)
         )
         return (await self._sesion.execute(consulta)).scalars().first()
 

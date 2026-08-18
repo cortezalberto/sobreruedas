@@ -83,7 +83,9 @@ export function SelectorDeVehiculo({ marcas }: { marcas: readonly Marca[] }) {
         valor={marca}
         alCambiar={alElegirMarca}
         textoVacio="Elegí una marca"
-        opciones={marcas.map((m) => ({ valor: m.slug, texto: m.name }))}
+        // El VALOR es el id porque es lo que el backend pide; el slug solo vive
+        // en las URLs del frontend.
+        opciones={marcas.map((m) => ({ valor: m.id, texto: m.name }))}
       />
 
       <Seleccion

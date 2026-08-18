@@ -147,7 +147,7 @@ function esModelo(valor: unknown): valor is Modelo {
 }
 
 export async function obtenerMarcas(): Promise<Marca[]> {
-  const datos = await pedir('/api/v1/vehicle-brands');
+  const datos = await pedir('/api/v1/catalog/brands');
 
   if (!Array.isArray(datos) || !datos.every(esMarca)) {
     throw new TypeError('El catalogo de marcas no tiene la forma esperada');
@@ -157,18 +157,29 @@ export async function obtenerMarcas(): Promise<Marca[]> {
 }
 
 /**
- * Los modelos de una marca.
+ * Los modelos de una marca, por su ID.
+ *
+ * ⚠️ EL BACKEND BUSCA POR ID, NO POR SLUG. Es lo que documenta el catalogo de
+ * endpoints de `knowledge-base/02`, derivado de `spec-tecnica` (N1). El slug
+ * queda del lado del frontend: las URLs legibles se resuelven con
+ * `idDeMarcaPorSlug` contra el listado que la pagina ya tiene cargado, en vez de
+ * pedirle al backend un contrato distinto del que su spec fija.
  *
  * Una marca inexistente da 404 y esto levanta `ErrorDeApi`, no una lista vacia:
  * "no hay modelos cargados" y "esa marca no existe" son cosas distintas y el
  * backend las distingue. Aplanarlas acá desharia esa distincion.
  */
-export async function obtenerModelos(slugDeMarca: string): Promise<Modelo[]> {
-  const datos = await pedir(`/api/v1/vehicle-brands/${encodeURIComponent(slugDeMarca)}/models`);
+export async function obtenerModelos(marcaId: string): Promise<Modelo[]> {
+  const datos = await pedir(`/api/v1/catalog/brands/${encodeURIComponent(marcaId)}/models`);
 
   if (!Array.isArray(datos) || !datos.every(esModelo)) {
     throw new TypeError('El catalogo de modelos no tiene la forma esperada');
   }
 
   return datos;
+}
+
+/** Resuelve el slug de una URL contra las marcas ya cargadas. */
+export function idDeMarcaPorSlug(marcas: readonly Marca[], slug: string): string | undefined {
+  return marcas.find((marca) => marca.slug === slug)?.id;
 }

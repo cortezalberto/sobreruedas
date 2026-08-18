@@ -13,7 +13,14 @@
  */
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
-import { ErrorDeApi, obtenerMarcas, obtenerModelos, obtenerPlanes, SIN_TECHO } from '@/lib/api';
+import {
+  ErrorDeApi,
+  idDeMarcaPorSlug,
+  obtenerMarcas,
+  obtenerModelos,
+  obtenerPlanes,
+  SIN_TECHO,
+} from '@/lib/api';
 
 const PLAN_VALIDO = {
   id: '11111111-1111-1111-1111-111111111111',
@@ -128,7 +135,7 @@ describe('obtenerModelos', () => {
   it('deja pasar year_to nulo, que significa vigente', async () => {
     responderCon([MODELO_VALIDO]);
 
-    const [modelo] = await obtenerModelos('toyota');
+    const [modelo] = await obtenerModelos(MARCA_VALIDA.id);
 
     expect(modelo?.year_to).toBeNull();
   });
@@ -136,7 +143,7 @@ describe('obtenerModelos', () => {
   it('acepta un modelo discontinuado', async () => {
     responderCon([{ ...MODELO_VALIDO, year_to: 2020 }]);
 
-    const [modelo] = await obtenerModelos('toyota');
+    const [modelo] = await obtenerModelos(MARCA_VALIDA.id);
 
     expect(modelo?.year_to).toBe(2020);
   });
@@ -146,7 +153,9 @@ describe('obtenerModelos', () => {
     // las dos en `[]` desharia esa distincion justo del lado que la muestra.
     responderCon({ detail: 'no existe' }, 404);
 
-    await expect(obtenerModelos('marca-que-no-existe')).rejects.toThrow(ErrorDeApi);
+    await expect(obtenerModelos('00000000-0000-0000-0000-000000000000')).rejects.toThrow(
+      ErrorDeApi,
+    );
   });
 
   it('escapa el slug en la URL', async () => {
@@ -164,5 +173,17 @@ describe('obtenerModelos', () => {
     await obtenerModelos('a/b');
 
     expect(urlPedida).toContain('a%2Fb');
+    expect(urlPedida).toContain('/api/v1/catalog/brands/');
+  });
+});
+
+describe('idDeMarcaPorSlug', () => {
+  it('resuelve el slug de la URL contra las marcas cargadas', () => {
+    // El backend busca por id; el slug vive solo en las URLs del frontend.
+    expect(idDeMarcaPorSlug([MARCA_VALIDA], 'toyota')).toBe(MARCA_VALIDA.id);
+  });
+
+  it('devuelve undefined si el slug no existe, para que la pagina de 404', () => {
+    expect(idDeMarcaPorSlug([MARCA_VALIDA], 'ferrari')).toBeUndefined();
   });
 });
