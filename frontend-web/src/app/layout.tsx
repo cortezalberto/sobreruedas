@@ -39,7 +39,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   // castellano y no se entiende nada.
   return (
     <html lang="es-AR">
-      <body className="min-h-screen bg-white text-slate-900 antialiased">
+      <body className="min-h-screen bg-white text-neutro-enfasis antialiased">
         <NavegacionPrincipal />
         {children}
       </body>

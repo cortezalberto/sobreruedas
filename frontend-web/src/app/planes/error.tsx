@@ -19,6 +19,8 @@
 
 import { useRouter } from 'next/navigation';
 
+import { Alerta, Boton } from '@/components/ui';
+
 export default function ErrorDePlanes({ reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
 
@@ -42,25 +44,16 @@ export default function ErrorDePlanes({ reset }: { error: Error; reset: () => vo
     <main className="mx-auto max-w-4xl p-8">
       <h1 className="text-3xl font-semibold tracking-tight">Planes</h1>
 
-      <div
-        // `role="alert"` para que un lector de pantalla lo anuncie al aparecer,
-        // en vez de dejarlo pasar como texto cualquiera.
-        role="alert"
-        className="mt-6 rounded-lg border-l-4 border-estado-advertencia bg-neutro-fondo p-4"
-      >
-        <p className="font-medium text-estado-advertencia">No se pudo cargar el catalogo.</p>
-        <p className="mt-1 text-sm text-neutro-texto">
+      <Alerta tono="advertencia" titulo="No se pudo cargar el catalogo.">
+        <p>
           El servicio no respondio. Si estas en desarrollo, revisa que el backend este levantado.
         </p>
-
-        <button
-          type="button"
-          onClick={reintentar}
-          className="mt-4 rounded-md border border-neutro-borde bg-white px-3 py-1.5 text-sm font-medium text-marca hover:bg-neutro-fondo"
-        >
-          Reintentar
-        </button>
-      </div>
+        <div className="mt-4">
+          <Boton variante="secundario" onClick={reintentar}>
+            Reintentar
+          </Boton>
+        </div>
+      </Alerta>
     </main>
   );
 }

@@ -20,7 +20,7 @@ export default function NoEncontrado() {
   return (
     <main className="mx-auto max-w-2xl p-8">
       <h1 className="text-3xl font-semibold tracking-tight">No encontrado</h1>
-      <p className="mt-2 text-slate-600">
+      <p className="mt-2 text-neutro-texto">
         La pagina que buscas no existe. Puede que el enlace este mal escrito o que el contenido ya
         no este publicado.
       </p>

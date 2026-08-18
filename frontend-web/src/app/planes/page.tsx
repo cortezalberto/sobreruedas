@@ -16,6 +16,7 @@
  * Query del lado del cliente. Para una grilla que se lee y no se toca, seria
  * maquinaria sin trabajo que hacer.
  */
+import { Tarjeta } from '@/components/ui';
 import { obtenerPlanes, SIN_TECHO, type Plan } from '@/lib/api';
 
 /**
@@ -61,15 +62,15 @@ function limite(valor: number, singular: string, plural: string): string {
 
 function TarjetaDePlan({ plan }: { plan: Plan }) {
   return (
-    <article className="rounded-lg border border-slate-200 p-5">
+    <Tarjeta>
       <h2 className="text-lg font-semibold capitalize tracking-tight">{plan.name}</h2>
 
       <p className="mt-1 text-2xl font-semibold">
         {PESOS.format(Number(plan.price_ars))}
-        <span className="text-sm font-normal text-slate-500"> /mes</span>
+        <span className="text-sm font-normal text-neutro-suave"> /mes</span>
       </p>
 
-      <ul className="mt-4 space-y-1 text-sm text-slate-700">
+      <ul className="mt-4 space-y-1 text-sm text-neutro-texto">
         <li>{limite(plan.max_users, 'usuario', 'usuarios')}</li>
         <li>{limite(plan.max_vehicles, 'vehiculo', 'vehiculos')}</li>
         <li>{limite(plan.max_branches, 'sucursal', 'sucursales')}</li>
@@ -82,10 +83,10 @@ function TarjetaDePlan({ plan }: { plan: Plan }) {
         </li>
       </ul>
 
-      <p className="mt-4 text-xs uppercase tracking-wide text-slate-400">
+      <p className="mt-4 text-xs uppercase tracking-wide text-neutro-suave">
         {plan.modules.length} modulos
       </p>
-    </article>
+    </Tarjeta>
   );
 }
 
@@ -95,7 +96,7 @@ export default async function PlanesPage() {
   return (
     <main className="mx-auto max-w-4xl p-8">
       <h1 className="text-3xl font-semibold tracking-tight">Planes</h1>
-      <p className="mt-2 text-slate-600">
+      <p className="mt-2 text-neutro-texto">
         Datos servidos por el backend desde PostgreSQL. Sin mocks.
       </p>
 

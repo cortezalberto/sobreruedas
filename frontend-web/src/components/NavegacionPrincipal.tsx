@@ -38,7 +38,7 @@ export function NavegacionPrincipal() {
   const pathname = usePathname();
 
   return (
-    <header className="border-b border-slate-200">
+    <header className="border-b border-neutro-borde">
       <nav aria-label="Principal" className="mx-auto flex max-w-4xl items-center gap-6 p-4">
         <span className="font-semibold tracking-tight">deRuedas</span>
 
@@ -54,8 +54,8 @@ export function NavegacionPrincipal() {
                   aria-current={actual ? 'page' : undefined}
                   className={
                     actual
-                      ? 'font-medium text-slate-900 underline underline-offset-4'
-                      : 'text-slate-600 hover:text-slate-900'
+                      ? 'font-medium text-neutro-enfasis underline underline-offset-4'
+                      : 'text-neutro-texto hover:text-neutro-enfasis'
                   }
                 >
                   {seccion.etiqueta}

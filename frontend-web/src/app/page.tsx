@@ -20,20 +20,20 @@ export default function HomePage() {
   return (
     <main className="mx-auto max-w-2xl p-8">
       <h1 className="text-3xl font-semibold tracking-tight">deRuedas Gestion</h1>
-      <p className="mt-2 text-slate-600">Sistema de gestion para agencias de vehiculos.</p>
+      <p className="mt-2 text-neutro-texto">Sistema de gestion para agencias de vehiculos.</p>
 
-      <div className="mt-8 rounded-lg border border-slate-200 p-4">
+      <div className="mt-8 rounded-lg border border-neutro-borde p-4">
         <h2 className="font-medium">
-          <Link href="/planes" className="underline underline-offset-4 hover:text-slate-600">
+          <Link href="/planes" className="underline underline-offset-4 hover:text-neutro-texto">
             Planes
           </Link>
         </h2>
-        <p className="mt-1 text-sm text-slate-600">
+        <p className="mt-1 text-sm text-neutro-texto">
           El catalogo comercial, servido por el backend desde PostgreSQL.
         </p>
       </div>
 
-      <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+      <div className="mt-4 rounded-lg border border-neutro-borde bg-neutro-fondo p-4 text-sm text-neutro-texto">
         <p className="font-medium">Ola 0 — fundacion</p>
         <p className="mt-1">
           Lo que se ve es catalogo publico. Todo lo que dependa de una agencia necesita identidad, y

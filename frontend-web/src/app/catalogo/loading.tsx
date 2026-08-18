@@ -17,6 +17,8 @@
  *    Verificado con el backend apagado: sin `loading.tsx` la respuesta es la
  *    pagina global; con el, es el `error.tsx` de este segmento.
  */
+import { Esqueleto } from '@/components/ui';
+
 export default function CargandoCatalogo() {
   return (
     <main className="mx-auto max-w-4xl p-8">
@@ -28,7 +30,7 @@ export default function CargandoCatalogo() {
         <span className="sr-only">Cargando el catalogo de vehiculos</span>
 
         {[0, 1, 2].map((posicion) => (
-          <div key={posicion} className="h-48 animate-pulse rounded-lg border border-slate-200" />
+          <Esqueleto key={posicion} alto="h-48" />
         ))}
       </div>
     </main>

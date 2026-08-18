@@ -9,6 +9,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { EstadoVacio } from '@/components/ui';
 import { ErrorDeApi, obtenerModelos, type Modelo } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -47,7 +48,7 @@ export default async function ModelosDeMarcaPage({
 
   return (
     <main className="mx-auto max-w-4xl p-8">
-      <Link href="/catalogo" className="text-sm text-slate-600 underline underline-offset-4">
+      <Link href="/catalogo" className="text-sm text-neutro-texto underline underline-offset-4">
         ← Catalogo
       </Link>
 
@@ -56,16 +57,16 @@ export default async function ModelosDeMarcaPage({
       </h1>
 
       {modelos.length === 0 ? (
-        <p className="mt-8 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-          Esta marca todavia no tiene modelos cargados. El catalogo se completa con datos de
-          mercado.
-        </p>
+        <EstadoVacio
+          titulo="Esta marca todavia no tiene modelos cargados"
+          descripcion="El catalogo se completa con datos de mercado."
+        />
       ) : (
-        <ul className="mt-8 divide-y divide-slate-200 border-y border-slate-200">
+        <ul className="mt-8 divide-y divide-neutro-borde border-y border-neutro-borde">
           {modelos.map((modelo) => (
             <li key={modelo.id} className="flex items-baseline justify-between gap-4 py-3">
               <span className="font-medium">{modelo.name}</span>
-              <span className="text-sm text-slate-500">
+              <span className="text-sm text-neutro-suave">
                 {modelo.body_type} · {vigencia(modelo)}
               </span>
             </li>

@@ -26,7 +26,7 @@ export default async function CatalogoPage() {
   return (
     <main className="mx-auto max-w-4xl p-8">
       <h1 className="text-3xl font-semibold tracking-tight">Catalogo</h1>
-      <p className="mt-2 text-slate-600">
+      <p className="mt-2 text-neutro-texto">
         {marcas.length} marcas del mercado argentino. Catalogo compartido: lo lee cualquier agencia
         y no lo escribe ninguna.
       </p>
@@ -36,11 +36,11 @@ export default async function CatalogoPage() {
           <li key={marca.id}>
             <Link
               href={`/catalogo/${marca.slug}`}
-              className="block rounded-lg border border-slate-200 p-3 hover:border-slate-400"
+              className="block rounded-lg border border-neutro-borde p-3 hover:border-marca"
             >
               <span className="font-medium">{marca.name}</span>
               {marca.origin_country && (
-                <span className="block text-xs text-slate-500">{marca.origin_country}</span>
+                <span className="block text-xs text-neutro-suave">{marca.origin_country}</span>
               )}
             </Link>
           </li>
