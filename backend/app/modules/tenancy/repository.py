@@ -30,9 +30,14 @@ from collections.abc import Sequence
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.tenancy.models import Branch, Plan, Tenant
+from app.modules.tenancy.models import Branch, Plan, Tenant, VehicleBrand, VehicleModel
 
-__all__ = ["BranchRepository", "PlanRepository", "TenantRepository"]
+__all__ = [
+    "BranchRepository",
+    "PlanRepository",
+    "TenantRepository",
+    "VehicleCatalogRepository",
+]
 
 
 class TenantRepository:
@@ -116,4 +121,49 @@ class PlanRepository:
         cliente espera leer, y alfabeticamente `enterprise` vendria primero.
         """
         consulta = select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.price_ars)
+        return (await self._sesion.execute(consulta)).scalars().all()
+
+
+class VehicleCatalogRepository:
+    """Marcas y modelos. Catalogo compartido: sin `tenant_id` y de solo lectura.
+
+    No tiene metodos de escritura, y no es un pendiente. La base ya niega
+    `INSERT`, `UPDATE` y `DELETE` al rol de aplicacion sobre estas tablas
+    (migracion `009`); un metodo `agregar()` acá solo serviria para descubrir esa
+    negativa en tiempo de ejecucion.
+    """
+
+    def __init__(self, sesion: AsyncSession) -> None:
+        self._sesion = sesion
+
+    async def listar_marcas(self) -> Sequence[VehicleBrand]:
+        """Las marcas publicables, en orden alfabetico.
+
+        Alfabetico y no por `created_at`: quien busca una marca en una lista de
+        40 la busca por nombre. El orden de insercion es del seed, no del que
+        mira la pantalla.
+        """
+        consulta = (
+            select(VehicleBrand).where(VehicleBrand.is_active.is_(True)).order_by(VehicleBrand.name)
+        )
+        return (await self._sesion.execute(consulta)).scalars().all()
+
+    async def obtener_marca_por_slug(self, slug: str) -> VehicleBrand | None:
+        consulta = select(VehicleBrand).where(
+            VehicleBrand.slug == slug, VehicleBrand.is_active.is_(True)
+        )
+        return (await self._sesion.execute(consulta)).scalars().first()
+
+    async def listar_modelos_de(self, marca_id: uuid.UUID) -> Sequence[VehicleModel]:
+        """Los modelos de una marca, del mas nuevo al mas viejo.
+
+        Por `year_from` descendente y despues por nombre: al cargar stock lo que
+        se busca casi siempre es un modelo reciente, y dejarlo al final de una
+        lista alfabetica obliga a recorrerla entera.
+        """
+        consulta = (
+            select(VehicleModel)
+            .where(VehicleModel.brand_id == marca_id, VehicleModel.is_active.is_(True))
+            .order_by(VehicleModel.year_from.desc(), VehicleModel.name)
+        )
         return (await self._sesion.execute(consulta)).scalars().all()

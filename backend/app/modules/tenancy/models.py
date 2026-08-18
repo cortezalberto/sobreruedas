@@ -182,3 +182,50 @@ class Subscription(Base):
     updated_at: Mapped[dt.datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=_AHORA
     )
+
+
+class VehicleBrand(Base):
+    """Marca de vehiculo. Catalogo compartido, sin `tenant_id` — C-13.
+
+    Vive en `tenancy` y no en un modulo propio a proposito: `tenancy` es hoy el
+    unico modulo que existe, y `stock` nace en C-14. Cuando ese modulo exista,
+    marcas y modelos se mudan con el.
+    """
+
+    __tablename__ = "vehicle_brands"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, server_default=_UUID_NUEVO
+    )
+    name: Mapped[str] = mapped_column(sa.String(80), unique=True)
+    slug: Mapped[str] = mapped_column(sa.String(80), unique=True)
+    origin_country: Mapped[str | None] = mapped_column(sa.String(80), nullable=True)
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, server_default=sa.text("true"))
+    created_at: Mapped[dt.datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=_AHORA
+    )
+
+
+class VehicleModel(Base):
+    """Modelo de vehiculo, colgado de su marca — C-13."""
+
+    __tablename__ = "vehicle_models"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), primary_key=True, server_default=_UUID_NUEVO
+    )
+    brand_id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(as_uuid=True), sa.ForeignKey("vehicle_brands.id", ondelete="RESTRICT")
+    )
+    name: Mapped[str] = mapped_column(sa.String(120))
+    body_type: Mapped[str] = mapped_column(sa.String(20))
+    year_from: Mapped[int] = mapped_column(sa.SmallInteger)
+
+    # `NULL` = se sigue vendiendo. No es dato faltante: es el estado normal de un
+    # modelo vigente, y por eso no hay default ni centinela.
+    year_to: Mapped[int | None] = mapped_column(sa.SmallInteger, nullable=True)
+
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, server_default=sa.text("true"))
+    created_at: Mapped[dt.datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=_AHORA
+    )

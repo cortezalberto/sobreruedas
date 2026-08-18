@@ -21,6 +21,8 @@ Sin mocks de base de datos (regla dura 8). Se corre con:
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -33,7 +35,7 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
-def cliente(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def cliente(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     """Un cliente por test, contra los servicios reales.
 
     ⚠️ LAS DOS COSAS QUE HACEN FALTA ACA, Y NINGUNA ES OPCIONAL.
@@ -67,7 +69,15 @@ def cliente(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("TENANT_SECRETS_MASTER_KEY", "no-se-usa-en-este-test")
     get_settings.cache_clear()
 
-    return TestClient(create_app())
+    # `with` y no `TestClient(...)` a secas: sin el context manager, starlette
+    # abre un portal —y con el un event loop— POR PEDIDO, y el engine cacheado
+    # del primero queda atado a un loop que ya no existe. El segundo pedido del
+    # mismo test muere con "attached to a different loop", lejos de su causa.
+    #
+    # Con un solo pedido por test no se nota, y por eso aparecio recien al
+    # escribir el primer test que hace dos.
+    with TestClient(create_app()) as cliente:
+        yield cliente
 
 
 def test_el_catalogo_devuelve_los_tres_planes_sembrados(cliente: TestClient) -> None:

@@ -169,3 +169,31 @@ class PlanSalida(_Salida):
     max_branches: int
     max_whatsapp_messages_month: int
     modules: list[str]
+
+
+class MarcaSalida(_Salida):
+    """Una marca del catalogo. Lista blanca, igual que `PlanSalida`.
+
+    `is_active` no viaja: decide QUE se publica y no es informacion de la marca.
+    """
+
+    id: uuid.UUID
+    name: str
+    slug: str
+    origin_country: str | None
+
+
+class ModeloSalida(_Salida):
+    """Un modelo del catalogo.
+
+    `year_to` es `None` cuando el modelo se sigue vendiendo. Se deja explicito
+    en el contrato porque el cliente tiene que distinguir "vigente" de "no
+    sabemos", y son la misma ausencia de valor con significados opuestos.
+    """
+
+    id: uuid.UUID
+    brand_id: uuid.UUID
+    name: str
+    body_type: str
+    year_from: int
+    year_to: int | None
