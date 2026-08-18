@@ -71,3 +71,9 @@ Thumbs.db
 
 # Registro de skills — derivado de las skills locales de cada dev
 .atl/
+
+# Configuracion de arranque local del navegador integrado. Fija el PUERTO de la
+# maquina donde se escribio, y los puertos de este proyecto son por maquina
+# (viven en `.env`, que tampoco se versiona). `.claude/commands/` si se versiona:
+# eso es del proyecto, esto es del escritorio de cada uno.
+.claude/launch.json
