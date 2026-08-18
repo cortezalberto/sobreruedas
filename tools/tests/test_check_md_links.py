@@ -99,9 +99,7 @@ def test_enlace_externo_no_se_resuelve_contra_el_disco(tmp_path: Path) -> None:
     Si el verificador tratara los enlaces externos como rutas, el repositorio
     entero daria rojo y el gate seria inservible desde el primer dia.
     """
-    raiz = armar_raiz(
-        tmp_path, "Ver [la spec](https://example.invalid/pagina-que-no-existe).\n"
-    )
+    raiz = armar_raiz(tmp_path, "Ver [la spec](https://example.invalid/pagina-que-no-existe).\n")
 
     resultado = correr(raiz)
 

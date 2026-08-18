@@ -61,9 +61,7 @@ from typing import NamedTuple
 
 # Los formatos de Office que son zip con XML adentro. Los `.doc` viejos y los
 # `.pdf` no entran: no son OOXML y necesitarian otro extractor.
-EXTENSIONES_OOXML = frozenset(
-    {".docx", ".docm", ".xlsx", ".xlsm", ".pptx", ".pptm"}
-)
+EXTENSIONES_OOXML = frozenset({".docx", ".docm", ".xlsx", ".xlsm", ".pptx", ".pptm"})
 
 # Partes que vale la pena leer. El resto de un OOXML son imagenes, fuentes y
 # temas: binarios sin texto que aportar.
@@ -111,9 +109,7 @@ def documentos_versionados(repo: Path) -> list[str]:
         check=True,
     ).stdout
     rutas = [ruta for ruta in salida.split("\0") if ruta]
-    return sorted(
-        ruta for ruta in rutas if Path(ruta).suffix.lower() in EXTENSIONES_OOXML
-    )
+    return sorted(ruta for ruta in rutas if Path(ruta).suffix.lower() in EXTENSIONES_OOXML)
 
 
 def texto_de_parte(xml: str, *, con_atributos: bool) -> str:
@@ -196,10 +192,7 @@ def informar(extraidos: list[Documento], ilegibles: list[str], destino: Path) ->
     for documento in extraidos:
         print(f"  {documento.ruta}: {documento.caracteres} caracteres")
     total = sum(documento.caracteres for documento in extraidos)
-    print(
-        f"[ok] {len(extraidos)} documentos OOXML extraidos "
-        f"({total} caracteres) a {destino}"
-    )
+    print(f"[ok] {len(extraidos)} documentos OOXML extraidos " f"({total} caracteres) a {destino}")
     if ilegibles:
         print(f"[ERROR] {len(ilegibles)} documentos ilegibles: {', '.join(ilegibles)}")
 

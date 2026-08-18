@@ -93,9 +93,7 @@ def texto_extraido(destino: Path) -> str:
 # ── Lo que el gate tiene que ver ──────────────────────────────────────────────
 
 
-def test_el_texto_de_un_docx_queda_legible_para_el_escaner(
-    repo: Path, tmp_path: Path
-) -> None:
+def test_el_texto_de_un_docx_queda_legible_para_el_escaner(repo: Path, tmp_path: Path) -> None:
     """El caso que hoy pasa inadvertido: un secreto adentro de un documento."""
     documento_ooxml(
         repo / "docs" / "constitucion.docx",
@@ -110,17 +108,11 @@ def test_el_texto_de_un_docx_queda_legible_para_el_escaner(
     assert SECRETO in texto_extraido(destino)
 
 
-def test_extrae_todos_los_formatos_ooxml_no_solo_docx(
-    repo: Path, tmp_path: Path
-) -> None:
+def test_extrae_todos_los_formatos_ooxml_no_solo_docx(repo: Path, tmp_path: Path) -> None:
     """Triangulacion: una planilla esconde un secreto igual de bien que un texto."""
     documento_ooxml(
         repo / "planilla.xlsx",
-        {
-            "xl/sharedStrings.xml": (
-                f"<sst><si><t>usuario</t></si><si><t>{SECRETO}</t></si></sst>"
-            )
-        },
+        {"xl/sharedStrings.xml": (f"<sst><si><t>usuario</t></si><si><t>{SECRETO}</t></si></sst>")},
     )
     documento_ooxml(
         repo / "presentacion.pptx",
@@ -156,9 +148,7 @@ def test_el_nombre_del_archivo_extraido_apunta_al_documento_original(
     assert "deRuedas-constitucion.docx" in nombres[0]
 
 
-def test_las_etiquetas_xml_no_sobreviven_a_la_extraccion(
-    repo: Path, tmp_path: Path
-) -> None:
+def test_las_etiquetas_xml_no_sobreviven_a_la_extraccion(repo: Path, tmp_path: Path) -> None:
     """Sin esto el escaner leeria markup en vez de prosa, y el ruido tapa la senal."""
     documento_ooxml(
         repo / "documento.docx",
@@ -175,9 +165,7 @@ def test_las_etiquetas_xml_no_sobreviven_a_la_extraccion(
     assert "w:document" not in extraido
 
 
-def test_un_secreto_partido_en_dos_runs_queda_en_una_sola_linea(
-    repo: Path, tmp_path: Path
-) -> None:
+def test_un_secreto_partido_en_dos_runs_queda_en_una_sola_linea(repo: Path, tmp_path: Path) -> None:
     """Word parte una palabra en varios `<w:t>` sin avisar.
 
     Si la extraccion metiera un salto de linea entre runs, el secreto quedaria
@@ -204,9 +192,7 @@ def test_un_secreto_partido_en_dos_runs_queda_en_una_sola_linea(
     assert any(SECRETO in linea for linea in lineas)
 
 
-def test_los_parrafos_distintos_no_se_pegan_en_una_sola_linea(
-    repo: Path, tmp_path: Path
-) -> None:
+def test_los_parrafos_distintos_no_se_pegan_en_una_sola_linea(repo: Path, tmp_path: Path) -> None:
     """El reverso del test anterior: el limite de parrafo si corta."""
     documento_ooxml(
         repo / "parrafos.docx",
@@ -222,9 +208,7 @@ def test_los_parrafos_distintos_no_se_pegan_en_una_sola_linea(
     assert "segundo" in lineas
 
 
-def test_el_destino_de_un_hipervinculo_tambien_se_extrae(
-    repo: Path, tmp_path: Path
-) -> None:
+def test_el_destino_de_un_hipervinculo_tambien_se_extrae(repo: Path, tmp_path: Path) -> None:
     """Word no guarda las URLs en el texto: las guarda en atributos de un `.rels`.
 
     Un token pegado en la query de un enlace no aparece entre etiquetas, asi que
@@ -315,9 +299,7 @@ def test_un_documento_ilegible_rompe_el_gate(repo: Path, tmp_path: Path) -> None
     assert "roto.docx" in resultado.stdout + resultado.stderr
 
 
-def test_un_documento_ilegible_entre_otros_sanos_igual_rompe(
-    repo: Path, tmp_path: Path
-) -> None:
+def test_un_documento_ilegible_entre_otros_sanos_igual_rompe(repo: Path, tmp_path: Path) -> None:
     """Triangulacion: que la mayoria se haya leido no salva a la que no."""
     documento_ooxml(repo / "sano.docx", {"word/document.xml": parrafos("hola")})
     (repo / "roto.docx").write_bytes(b"tampoco es un zip")
@@ -336,9 +318,7 @@ def test_un_documento_ilegible_entre_otros_sanos_igual_rompe(
 # ── Lo que tiene que quedar en el log ─────────────────────────────────────────
 
 
-def test_informa_cuantos_documentos_y_cuanto_texto_extrajo(
-    repo: Path, tmp_path: Path
-) -> None:
+def test_informa_cuantos_documentos_y_cuanto_texto_extrajo(repo: Path, tmp_path: Path) -> None:
     """Un gate que no dice cuanto miro es indistinguible de uno que no miro nada.
 
     Este es el sintoma original: el job daba verde sin leer 1,5 MB. El resumen

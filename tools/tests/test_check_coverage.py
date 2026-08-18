@@ -178,9 +178,7 @@ def test_los_umbrales_son_configurables(tmp_path: Path) -> None:
         ramas_cubiertas=50,
     )
     assert correr("--coverage-json", str(archivo)).returncode == 1
-    aprobado = correr(
-        "--coverage-json", str(archivo), "--min-lineas", "70", "--min-ramas", "50"
-    )
+    aprobado = correr("--coverage-json", str(archivo), "--min-lineas", "70", "--min-ramas", "50")
     assert aprobado.returncode == 0
 
 
@@ -276,7 +274,11 @@ def test_ramas_que_decrecen_bloquean_aunque_las_lineas_suban(tmp_path: Path) -> 
         tmp_path / "base.json", sentencias=100, lineas_cubiertas=90, ramas=100, ramas_cubiertas=80
     )
     actual = escribir_cobertura(
-        tmp_path / "actual.json", sentencias=200, lineas_cubiertas=190, ramas=100, ramas_cubiertas=70
+        tmp_path / "actual.json",
+        sentencias=200,
+        lineas_cubiertas=190,
+        ramas=100,
+        ramas_cubiertas=70,
     )
     resultado = correr("--coverage-json", str(actual), "--base", str(base))
     assert resultado.returncode == 1

@@ -32,9 +32,7 @@ EXTERNAL_PREFIXES = ("http://", "https://", "mailto:", "tel:", "#")
 
 def markdown_files() -> list[Path]:
     return sorted(
-        path
-        for path in REPO.rglob("*.md")
-        if not EXCLUDED_DIRS & set(path.relative_to(REPO).parts)
+        path for path in REPO.rglob("*.md") if not EXCLUDED_DIRS & set(path.relative_to(REPO).parts)
     )
 
 

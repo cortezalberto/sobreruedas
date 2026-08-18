@@ -87,9 +87,7 @@ def main() -> int:
     fallas += informar("en .env.example y no en ADR-013", env - adr)
     fallas += informar("en ADR-013 (backend) y no en Settings", adr_backend - cfg)
     fallas += informar("en Settings y no en ADR-013", cfg - adr)
-    fallas += informar(
-        "en Settings pero marcadas como solo-frontend", cfg & SOLO_FRONTEND
-    )
+    fallas += informar("en Settings pero marcadas como solo-frontend", cfg & SOLO_FRONTEND)
 
     # Que una variable este declarada no alcanza: si ADR-013 la marca sensible,
     # tiene que ser SecretStr. Si no, se filtra por repr y el enmascarado es
