@@ -12,10 +12,20 @@
  * alguien: el rol que expone cada pieza, cuando interrumpe a un lector de
  * pantalla y cuando no, y los defaults que evitan errores dificiles de ver.
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { Alerta, Boton, Esqueleto, EstadoVacio, Etiqueta, Tarjeta } from '@/components/ui';
+import {
+  Alerta,
+  Boton,
+  Esqueleto,
+  EstadoVacio,
+  Etiqueta,
+  Migas,
+  Seleccion,
+  Tabla,
+  Tarjeta,
+} from '@/components/ui';
 
 describe('Boton', () => {
   it('es un boton y no un submit por defecto', () => {
@@ -130,5 +140,78 @@ describe('Esqueleto', () => {
     const { container } = render(<Esqueleto />);
 
     expect(container.firstElementChild).toHaveAttribute('aria-hidden', 'true');
+  });
+});
+
+describe('Seleccion', () => {
+  const OPCIONES = [
+    { valor: 'toyota', texto: 'Toyota' },
+    { valor: 'ford', texto: 'Ford' },
+  ];
+
+  it('la etiqueta esta asociada al control', () => {
+    // Sin asociacion, un lector de pantalla anuncia "combo box" y nada mas.
+    render(
+      <Seleccion id="marca" etiqueta="Marca" valor="" alCambiar={vi.fn()} opciones={OPCIONES} />,
+    );
+
+    expect(screen.getByLabelText('Marca')).toBeInTheDocument();
+  });
+
+  it('avisa el valor elegido al cambiar', () => {
+    const alCambiar = vi.fn();
+    render(
+      <Seleccion id="marca" etiqueta="Marca" valor="" alCambiar={alCambiar} opciones={OPCIONES} />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Marca'), { target: { value: 'ford' } });
+
+    expect(alCambiar).toHaveBeenCalledWith('ford');
+  });
+});
+
+describe('Migas', () => {
+  it('el tramo actual no es un enlace', () => {
+    // Un enlace a la pagina en la que ya estas es ruido para quien tabula.
+    render(<Migas tramos={[{ texto: 'Catalogo', href: '/catalogo' }, { texto: 'Toyota' }]} />);
+
+    expect(screen.getByRole('link', { name: 'Catalogo' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Toyota' })).toBeNull();
+    expect(screen.getByText('Toyota')).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('la navegacion tiene nombre propio', () => {
+    // Una pagina puede tener varias navegaciones; sin nombre se anuncian igual.
+    render(<Migas tramos={[{ texto: 'Catalogo' }]} />);
+
+    expect(screen.getByRole('navigation', { name: /migas/i })).toBeInTheDocument();
+  });
+});
+
+describe('Tabla', () => {
+  it('tiene descripcion para lectores de pantalla', () => {
+    // La diferencia entre "tabla, 3 columnas" y "modelos de Toyota, tabla".
+    render(
+      <Tabla descripcion="Modelos de Toyota" columnas={['Modelo']}>
+        <tr>
+          <td>Hilux</td>
+        </tr>
+      </Tabla>,
+    );
+
+    expect(screen.getByRole('table', { name: 'Modelos de Toyota' })).toBeInTheDocument();
+  });
+
+  it('los encabezados declaran que columna encabezan', () => {
+    render(
+      <Tabla descripcion="Modelos" columnas={['Modelo', 'Carroceria']}>
+        <tr>
+          <td>Hilux</td>
+          <td>pickup</td>
+        </tr>
+      </Tabla>,
+    );
+
+    expect(screen.getByRole('columnheader', { name: 'Modelo' })).toHaveAttribute('scope', 'col');
   });
 });

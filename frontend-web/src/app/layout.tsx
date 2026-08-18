@@ -1,8 +1,38 @@
 import type { Metadata, Viewport } from 'next';
+import { Inter } from 'next/font/google';
 
 import { NavegacionPrincipal } from '@/components/NavegacionPrincipal';
 
 import './globals.css';
+
+/**
+ * Inter — la tipografia digital principal del brand book (`knowledge-base/15`
+ * §Tipografia, licencia SIL OFL).
+ *
+ * `next/font/google` Y NO UN `<link>` A GOOGLE FONTS. La diferencia importa por
+ * dos motivos, y ninguno es de moda:
+ *
+ *   - **No hay dependencia de red en tiempo de ejecucion.** Next descarga la
+ *     fuente en el BUILD y la sirve desde el propio dominio. Un `<link>` a
+ *     `fonts.googleapis.com` haria que cada visita dependa de un tercero, y
+ *     ademas le filtra la IP del usuario — que con Ley 25.326 encima no es un
+ *     detalle estetico.
+ *   - **No hay salto de maquetado.** Next calcula el `size-adjust` de la fuente
+ *     de respaldo, asi que el texto no se reacomoda cuando termina de cargar.
+ *
+ * ⚠️ A cambio, el BUILD pasa a necesitar red la primera vez (despues cachea).
+ * Es un costo real y esta asumido: el pipeline ya descarga dependencias de npm y
+ * de PyPI, asi que no introduce una clase de fallo nueva.
+ *
+ * `display: 'swap'`: el texto se ve con la fuente de respaldo mientras Inter
+ * carga, en vez de quedar invisible. Un bloque de texto en blanco es peor que un
+ * bloque con otra tipografia.
+ */
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--fuente-inter',
+});
 
 /**
  * Layout raiz — T-006.
@@ -38,7 +68,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   // pantalla para elegir la voz. Sin esto, un lector en ingles pronuncia el
   // castellano y no se entiende nada.
   return (
-    <html lang="es-AR">
+    <html lang="es-AR" className={inter.variable}>
       <body className="min-h-screen bg-white text-neutro-enfasis antialiased">
         <NavegacionPrincipal />
         {children}

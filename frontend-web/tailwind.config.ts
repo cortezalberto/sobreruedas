@@ -51,6 +51,12 @@ const config: Config = {
       maxWidth: {
         lectura: '68ch',
       },
+      fontFamily: {
+        // Inter la carga `next/font` en el layout raiz y expone la variable CSS.
+        // El fallback no es decorativo: cubre el rato entre el primer pintado y
+        // la carga de la fuente, y el sistema operativo de quien mira.
+        sans: ['var(--fuente-inter)', 'system-ui', 'sans-serif'],
+      },
     },
   },
   plugins: [],

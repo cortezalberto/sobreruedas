@@ -6,10 +6,9 @@
  * modelos cargados" y "esa marca no existe" son cosas distintas, y el backend
  * se tomo el trabajo de distinguirlas.
  */
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { EstadoVacio } from '@/components/ui';
+import { EstadoVacio, Migas, Tabla } from '@/components/ui';
 import { ErrorDeApi, obtenerModelos, type Modelo } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -48,9 +47,9 @@ export default async function ModelosDeMarcaPage({
 
   return (
     <main className="mx-auto max-w-4xl p-8">
-      <Link href="/catalogo" className="text-sm text-neutro-texto underline underline-offset-4">
-        ← Catalogo
-      </Link>
+      <Migas
+        tramos={[{ texto: 'Catalogo', href: '/catalogo' }, { texto: marca.replace(/-/g, ' ') }]}
+      />
 
       <h1 className="mt-4 text-3xl font-semibold capitalize tracking-tight">
         {marca.replace(/-/g, ' ')}
@@ -62,16 +61,20 @@ export default async function ModelosDeMarcaPage({
           descripcion="El catalogo se completa con datos de mercado."
         />
       ) : (
-        <ul className="mt-8 divide-y divide-neutro-borde border-y border-neutro-borde">
-          {modelos.map((modelo) => (
-            <li key={modelo.id} className="flex items-baseline justify-between gap-4 py-3">
-              <span className="font-medium">{modelo.name}</span>
-              <span className="text-sm text-neutro-suave">
-                {modelo.body_type} · {vigencia(modelo)}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-8">
+          <Tabla
+            descripcion={`Modelos de ${marca.replace(/-/g, ' ')}`}
+            columnas={['Modelo', 'Carroceria', 'Vigencia']}
+          >
+            {modelos.map((modelo) => (
+              <tr key={modelo.id} className="border-b border-neutro-borde">
+                <td className="py-2 pr-4 font-medium">{modelo.name}</td>
+                <td className="py-2 pr-4 text-neutro-texto">{modelo.body_type}</td>
+                <td className="py-2 pr-4 text-neutro-texto">{vigencia(modelo)}</td>
+              </tr>
+            ))}
+          </Tabla>
+        </div>
       )}
     </main>
   );

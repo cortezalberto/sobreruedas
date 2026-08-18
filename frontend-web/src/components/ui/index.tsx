@@ -262,3 +262,134 @@ export function Esqueleto({ alto = 'h-24' }: { alto?: string }) {
     />
   );
 }
+
+// ── 7. Seleccion ────────────────────────────────────────────────────────────
+
+/**
+ * Desplegable con etiqueta asociada.
+ *
+ * La etiqueta va con `htmlFor` y no envolviendo al control: las dos formas son
+ * validas en HTML, pero la asociacion explicita es la unica que sobrevive a que
+ * alguien reordene el JSX. Sin etiqueta asociada, un lector de pantalla anuncia
+ * "combo box" y nada mas.
+ *
+ * `<select>` nativo y no un desplegable propio. El nativo ya trae teclado,
+ * busqueda por letra y el selector de rueda del telefono — reimplementarlo es
+ * exactamente el trabajo para el que existe Radix, y todavia no hace falta.
+ */
+export function Seleccion({
+  id,
+  etiqueta,
+  valor,
+  alCambiar,
+  opciones,
+  deshabilitado,
+  textoVacio = 'Elegí una opción',
+}: {
+  id: string;
+  etiqueta: string;
+  valor: string;
+  alCambiar: (valor: string) => void;
+  opciones: readonly { valor: string; texto: string }[];
+  deshabilitado?: boolean;
+  textoVacio?: string;
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium text-neutro-texto">
+        {etiqueta}
+      </label>
+      <select
+        id={id}
+        value={valor}
+        disabled={deshabilitado}
+        onChange={(evento) => alCambiar(evento.target.value)}
+        className="mt-1 w-full rounded-md border border-neutro-borde bg-white px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <option value="">{textoVacio}</option>
+        {opciones.map((opcion) => (
+          <option key={opcion.valor} value={opcion.valor}>
+            {opcion.texto}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// ── 8. Migas ────────────────────────────────────────────────────────────────
+
+/**
+ * Navegacion jerarquica.
+ *
+ * El ultimo tramo NO es un enlace: es donde ya estas, y un enlace a la pagina
+ * actual es ruido para quien tabula. Se marca con `aria-current="page"`, que es
+ * lo que un lector anuncia.
+ *
+ * El `<nav>` lleva nombre porque una pagina puede tener varias navegaciones
+ * —la principal y esta— y sin nombre se anuncian las dos igual.
+ */
+export function Migas({ tramos }: { tramos: readonly { texto: string; href?: string }[] }) {
+  return (
+    <nav aria-label="Migas de navegación">
+      <ol className="flex flex-wrap items-center gap-2 text-sm text-neutro-texto">
+        {tramos.map((tramo, posicion) => (
+          <li key={tramo.texto} className="flex items-center gap-2">
+            {posicion > 0 && <span aria-hidden="true">/</span>}
+            {tramo.href ? (
+              <a href={tramo.href} className="underline underline-offset-4 hover:text-marca">
+                {tramo.texto}
+              </a>
+            ) : (
+              <span aria-current="page" className="text-neutro-enfasis">
+                {tramo.texto}
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
+// ── 9. Tabla ────────────────────────────────────────────────────────────────
+
+/**
+ * Listado denso.
+ *
+ * `<caption>` obligatorio y visualmente oculto: es lo que le dice a un lector de
+ * pantalla de que es esta tabla antes de leer 50 filas. Es la diferencia entre
+ * "tabla, 6 columnas" y "modelos de Toyota, tabla, 6 columnas".
+ *
+ * `scope="col"` en los encabezados: sin eso, el lector no sabe que celda
+ * encabeza que columna y lee los datos sueltos.
+ */
+export function Tabla({
+  descripcion,
+  columnas,
+  children,
+}: {
+  descripcion: string;
+  columnas: readonly string[];
+  children: ReactNode;
+}) {
+  return (
+    // El contenedor scrollea en horizontal: una tabla ancha en un telefono
+    // rompe el ancho del documento entero si no se acota acá.
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <caption className="sr-only">{descripcion}</caption>
+        <thead>
+          <tr className="border-b border-neutro-borde text-left">
+            {columnas.map((columna) => (
+              <th key={columna} scope="col" className="py-2 pr-4 font-medium text-neutro-texto">
+                {columna}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
+}

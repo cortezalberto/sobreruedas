@@ -12,6 +12,7 @@
  */
 import Link from 'next/link';
 
+import { SelectorDeVehiculo } from '@/components/SelectorDeVehiculo';
 import { obtenerMarcas } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +32,16 @@ export default async function CatalogoPage() {
         y no lo escribe ninguna.
       </p>
 
-      <ul className="mt-8 grid gap-2 sm:grid-cols-3">
+      <section className="mt-8 max-w-lectura rounded-lg border border-neutro-borde p-4">
+        <h2 className="text-lg font-medium">Buscador</h2>
+        <p className="mb-4 mt-1 text-sm text-neutro-texto">
+          Elegí una marca y se cargan sus modelos.
+        </p>
+        <SelectorDeVehiculo marcas={marcas} />
+      </section>
+
+      <h2 className="mt-10 text-lg font-medium">Todas las marcas</h2>
+      <ul className="mt-4 grid gap-2 sm:grid-cols-3">
         {marcas.map((marca) => (
           <li key={marca.id}>
             <Link
