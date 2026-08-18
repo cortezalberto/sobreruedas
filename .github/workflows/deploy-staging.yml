@@ -136,7 +136,7 @@ jobs:
       # Se escanea por DIGEST y no por tag, igual que la firma: un tag se puede
       # mover entre el escaneo y el despliegue, un digest no.
       - name: Escanear la imagen — trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.componente }}@${{ steps.construir.outputs.digest }}
           format: table
