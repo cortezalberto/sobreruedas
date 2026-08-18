@@ -82,6 +82,37 @@ class AuthenticationError(Exception):
         self.code = code or "not_authenticated"
 
 
+class PlanQuotaExceeded(Exception):
+    """El plan del tenant no da para una creacion mas.
+
+    **402 y no 403**, y la diferencia no es cosmetica (design.md D-6 de C-04):
+
+      - 401  no se quien sos            -> autenticarse
+      - 403  se quien sos y no te alcanza el rol -> pedirselo a un manager
+      - 402  se quien sos, TENES el permiso, y el plan no da -> subir de plan
+
+    Un 403 aca manda al usuario por el camino equivocado: va a buscar a alguien
+    con mas permisos, y no hay permiso que agregue vehiculos por encima de la
+    cuota — el manager tampoco puede. Y para el producto la diferencia importa
+    todavia mas: un 402 es una senal comercial (un tenant tocando su techo es
+    un candidato a upgrade) y un 403 es ruido de soporte.
+
+    Lleva `recurso`, `limite` y `usados` en el cuerpo para que el frontend
+    pueda decir "llegaste a 80 de 80 vehiculos de Starter" sin adivinar.
+    """
+
+    status_code = 402
+
+    def __init__(self, *, recurso: str, limite: int, usados: int) -> None:
+        detalle = f"el plan permite hasta {limite} y ya hay {usados}"
+        super().__init__(detalle)
+        self.detail = detalle
+        self.code = "plan_quota_exceeded"
+        self.recurso = recurso
+        self.limite = limite
+        self.usados = usados
+
+
 class RequestError(Exception):
     """La peticion no se pudo interpretar, y la validacion no lo atrapo.
 
@@ -136,6 +167,19 @@ def register_exception_handlers(app: FastAPI) -> None:
             title="No autenticado",
             detail=exc.detail,
             code=exc.code,
+        )
+
+    @app.exception_handler(PlanQuotaExceeded)
+    async def _cuota(_: Request, exc: PlanQuotaExceeded) -> JSONResponse:
+        return _problema(
+            status=exc.status_code,
+            title="Limite del plan alcanzado",
+            detail=exc.detail,
+            code=exc.code,
+            # El cliente reacciona por `code` y arma el mensaje con estos tres.
+            # Sin ellos tendria que parsear `detail`, que es texto para humanos
+            # y cambia con el idioma.
+            extra={"resource": exc.recurso, "limit": exc.limite, "used": exc.usados},
         )
 
     @app.exception_handler(RequestError)
