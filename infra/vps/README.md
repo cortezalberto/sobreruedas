@@ -93,8 +93,8 @@ sudo -u deploy git clone https://github.com/cortezalberto/sobreruedas.git /opt/d
 
 # Las redes son EXTERNAS: las comparten los tres proyectos de Compose. Sin esto
 # los stacks de aplicacion no alcanzan a la base.
-docker network create deruedas_default
-docker network create deruedas_observability
+docker network create deruedas_prod_default
+docker network create deruedas_prod_observability
 
 sudo install -m 0755 /opt/deruedas/infra/vps/deploy/*.sh /opt/deruedas/infra/vps/deploy/
 sudo cp /opt/deruedas/infra/vps/deploy/deruedas-desplegar.{service,timer} /etc/systemd/system/

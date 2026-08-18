@@ -29,9 +29,19 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # LA RED ES EXTERNA
 #
-# Los tres proyectos de Compose comparten `deruedas_default`, que se crea UNA
-# VEZ fuera de Compose (runbook 03). Si fuera una red por proyecto, los stacks
-# de aplicacion no alcanzarian a la base.
+# Los tres proyectos de Compose comparten `deruedas_prod_default`, que se crea
+# UNA VEZ fuera de Compose (runbook 03). Si fuera una red por proyecto, los
+# stacks de aplicacion no alcanzarian a la base.
+#
+# ⚠️ EL PREFIJO `prod_` NO ES COSMETICO. Hasta el 17-ago-2026 esta red se
+# llamaba `deruedas_default` — el MISMO nombre que docker-compose.yml CREA en
+# desarrollo. Como aca es `external: true`, un stack de produccion levantado en
+# una maquina con el entorno de desarrollo arriba no fallaba: se enganchaba en
+# silencio a la red de desarrollo y hablaba con la base equivocada.
+#
+# En el VPS nunca se habria visto, porque alla no hay entorno de desarrollo.
+# Se habria visto justo donde probamos. Con el prefijo, si el runbook 03 no
+# corrio, Compose corta con "network not found", que es lo que uno quiere.
 #
 # ⚠️ Compose agrega el nombre del servicio como alias de red. Con azul y verde
 # levantados a la vez, `backend` resuelve a LOS DOS por round-robin. Por eso
@@ -344,8 +354,8 @@ networks:
   # Externa: la crea el runbook 03, no Compose. Es lo que permite que los tres
   # proyectos se vean entre si.
   default:
-    name: deruedas_default
+    name: deruedas_prod_default
     external: true
   observability:
-    name: deruedas_observability
+    name: deruedas_prod_observability
     external: true

@@ -24,7 +24,7 @@ set -euo pipefail
 COLOR="${1:-}"
 DURACION="${2:-300}"
 INTERVALO="${INTERVALO_HUMO:-10}"
-RED="${RED_DOCKER:-deruedas_default}"
+RED="${RED_DOCKER:-deruedas_prod_default}"
 
 [[ "$COLOR" == "azul" || "$COLOR" == "verde" ]] \
     || { echo "[humo] ERROR: color invalido '${COLOR:-<vacio>}'" >&2; exit 2; }

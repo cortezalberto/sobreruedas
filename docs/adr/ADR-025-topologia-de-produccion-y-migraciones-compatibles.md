@@ -33,7 +33,9 @@ Este ADR cierra los tres.
 | **Datos** | `deruedas-datos` | `postgres`, `redis`, `minio`, `opensearch`, `keycloak` | **Uno solo, permanente.** No se toca en un despliegue ordinario. |
 | **Aplicación** | `deruedas-azul` / `deruedas-verde` | `backend`, `worker`, `frontend-web` | **Dos, alternándose.** Es lo único que el proxy conmuta. |
 
-Los stacks de aplicación alcanzan al de datos por una red **externa** creada una sola vez (`deruedas_default`), no por una red por proyecto.
+Los stacks de aplicación alcanzan al de datos por una red **externa** creada una sola vez (`deruedas_prod_default`), no por una red por proyecto.
+
+> **Corregido el 17-ago-2026.** Este ADR decía `deruedas_default`, que es **el mismo nombre que `docker-compose.yml` crea en desarrollo**. Como en producción la red es `external: true`, un stack de producción levantado en una máquina con el entorno de desarrollo arriba no fallaba: se enganchaba en silencio a la red de desarrollo. En el VPS nunca se habría visto —allá no hay entorno de desarrollo—, se habría visto justo en la máquina donde probamos. Las redes de producción llevan ahora el prefijo `deruedas_prod_`.
 
 `mailhog` no existe en producción: es un capturador de correo de prueba, y dejarlo haría que producción **no envíe un solo mail** —ni recuperación de cuenta ni notificaciones— fallando en silencio.
 
