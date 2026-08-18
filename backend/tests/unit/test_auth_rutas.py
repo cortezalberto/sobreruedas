@@ -12,7 +12,7 @@ from collections.abc import Iterator
 from typing import Any, cast
 
 import pytest
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
@@ -138,13 +138,41 @@ def rutas_desprotegidas(app: FastAPI) -> set[str]:
     """
     desprotegidas: set[str] = set()
 
-    for ruta in app.routes:
-        if not isinstance(ruta, APIRoute) or ruta.path in RUTAS_EXENTAS:
+    for ruta in _todas_las_rutas(app):
+        if ruta.path in RUTAS_EXENTAS:
             continue
         if not _exige_identidad(ruta):
             desprotegidas.add(ruta.path)
 
     return desprotegidas
+
+
+def _todas_las_rutas(contenedor: object) -> Iterator[APIRoute]:
+    """Las `APIRoute` del contenedor, ENTRANDO en los routers incluidos.
+
+    ⚠️ ESTE RECORRIDO ES EL CONTROL. Hasta el 18-ago-2026 esta funcion iteraba
+    `app.routes` y se quedaba con lo que fuera `APIRoute` — y eso dejaba ciego al
+    gate entero.
+
+    FastAPI **no aplana** un `include_router()` dentro de `app.routes`: guarda un
+    objeto envoltorio (`_IncludedRouter`) que no es `APIRoute`, con las rutas
+    reales colgando de su `original_router`. Como el bucle viejo descartaba todo
+    lo que no fuera `APIRoute`, **ninguna ruta montada por `include_router`
+    llegaba a mirarse**.
+
+    Y ese es el unico camino por el que van a entrar los routers de dominio. El
+    test decia "ninguna ruta de datos se atiende sin token" y habria seguido en
+    verde con la API entera abierta: se descubrio cuando el primer router de
+    dominio —el catalogo— aparecio sin token y sin estar declarado exento, y el
+    gate no dijo nada.
+    """
+    for ruta in getattr(contenedor, "routes", []):
+        if isinstance(ruta, APIRoute):
+            yield ruta
+            continue
+        incluido = getattr(ruta, "original_router", None)
+        if incluido is not None:
+            yield from _todas_las_rutas(incluido)
 
 
 def _exige_identidad(ruta: APIRoute) -> bool:
@@ -215,10 +243,61 @@ def test_las_exentas_son_solo_sondas_y_documentacion() -> None:
     falla si alguien le agrega algo que no sea una sonda o documentacion. El
     dia que entre un webhook, se agrega aca **y** con su verificacion de firma.
     """
-    permitidas = {"/health", "/ready", "/docs", "/redoc", "/openapi.json"}
+    permitidas = {
+        "/health",
+        "/ready",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        # Catalogos cross-tenant de solo lectura, declarados el 18-ago-2026. No
+        # llevan `tenant_id`, estan en `EXENTAS_DE_RLS` y la base les revoco la
+        # escritura. Ver la justificacion completa en `auth.py`.
+        "/api/v1/plans",
+        "/api/v1/catalog/brands",
+        "/api/v1/catalog/brands/{marca_id}/models",
+    }
 
     assert RUTAS_EXENTAS == permitidas, (
         "cambio la lista de rutas exentas. Si es un webhook, tiene que verificar "
         "la firma del emisor por su propio mecanismo; si expone datos de un "
         "tenant, no puede estar exento (spec `platform/identity`)"
     )
+
+
+def test_el_detector_entra_en_los_routers_incluidos() -> None:
+    """El agujero que este gate tuvo hasta el 18-ago-2026.
+
+    FastAPI **no aplana** un `include_router()` dentro de `app.routes`: deja un
+    envoltorio que no es `APIRoute`, con las rutas colgando de su
+    `original_router`. El detector viejo descartaba todo lo que no fuera
+    `APIRoute`, asi que **ninguna ruta montada por include_router se miraba** — y
+    ese es el unico camino por el que entran los routers de dominio.
+
+    El test de arriba habria seguido en verde con la API entera abierta. Este es
+    el que lo impide: monta una ruta desprotegida DENTRO de un router incluido, y
+    exige que el detector la encuentre.
+    """
+    app = FastAPI()
+    router = APIRouter(prefix="/api/v1")
+
+    @router.get("/vehiculos")
+    async def _abierta() -> dict[str, str]:
+        return {}
+
+    app.include_router(router)
+
+    assert rutas_desprotegidas(app) == {"/api/v1/vehiculos"}
+
+
+def test_el_detector_acepta_una_ruta_protegida_dentro_de_un_router_incluido() -> None:
+    """El contrapeso: entrar en el router no puede reportar falsos positivos."""
+    app = FastAPI()
+    router = APIRouter(prefix="/api/v1")
+
+    @router.get("/vehiculos")
+    async def _protegida(sujeto: SujetoActual) -> dict[str, str]:
+        return {"tenant": str(sujeto.tenant_id)}
+
+    app.include_router(router)
+
+    assert rutas_desprotegidas(app) == set()

@@ -319,10 +319,25 @@ SujetoActual = Annotated[Sujeto, Depends(get_current_user)]
 # ninguna ruta fuera de esta lista se atienda sin token.
 #
 # El limite es duro: **ninguna ruta que exponga datos de un tenant puede estar
-# aca**. Las unicas categorias admitidas son las sondas de estado, la
-# documentacion —que ademas se bloquea en produccion— y los receptores de
-# notificaciones externas, que verifican la autenticidad del emisor por su
-# propio mecanismo (firma HMAC del webhook) en vez de por token.
+# aca**. Las categorias admitidas son:
+#
+#   1. Sondas de estado.
+#   2. Documentacion — que ademas se bloquea en produccion.
+#   3. Receptores de notificaciones externas, que verifican la autenticidad del
+#      emisor por su propio mecanismo (firma HMAC del webhook) en vez de token.
+#   4. **Catalogos cross-tenant de solo lectura** — agregada el 18-ago-2026.
+#
+# La categoria 4 merece su justificacion, porque es la unica que devuelve datos
+# de negocio. `plans` y el catalogo de vehiculos NO contienen dato de ninguna
+# agencia: son los mismos para todas, no llevan `tenant_id`, figuran en
+# `EXENTAS_DE_RLS` y la base les tiene REVOCADA la escritura (migraciones `009`
+# y `010`). La grilla de precios es informacion publica —es la pagina de
+# pricing— y el catalogo de marcas lo necesita el portal publico (C-22/C-23).
+#
+# ⚠️ Exigir token acá no agregaria aislamiento: no hay nada que aislar. Lo que
+# si hace falta y NO esta puesto todavia es limitar la tasa por IP sobre estas
+# rutas, que es el control que corresponde a una superficie anonima. Queda
+# anotado para C-03.
 # ─────────────────────────────────────────────────────────────────────────────
 RUTAS_EXENTAS = frozenset(
     {
@@ -331,5 +346,9 @@ RUTAS_EXENTAS = frozenset(
         "/docs",  # documentacion interactiva
         "/redoc",
         "/openapi.json",
+        # Categoria 4 — catalogos cross-tenant de solo lectura. Ver arriba.
+        "/api/v1/plans",
+        "/api/v1/catalog/brands",
+        "/api/v1/catalog/brands/{marca_id}/models",
     }
 )
