@@ -50,7 +50,13 @@
 | Gris oscuro | `#404040` | — | Texto principal |
 | Casi negro | `#1A1A1A` | — | Texto enfático |
 
-⚠️ **`IN-45`**: el "Rojo crítico" `#974706` es visualmente un **marrón anaranjado oscuro**, prácticamente indistinguible del "Amarillo atención" `#9C5700`. Los dos colores funcionales de *error* y *advertencia* colisionan, lo que viola la propia regla del documento de tener colores distintos por estado. Casi con seguridad es un error de transcripción del `.docx` original. **Verificar contra el archivo de diseño antes de implementar el design system.**
+✅ ~~**`IN-45`**~~ — **CERRADO el 18-ago-2026 por [`ADR-028`](../docs/adr/ADR-028-tokens-de-color-y-el-rojo-que-no-era-rojo.md).** El producto usa **`#A4161A`** como color de error, no el `#974706` de esta tabla.
+
+> **El diagnóstico que había acá era incorrecto, y conviene decir en qué.** Esta nota suponía que el `#974706` era *"casi con seguridad un error de transcripción del `.docx` original"* y pedía verificar contra el archivo de diseño. **Se verificó.** El `.docx` fuente dice, para *Rojo crítico*: `HEX: #974706 · RGB: 151, 71, 6 · CMYK: 20, 70, 100, 30` — los tres valores **coinciden entre sí**. No hubo error de transcripción: el brand book especifica deliberadamente un marrón anaranjado y lo llama rojo.
+>
+> **El problema sí era real**, pero se medía mal. El primer intento comparó el *contraste WCAG* entre el rojo y el amarillo (1,17:1) — métrica equivocada, porque WCAG mide texto sobre fondo y dos colores de estado nunca se apilan. Lo que los separa es el **tono**: el `#974706` está a **7°** del `#9C5700`, y por eso son indistinguibles. El `#A4161A` adoptado está a **35°** y da 7,75:1 sobre blanco.
+>
+> Se pudo decidir en C-07 sin escalar porque `brand-book` es **N4** por [`ADR-000`](../docs/adr/ADR-000-precedencia-documental.md): insumo, no norma. **El brand book no se modifica** — es corpus inmutable; lo que cambia es el token del producto.
 
 **Proporciones de uso**: neutros ~60 % · azul institucional 25-30 % · secundarios 5-10 % · dorado < 2 %.
 
@@ -162,7 +168,13 @@ Cinco dimensiones de personalidad: **tendiendo a informal** (voseo argentino) ·
 
 **Herramientas de verificación**: WebAIM Contrast Checker (diseño), `axe-core` integrado en Playwright y `jest-axe` (automatizado). En el pipeline, los findings de severidad *serious* **bloquean el release**.
 
-⚠️ **`IN-44`**: el brand book se contradice sobre el contraste del azul institucional sobre blanco — §5.6 lo declara "AA cumplido" y §6.4.4 dice que "cumple AAA (más de 7:1)". Son niveles distintos para el mismo par de colores.
+✅ ~~**`IN-44`**~~ — **CERRADO el 18-ago-2026 por [`ADR-028`](../docs/adr/ADR-028-tokens-de-color-y-el-rojo-que-no-era-rojo.md): no había contradicción.**
+
+> §5.6 dice que el azul institucional sobre blanco *"cumple AA"* y §6.4.4 que *"cumple AAA (más de 7:1)"*. **Medido: 11,62:1.** Las dos afirmaciones son verdaderas — AA (4,5:1) es un **piso**, AAA (7:1) es un piso más alto, y ese par los cruza a los dos.
+>
+> Es la segunda vez que el proyecto anota como contradicción lo que era **un piso leído como techo** — la primera fue el escenario de `pip-audit` en C-01. Vale tenerlo presente al revisar el resto de las inconsistencias.
+>
+> El estándar vinculante sigue siendo **AA**, que es lo que declaran de forma consistente `brand-book`, `spec-tecnica` §6.6 e `historias-usuario`. Que este par alcance AAA es un dato, no un compromiso.
 
 ## Localización
 
