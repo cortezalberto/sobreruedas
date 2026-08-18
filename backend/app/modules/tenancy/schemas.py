@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from decimal import Decimal
 from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -144,3 +145,27 @@ class SucursalSalida(_Salida):
     phone: str | None
     is_active: bool
     created_at: dt.datetime
+
+
+class PlanSalida(_Salida):
+    """Un plan del catalogo comercial, tal como lo consume la grilla de precios.
+
+    Lista blanca explicita, no un volcado del modelo: `is_active` decide QUE se
+    publica y no es informacion del plan, y `created_at` es de la fila, no del
+    producto.
+
+    `max_*` viaja como entero y el `0` significa SIN TECHO (`spec-tecnica` 3.3,
+    `Plan.SIN_TECHO`). No se traduce a `null`: "no hay tope" y "el campo no vino"
+    son cosas distintas, y el cliente que las confunda muestra "0 vehiculos" en
+    el plan mas caro del producto.
+    """
+
+    id: uuid.UUID
+    code: str
+    name: str
+    price_ars: Decimal
+    max_users: int
+    max_vehicles: int
+    max_branches: int
+    max_whatsapp_messages_month: int
+    modules: list[str]

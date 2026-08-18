@@ -28,6 +28,7 @@ from app.core.observability import (
     configure_logging,
     get_correlation_id,
 )
+from app.modules.tenancy.router import router as tenancy_router
 
 VERSION = "0.1.0"
 
@@ -134,6 +135,11 @@ def create_app() -> FastAPI:
     )
 
     register_exception_handlers(app)
+
+    # Primer router de dominio. Publica solo el catalogo de planes, que no lleva
+    # `tenant_id` ni requiere identidad — ver el encabezado de `router.py`. Los
+    # endpoints de agencias y usuarios siguen siendo C-05.
+    app.include_router(tenancy_router)
 
     @app.get("/health", tags=["salud"], summary="Sonda de vida")
     async def health() -> dict[str, Any]:

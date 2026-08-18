@@ -30,9 +30,9 @@ from collections.abc import Sequence
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.tenancy.models import Branch, Tenant
+from app.modules.tenancy.models import Branch, Plan, Tenant
 
-__all__ = ["BranchRepository", "TenantRepository"]
+__all__ = ["BranchRepository", "PlanRepository", "TenantRepository"]
 
 
 class TenantRepository:
@@ -97,3 +97,23 @@ class BranchRepository:
     @staticmethod
     def _vivas(consulta: Select[tuple[Branch]], incluir: bool) -> Select[tuple[Branch]]:
         return consulta if incluir else consulta.where(Branch.deleted_at.is_(None))
+
+
+class PlanRepository:
+    """Catalogo comercial. Sin `tenant_id`: es compartido (`RN-MT-09`)."""
+
+    def __init__(self, sesion: AsyncSession) -> None:
+        self._sesion = sesion
+
+    async def listar_activos(self) -> Sequence[Plan]:
+        """Los planes publicables, del mas barato al mas caro.
+
+        El `ORDER BY` no es cosmetico. Sin el, PostgreSQL puede devolver las
+        filas en cualquier orden, y una grilla de precios que se reordena sola
+        entre dos cargas de la pagina no es una grilla de precios.
+
+        Se ordena por precio y no por `code`: el orden comercial es el que el
+        cliente espera leer, y alfabeticamente `enterprise` vendria primero.
+        """
+        consulta = select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.price_ars)
+        return (await self._sesion.execute(consulta)).scalars().all()
