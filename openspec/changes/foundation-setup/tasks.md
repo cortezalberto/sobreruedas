@@ -611,6 +611,27 @@ Cubre la capability `platform/delivery-pipeline`.
 > | `platform/configuration` | 10 | **10** | ✅ completa |
 > | `platform/delivery-pipeline` | 16 | **15** | ⚠️ falta 1 |
 >
+> > **Re-verificado el 18-ago-2026 — el 35 de 36 sigue en pie, y no se tildó.**
+> > No se repitió la auditoría: se comprobó que siga siendo cierta, que es
+> > distinto. Los conteos de escenarios de las tres delta specs siguen dando
+> > 10 / 10 / 16; los cuatro archivos de test que esta nota nombra existen; y la
+> > suite entera corrió verde en CI (7/7, corrida `32144874673`). El escenario
+> > que falta sigue siendo el mismo y sigue esperando el servidor.
+> >
+> > Se agregó una comprobación que esta auditoría no había hecho, y que resultó
+> > pertinente: **que las acciones de tercero que los workflows fijan existan de
+> > verdad.** El escenario pendiente afirma que el despliegue a staging *ocurre*,
+> > y quien lo ejecutaría es `deploy-staging.yml` — un workflow que solo corre en
+> > `main`, así que ningún push a una rama lo prueba. Ese mismo día se encontró
+> > que fijaba `aquasecurity/trivy-action@0.28.0`, **un tag que no existe** (los
+> > de ese repositorio llevan `v`). Habría fallado en el primer merge a `main`, y
+> > se habría leído como un problema del servidor.
+> >
+> > Corregido, se verificaron los **8** pines de acción de todos los workflows
+> > contra la API de refs de GitHub: los 8 resuelven. Queda dicho para que el día
+> > que el VPS exista, si este escenario falla, sea por el servidor y no por la
+> > maquinaria que lo lleva.
+>
 > > **Actualizado el 17-ago-2026 — 35 de 36, y el único que falta espera el
 > > servidor.** El escenario *"Vulnerabilidad de severidad baja"* **no
 > > necesitaba un test: necesitaba una decisión**, y se tomó (salida A, ver la
