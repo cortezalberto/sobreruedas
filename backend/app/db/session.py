@@ -310,3 +310,38 @@ async def sesion_de_plataforma(*, dsn: str | None = None) -> AsyncIterator[Async
     async with fabrica() as sesion:
         async with sesion.begin():
             yield sesion
+
+
+@asynccontextmanager
+async def sesion_de_catalogo(*, dsn: str | None = None) -> AsyncIterator[AsyncSession]:
+    """Sesion para CATALOGOS GLOBALES. Sin contexto de tenant, y sin que falte.
+
+    Existe para no ensanchar `sesion_de_plataforma`, que es otra cosa.
+
+    LA DIFERENCIA, QUE NO ES DE MATIZ
+    ──────────────────────────────────
+    `sesion_de_plataforma` consulta POR ENCIMA de los tenants: los datos tienen
+    dueno y ella lo ignora. Por eso su unico lugar legitimo es el backoffice
+    cross-tenant, y por eso el test de arquitectura la persigue.
+
+    Esta consulta tablas que NO TIENEN DUENO. `plans`, `vehicle_brands`,
+    `vehicle_models` son catalogo compartido: figuran en `EXENTAS_DE_RLS`
+    (`RN-MT-09`), no llevan `tenant_id`, y no hay contexto que establecer porque
+    no hay a que acotarlas. Pedirle contexto de tenant a la grilla de precios no
+    la haria mas segura: la haria imposible de consultar antes de tener sesion.
+
+    Que sean dos funciones y no un parametro es a proposito. Un
+    `sesion_de_plataforma(motivo="catalogo")` se lee igual en el diff que
+    cualquier otro uso, y lo que hace falta es exactamente lo contrario: que un
+    uso indebido salte a la vista. Cada una tiene su propia lista de lugares
+    permitidos en `test_arquitectura.py`.
+
+    ⚠️ NO sirve para tablas con `tenant_id`. Sobre una tabla con RLS activo esta
+    sesion no devuelve filas —igual que la de plataforma—, asi que usarla ahi no
+    es un agujero, es un listado vacio que alguien va a "arreglar" cambiando la
+    sesion. Para datos de un tenant va `sesion_de_tenant`, siempre.
+    """
+    fabrica = async_sessionmaker(_engine(dsn), expire_on_commit=False)
+    async with fabrica() as sesion:
+        async with sesion.begin():
+            yield sesion

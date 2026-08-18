@@ -38,6 +38,24 @@ PERMITIDOS = (
     "modules/admin/",
 )
 
+# La SEGUNDA puerta sin contexto de tenant, y no es la misma que la de arriba.
+#
+# `sesion_de_plataforma` consulta por encima de los tenants: los datos tienen
+# dueno y ella lo ignora. `sesion_de_catalogo` consulta tablas SIN dueno —las de
+# `EXENTAS_DE_RLS`, que no llevan `tenant_id`—, donde no hay contexto que
+# establecer.
+#
+# Listas separadas a proposito: fundirlas dejaria que un uso de catalogo
+# habilite tacitamente uno cross-tenant en la misma carpeta.
+PUERTA_DE_CATALOGO = "sesion_de_catalogo"
+
+PERMITIDOS_CATALOGO = (
+    # `plans` es catalogo comercial compartido (`RN-MT-09`). El router del
+    # modulo lo publica; el resto del modulo trabaja con datos de tenant y usa
+    # `sesion_de_tenant`.
+    "modules/tenancy/router.py",
+)
+
 
 def usos_de(nombre: str, raiz: Path, *, incluir_definiciones: bool = False) -> set[str]:
     """Rutas de los `.py` bajo `raiz` que REFERENCIAN `nombre`.
@@ -104,7 +122,69 @@ def test_la_sesion_sin_tenant_no_se_usa_fuera_del_espacio_administrativo() -> No
     )
 
 
+def test_la_sesion_de_catalogo_no_se_usa_fuera_de_donde_viven_los_catalogos() -> None:
+    """La segunda puerta sin contexto de tenant, con su propia lista.
+
+    `sesion_de_catalogo` consulta tablas que no tienen dueno —`plans` y
+    companía, todas en `EXENTAS_DE_RLS`—, asi que no hay contexto que
+    establecer. Eso la hace legitima donde vive un catalogo y en ningun otro
+    lado: sobre una tabla con `tenant_id` no devuelve filas, y el que se
+    encuentre con el listado vacio va a "arreglarlo" cambiando la sesion.
+
+    Tiene lista propia y no comparte la de `sesion_de_plataforma` a proposito.
+    Fundirlas dejaria que un uso de catalogo habilite tacitamente uno
+    cross-tenant en la misma carpeta, que es justo lo que cada lista existe
+    para no permitir.
+    """
+    infractores = {
+        ruta
+        for ruta in usos_de(PUERTA_DE_CATALOGO, RAIZ_APP)
+        if not any(ruta.startswith(p) for p in PERMITIDOS_CATALOGO)
+    }
+
+    assert not infractores, (
+        f"`{PUERTA_DE_CATALOGO}` aparece fuera de donde viven los catalogos: "
+        f"{sorted(infractores)}. Si la tabla lleva `tenant_id`, la sesion correcta "
+        "es `sesion_de_tenant` — esta no te va a devolver ninguna fila"
+    )
+
+
 # ── Probar el detector, no solo usarlo ───────────────────────────────────────
+
+
+def test_el_detector_encuentra_un_uso_infractor_de_catalogo(tmp_path: Path) -> None:
+    """El mismo detector, ejercitado sobre la segunda puerta.
+
+    Sin esto, el test de arriba pasaria igual el dia que `usos_de` dejara de
+    encontrar la referencia — y una lista de permitidos sobre un detector ciego
+    autoriza todo.
+    """
+    infractor = tmp_path / "modules" / "stock" / "servicio.py"
+    infractor.parent.mkdir(parents=True)
+    infractor.write_text(
+        "from app.db.session import sesion_de_catalogo\n"
+        "async def listar():\n"
+        "    async with sesion_de_catalogo() as s:\n"
+        "        return s\n",
+        encoding="utf-8",
+    )
+
+    permitido = tmp_path / "modules" / "tenancy" / "router.py"
+    permitido.parent.mkdir(parents=True)
+    permitido.write_text(
+        "from app.db.session import sesion_de_catalogo\n"
+        "async def planes():\n"
+        "    async with sesion_de_catalogo() as s:\n"
+        "        return s\n",
+        encoding="utf-8",
+    )
+
+    usos = usos_de(PUERTA_DE_CATALOGO, tmp_path)
+    infractores = {
+        ruta for ruta in usos if not any(ruta.startswith(p) for p in PERMITIDOS_CATALOGO)
+    }
+
+    assert infractores == {"modules/stock/servicio.py"}
 
 
 def test_el_detector_encuentra_un_uso_infractor(tmp_path: Path) -> None:
