@@ -13,7 +13,7 @@
  */
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
-import { ErrorDeApi, obtenerPlanes, SIN_TECHO } from '@/lib/api';
+import { ErrorDeApi, obtenerMarcas, obtenerModelos, obtenerPlanes, SIN_TECHO } from '@/lib/api';
 
 const PLAN_VALIDO = {
   id: '11111111-1111-1111-1111-111111111111',
@@ -87,5 +87,82 @@ describe('obtenerPlanes', () => {
 
     const [enterprise] = planes;
     expect(enterprise?.max_vehicles).toBe(0);
+  });
+});
+
+const MARCA_VALIDA = {
+  id: '22222222-2222-2222-2222-222222222222',
+  name: 'Toyota',
+  slug: 'toyota',
+  origin_country: 'Japón',
+};
+
+const MODELO_VALIDO = {
+  id: '33333333-3333-3333-3333-333333333333',
+  brand_id: MARCA_VALIDA.id,
+  name: 'Hilux',
+  body_type: 'pickup',
+  year_from: 2016,
+  year_to: null,
+};
+
+describe('obtenerMarcas', () => {
+  it('acepta una marca sin pais de origen', () => {
+    // `origin_country` es nullable en la base. Un guarda que exigiera string
+    // dejaria afuera marcas validas.
+    responderCon([{ ...MARCA_VALIDA, origin_country: null }]);
+
+    return expect(obtenerMarcas()).resolves.toHaveLength(1);
+  });
+
+  it('rechaza una marca sin slug', async () => {
+    const incompleta: Record<string, unknown> = { ...MARCA_VALIDA };
+    delete incompleta.slug;
+    responderCon([incompleta]);
+
+    await expect(obtenerMarcas()).rejects.toThrow(TypeError);
+  });
+});
+
+describe('obtenerModelos', () => {
+  it('deja pasar year_to nulo, que significa vigente', async () => {
+    responderCon([MODELO_VALIDO]);
+
+    const [modelo] = await obtenerModelos('toyota');
+
+    expect(modelo?.year_to).toBeNull();
+  });
+
+  it('acepta un modelo discontinuado', async () => {
+    responderCon([{ ...MODELO_VALIDO, year_to: 2020 }]);
+
+    const [modelo] = await obtenerModelos('toyota');
+
+    expect(modelo?.year_to).toBe(2020);
+  });
+
+  it('propaga el 404 como ErrorDeApi y no como lista vacia', async () => {
+    // El backend distingue "marca inexistente" de "marca sin modelos". Aplanar
+    // las dos en `[]` desharia esa distincion justo del lado que la muestra.
+    responderCon({ detail: 'no existe' }, 404);
+
+    await expect(obtenerModelos('marca-que-no-existe')).rejects.toThrow(ErrorDeApi);
+  });
+
+  it('escapa el slug en la URL', async () => {
+    // Se captura la URL en vez de leerla de `mock.calls`: sin un parametro
+    // declarado, `calls` es una tupla vacia y TypeScript no deja indexarla.
+    let urlPedida = '';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        urlPedida = url;
+        return new Response('[]', { status: 200 });
+      }),
+    );
+
+    await obtenerModelos('a/b');
+
+    expect(urlPedida).toContain('a%2Fb');
   });
 });

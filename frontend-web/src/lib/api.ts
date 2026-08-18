@@ -90,3 +90,85 @@ export async function obtenerPlanes(): Promise<Plan[]> {
 
   return datos;
 }
+
+/**
+ * Una marca del catalogo de vehiculos.
+ *
+ * Catalogo cross-tenant: lo lee cualquiera y no lo escribe nadie. El backend lo
+ * garantiza en la base, no en la aplicacion — ver la migracion `009`.
+ */
+export interface Marca {
+  id: string;
+  name: string;
+  slug: string;
+  origin_country: string | null;
+}
+
+/**
+ * Un modelo, colgado de su marca.
+ *
+ * ⚠️ `year_to` en `null` significa QUE SE SIGUE VENDIENDO, no que falte el dato.
+ * Son la misma ausencia de valor con significados opuestos, y por eso el campo
+ * viaja siempre en vez de omitirse cuando esta vacio.
+ */
+export interface Modelo {
+  id: string;
+  brand_id: string;
+  name: string;
+  body_type: string;
+  year_from: number;
+  year_to: number | null;
+}
+
+function esMarca(valor: unknown): valor is Marca {
+  if (typeof valor !== 'object' || valor === null) return false;
+  const m = valor as Record<string, unknown>;
+
+  return (
+    typeof m.id === 'string' &&
+    typeof m.name === 'string' &&
+    typeof m.slug === 'string' &&
+    (m.origin_country === null || typeof m.origin_country === 'string')
+  );
+}
+
+function esModelo(valor: unknown): valor is Modelo {
+  if (typeof valor !== 'object' || valor === null) return false;
+  const m = valor as Record<string, unknown>;
+
+  return (
+    typeof m.id === 'string' &&
+    typeof m.brand_id === 'string' &&
+    typeof m.name === 'string' &&
+    typeof m.body_type === 'string' &&
+    typeof m.year_from === 'number' &&
+    (m.year_to === null || typeof m.year_to === 'number')
+  );
+}
+
+export async function obtenerMarcas(): Promise<Marca[]> {
+  const datos = await pedir('/api/v1/vehicle-brands');
+
+  if (!Array.isArray(datos) || !datos.every(esMarca)) {
+    throw new TypeError('El catalogo de marcas no tiene la forma esperada');
+  }
+
+  return datos;
+}
+
+/**
+ * Los modelos de una marca.
+ *
+ * Una marca inexistente da 404 y esto levanta `ErrorDeApi`, no una lista vacia:
+ * "no hay modelos cargados" y "esa marca no existe" son cosas distintas y el
+ * backend las distingue. Aplanarlas acá desharia esa distincion.
+ */
+export async function obtenerModelos(slugDeMarca: string): Promise<Modelo[]> {
+  const datos = await pedir(`/api/v1/vehicle-brands/${encodeURIComponent(slugDeMarca)}/models`);
+
+  if (!Array.isArray(datos) || !datos.every(esModelo)) {
+    throw new TypeError('El catalogo de modelos no tiene la forma esperada');
+  }
+
+  return datos;
+}

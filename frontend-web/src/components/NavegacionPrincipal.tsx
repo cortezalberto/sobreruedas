@@ -26,6 +26,7 @@ interface Seccion {
 const SECCIONES: readonly Seccion[] = [
   { href: '/', etiqueta: 'Inicio' },
   { href: '/planes', etiqueta: 'Planes' },
+  { href: '/catalogo', etiqueta: 'Catalogo' },
 ];
 
 function esActual(pathname: string, href: string): boolean {
