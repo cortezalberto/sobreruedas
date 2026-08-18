@@ -361,7 +361,7 @@ Tres observaciones sobre la cadena:
 - **Bloqueantes a resolver (al inicio del change)**: ✅ **los dos cerrados** — `IN-22` por [`ADR-014`](docs/adr/ADR-014-umbrales-de-cobertura.md), `IN-29` por [`ADR-018`](docs/adr/ADR-018-anclas-de-adr-del-plan-de-implementacion.md). Texto original abajo, como registro de qué se decidió y contra qué.
   - **`IN-22`** — umbral de cobertura. La constitución (Art. 2, vinculante) exige **80 % de líneas**; el plan de testing fija **70 % líneas / 60 % branches**; la spec técnica dice 80 % core / 70 % resto. **Hoy el CI está especificado en violación de la norma vinculante del proyecto.** O se enmienda formalmente la constitución (Art. 8) o el plan de testing sube a 80. No se puede escribir `ci.yml` sin este número.
   - **`IN-29`** — numeración de ADRs. `ADR-002`, `ADR-005` y `ADR-011` significan cosas distintas en la spec y en el plan (ej.: T-098 dice *"anclada en ADR-005"*, que es **OpenSearch** en el plan y **React Native** en la spec). La constitución (Principio 5) exige que los ADRs sean vinculantes y trazables; con dos numeraciones esa trazabilidad no existe para las 194 tareas. Fijar la numeración de la spec como canónica y corregir las anclas antes de sembrar `docs/adr/`.
-- **Riesgos**: ~~**R-3**~~ (tabla de variables de entorno inexistente) — ✅ **cerrado** por [`ADR-013`](docs/adr/ADR-013-variables-de-entorno.md): 35 variables en 12 grupos, sostenidas por `tools/check-config-parity.py` con 0 divergencias entre el ADR, `.env.example` y `Settings`.
+- **Riesgos**: ~~**R-3**~~ (tabla de variables de entorno inexistente) — ✅ **cerrado** por [`ADR-013`](docs/adr/ADR-013-variables-de-entorno.md): 36 variables en 12 grupos, sostenidas por `tools/check-config-parity.py` con 0 divergencias entre el ADR, `.env.example` y `Settings`. El verificador lo ejecuta `tools/tests/test_check_config_parity.py`, que CI corre en el job `test-backend-unit`.
 - **Leer antes**:
   - `docs/sdd/deRuedas-plan-implementacion.md` §4 (estructura canónica del repositorio — vinculante)
   - `knowledge-base/08_arquitectura_propuesta.md` §Estructura de directorios, §Variables de entorno, §Infraestructura y despliegue
@@ -430,7 +430,7 @@ Tres observaciones sobre la cadena:
   - ✅ **`PlanLimitsService`**. No sabe contar `users` ni `vehicles` a propósito —son C-05 y C-14—; cada módulo registra su contador al nacer, y **falla cerrado**: recurso sin contador registrado levanta en vez de permitir.
   - ⚠️ **Hallazgo**: **PostGIS no estaba instalado**. `branches.geo_point` es `geography(Point,4326)` y la migración de extensiones de C-02 nunca lo creó, aunque la imagen es `postgis/postgis:16-3.4-alpine`. Se agrega en la migración `004`.
   - 🔜 **Lo que habilita**: C-05 puede montar sus endpoints sobre `tenants`, y C-14 registrar su contador de vehículos. ⚠️ `tenants` queda con **dos capas de aislamiento y no tres** (`design.md` `D-1`) — C-05 debe filtrar por el `id` del token, **nunca** por un `id` del path.
-  - Detalle por tarea en [`openspec/changes/tenancy-planes-y-limites/tasks.md`](openspec/changes/tenancy-planes-y-limites/tasks.md).
+  - Detalle por tarea en [`openspec/changes/archive/2026-08-17-tenancy-planes-y-limites/tasks.md`](openspec/changes/archive/2026-08-17-tenancy-planes-y-limites/tasks.md).
 - **Rango**: `T-017`, `T-018`, `T-019`, `T-020`, `T-059` (5 tareas) — ver **D-4**
 - **Scope**:
   - Migración `tenants`: `id`, `name`, `slug`, `cuit`, `billing_email`, `status`, `plan_id` (FK temporal NULL hasta T-019), `trial_ends_at`, `timezone`, `locale`, `settings`, timestamps, `deleted_at`

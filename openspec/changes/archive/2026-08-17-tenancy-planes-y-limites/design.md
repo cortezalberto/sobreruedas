@@ -2,7 +2,7 @@
 
 ## D-1 — `tenants` y `plans` quedan exentas de RLS; `branches` y `subscriptions` no
 
-`EXENTAS_DE_RLS` en [`test_tenant_isolation.py`](../../../backend/tests/integration/test_tenant_isolation.py) ya nombra a `tenants` y `plans`, por `RN-MT-09`. **No se re-decide: se aplica.**
+`EXENTAS_DE_RLS` en [`test_tenant_isolation.py`](../../../../backend/tests/integration/test_tenant_isolation.py) ya nombra a `tenants` y `plans`, por `RN-MT-09`. **No se re-decide: se aplica.**
 
 El motivo es estructural, no una concesión. La política canónica del proyecto compara `tenant_id` contra `app.current_tenant`, y ninguna de las dos tablas tiene esa columna:
 
