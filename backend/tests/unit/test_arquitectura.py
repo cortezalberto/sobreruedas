@@ -182,6 +182,19 @@ NOMBRES_DE_CONTRASENA = (
     "get_password_hash",
     "hash_password",
     "check_password",
+    # `mfa_secret` se suma el 17-ago-2026, y no es una precaucion abstracta:
+    # `spec-tecnica` 3.3 le da a `users` una columna `mfa_secret varchar(255)`
+    # ("cifrado simetricamente con KMS"), justo al lado de `password_hash`.
+    #
+    # `IN-06` documento la contradiccion de la contrasena y paso de largo por la
+    # de al lado. Es el mismo error: `plan-seguridad` 112 pone la MFA del lado
+    # de Keycloak ("provee auth e MFA opcional", "custodia sus credenciales") y
+    # `ADR-026` ya retiro los endpoints `/auth/mfa/*` porque el TOTP es suyo.
+    #
+    # Un secreto TOTP en nuestra base es una credencial en nuestra base, este
+    # cifrada o no. Se agrega ANTES de que exista la migracion de `users`, que
+    # es cuando la columna se copiaria de la spec sin que nadie la mire.
+    "mfa_secret",
 )
 
 # Librerias de hashing de contrasenas. Que aparezca una importada ya es la senal:
