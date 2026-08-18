@@ -18,6 +18,25 @@
  */
 import { obtenerPlanes, SIN_TECHO, type Plan } from '@/lib/api';
 
+/**
+ * SE RENDERIZA POR PEDIDO, NO EN EL BUILD. No es una preferencia: el build no
+ * puede depender de que el backend este vivo.
+ *
+ * Sin esto Next prerenderiza `/planes` al compilar, sale a buscar los planes en
+ * ese momento y el build falla con ECONNREFUSED donde no haya API escuchando.
+ * Paso exactamente eso en CI, y en local no se vio porque el backend estaba
+ * corriendo.
+ *
+ * Y no es un problema solo de CI: por `ADR-023` la imagen se construye en el
+ * runner y el VPS la baja despues. En el runner no hay —ni debe haber— acceso a
+ * la base de produccion, asi que una pagina que necesita la API para compilar
+ * no se puede empaquetar.
+ *
+ * El cacheo no se pierde: vive en el `revalidate` del fetch (`lib/api.ts`), que
+ * es cache de datos y no de build.
+ */
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'Planes — deRuedas Gestion',
 };
