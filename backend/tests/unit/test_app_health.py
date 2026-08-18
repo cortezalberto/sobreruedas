@@ -7,8 +7,10 @@ de openspec/changes/foundation-setup/specs/platform/service-health/spec.md.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import cast
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field
 
@@ -71,12 +73,26 @@ def cliente(entorno_valido: dict[str, str]) -> Iterator[TestClient]:
         yield c
 
 
+def _app(cliente: TestClient) -> FastAPI:
+    """La aplicacion detras del cliente, con su tipo real.
+
+    `TestClient.app` esta declarado como `ASGIApp` —una interfaz de tres
+    argumentos— porque starlette acepta cualquier cosa que la implemente. En
+    ejecucion siempre es la `FastAPI` que le pasamos al construirlo, y de ahi
+    salen `.state` y los decoradores de ruta.
+
+    El `cast` no relaja nada: fija lo que el constructor ya garantiza. Sin el,
+    `mypy --strict` reporta diecisiete errores que son todos este.
+    """
+    return cast(FastAPI, cliente.app)
+
+
 def _romper(cliente: TestClient, dependencia: str) -> None:
-    cliente.app.state.readiness_checks[dependencia] = _sonda_caida
+    _app(cliente).state.readiness_checks[dependencia] = _sonda_caida
 
 
 def _reparar(cliente: TestClient, dependencia: str) -> None:
-    cliente.app.state.readiness_checks[dependencia] = _sonda_sana
+    _app(cliente).state.readiness_checks[dependencia] = _sonda_sana
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -222,7 +238,7 @@ def test_docs_bloqueada_en_produccion(
 def test_error_de_dominio_responde_problem_details(cliente: TestClient) -> None:
     from app.core.errors import DomainError
 
-    @cliente.app.get("/_prueba/dominio")
+    @_app(cliente).get("/_prueba/dominio")
     async def _explota() -> None:
         raise DomainError("la patente ya existe", code="patente_duplicada")
 
@@ -238,7 +254,7 @@ def test_el_error_lleva_el_identificador_de_correlacion(cliente: TestClient) -> 
     """Sin esto, un error reportado por un usuario no se puede rastrear."""
     from app.core.errors import DomainError
 
-    @cliente.app.get("/_prueba/correlacion")
+    @_app(cliente).get("/_prueba/correlacion")
     async def _explota() -> None:
         raise DomainError("algo salio mal")
 
@@ -255,7 +271,7 @@ def test_http_exception_mantiene_el_formato(cliente: TestClient) -> None:
 
 
 def test_error_de_validacion_lista_los_campos(cliente: TestClient) -> None:
-    @cliente.app.post("/_prueba/validacion")
+    @_app(cliente).post("/_prueba/validacion")
     async def _recibe(cuerpo: CuerpoDePrueba) -> dict[str, int]:
         return {"cantidad": cuerpo.cantidad}
 
@@ -272,7 +288,7 @@ def test_el_error_de_validacion_no_devuelve_lo_que_mando_el_cliente(
 ) -> None:
     """`errors()` de pydantic trae `input`. Podria ser una contrasena."""
 
-    @cliente.app.post("/_prueba/sensible")
+    @_app(cliente).post("/_prueba/sensible")
     async def _recibe(cuerpo: CuerpoDePrueba) -> dict[str, int]:
         return {"cantidad": cuerpo.cantidad}
 
@@ -295,7 +311,7 @@ def test_cada_campo_invalido_trae_field_code_y_message(cliente: TestClient) -> N
     A ESE CAMPO. Son dos cosas y por eso son dos campos.
     """
 
-    @cliente.app.post("/_prueba/tres-campos")
+    @_app(cliente).post("/_prueba/tres-campos")
     async def _recibe(cuerpo: CuerpoDeTresCampos) -> dict[str, int]:
         return {"cantidad": cuerpo.cantidad}
 
@@ -335,7 +351,7 @@ def test_un_cursor_invalido_sale_con_el_formato_uniforme(cliente: TestClient) ->
     """
     from app.core.pagination import CursorInvalido
 
-    @cliente.app.get("/_prueba/cursor")
+    @_app(cliente).get("/_prueba/cursor")
     async def _explota() -> None:
         raise CursorInvalido
 
@@ -356,7 +372,7 @@ def test_el_codigo_del_campo_no_depende_del_idioma(cliente: TestClient) -> None:
     que el codigo sea un identificador estable y no la prosa.
     """
 
-    @cliente.app.post("/_prueba/idioma")
+    @_app(cliente).post("/_prueba/idioma")
     async def _recibe(cuerpo: CuerpoDePrueba) -> dict[str, int]:
         return {"cantidad": cuerpo.cantidad}
 

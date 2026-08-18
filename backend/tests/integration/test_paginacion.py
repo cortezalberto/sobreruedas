@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta
+from typing import Any
 
 import pytest
-from sqlalchemy import Column, DateTime, MetaData, Table, Uuid, select, text
+from sqlalchemy import Column, DateTime, MetaData, Select, Table, Uuid, select, text
 
 from app.core.pagination import (
     TAMANO_MAXIMO,
@@ -73,7 +74,7 @@ async def sembrar(tenant: uuid.UUID, cuantos: int, *, mismo_instante: bool = Fal
     return etiquetas
 
 
-def consulta_del_tenant(tenant: uuid.UUID) -> object:
+def consulta_del_tenant(tenant: uuid.UUID) -> Select[Any]:
     """El `select` que la aplicacion haria: con su filtro explicito de tenant.
 
     El filtro va aunque RLS ya acote: es la capa 3 de `ADR-006`, y la

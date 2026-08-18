@@ -12,6 +12,7 @@ canonica de docs/adr/ADR-013-variables-de-entorno.md:
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 
 import pytest
 
@@ -45,7 +46,11 @@ def test_database_url_esta_enmascarada(entorno_valido: dict[str, str]) -> None:
         (lambda s: s.s3.bucket, "deruedas-media"),
     ],
 )
-def test_defaults(entorno_valido: dict[str, str], acceso, esperado) -> None:  # noqa: ANN001
+def test_defaults(
+    entorno_valido: dict[str, str],
+    acceso: Callable[[Settings], object],
+    esperado: object,
+) -> None:
     assert acceso(Settings()) == esperado
 
 
@@ -133,7 +138,7 @@ def test_opcional_vacia_equivale_a_no_configurada(
     entorno_valido: dict[str, str],
     monkeypatch: pytest.MonkeyPatch,
     opcional: str,
-    acceso,  # noqa: ANN001
+    acceso: Callable[[Settings], object],
 ) -> None:
     """`SENTRY_DSN=` significa "desactivado", no "un secreto de cero bytes".
 

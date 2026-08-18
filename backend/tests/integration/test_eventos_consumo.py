@@ -10,6 +10,7 @@ Ver `design.md` D-10 de C-02.
 from __future__ import annotations
 
 import uuid
+from typing import Any, cast
 
 import pytest
 from redis.asyncio import Redis
@@ -321,7 +322,7 @@ async def test_el_mismo_evento_entregado_dos_veces_se_procesa_una(
     un publicador reintenta— y el manejador tiene que correr una sola.
     """
     sobre = await publicar(tipo, tenant_id=tenant, payload={"a": 1}, cliente=redis)
-    await redis.xadd(nombre_del_stream(tipo), sobre.a_redis())
+    await redis.xadd(nombre_del_stream(tipo), cast("dict[Any, Any]", sobre.a_redis()))
 
     manejador = ManejadorQueAnota()
     resultado = await consumir(

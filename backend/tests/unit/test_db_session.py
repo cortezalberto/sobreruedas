@@ -19,6 +19,8 @@ Un doble de la base habria probado lo mismo, pero probando el doble.
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 from app.db.session import (
@@ -118,6 +120,20 @@ def test_la_sesion_de_plataforma_es_una_funcion_aparte() -> None:
 
     Un booleano en la llamada se lee como un detalle en una revision de codigo.
     Un nombre distinto se lee como una decision.
+
+    La version anterior de este test empezaba con
+    `assert sesion_de_plataforma is not sesion_de_tenant`, que **es verdadera
+    siempre**: son dos objetos funcion distintos y ninguna implementacion
+    posible los volveria el mismo. Lo delato `mypy --strict` con
+    `comparison-overlap`, no una revision.
+
+    Lo que hay que verificar no es que sean distintas, sino que la de
+    plataforma NO tenga por donde recibir un tenant — que es la forma que
+    tendria si alguien la colapsara en `sesion_de_tenant(tenant=None)`.
     """
-    assert sesion_de_plataforma is not sesion_de_tenant
+    parametros_plataforma = set(inspect.signature(sesion_de_plataforma).parameters)
+    parametros_tenant = set(inspect.signature(sesion_de_tenant).parameters)
+
+    assert "tenant_id" not in parametros_plataforma
+    assert "tenant_id" in parametros_tenant
     assert "plataforma" in sesion_de_plataforma.__name__

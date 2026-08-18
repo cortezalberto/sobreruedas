@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from fastapi import FastAPI
@@ -164,7 +164,7 @@ def test_ninguna_ruta_de_datos_se_atiende_sin_token(cliente: TestClient) -> None
     empiecen a entrar los routers de dominio en C-05, este test es lo que va a
     avisar si alguno queda abierto.
     """
-    assert rutas_desprotegidas(cliente.app) == set()
+    assert rutas_desprotegidas(cast(FastAPI, cliente.app)) == set()
 
 
 def test_las_sondas_responden_sin_token(cliente: TestClient) -> None:

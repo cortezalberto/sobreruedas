@@ -31,7 +31,7 @@ from logging.config import fileConfig
 from urllib.parse import urlparse
 
 from alembic import context
-from sqlalchemy import pool
+from sqlalchemy import MetaData, pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -63,7 +63,7 @@ if config.config_file_name is not None:
 try:
     from app.db.base import Base
 
-    target_metadata = Base.metadata
+    target_metadata: MetaData | None = Base.metadata
 except ModuleNotFoundError:
     target_metadata = None
     print(
