@@ -31,8 +31,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db.session import sesion_de_plataforma
 
 RAIZ_BACKEND = Path(__file__).resolve().parent.parent.parent
@@ -115,3 +117,39 @@ async def sesion_de_propietario() -> AsyncIterator[AsyncSession]:
     """
     async with sesion_de_plataforma(dsn=DSN_PROPIETARIO) as sesion:
         yield sesion
+
+
+def reponer_entorno(monkeypatch: pytest.MonkeyPatch, *, dsn: str) -> None:
+    """Repone las variables que `entorno_limpio` borro, y descachea `Settings`.
+
+    LAS DOS COSAS, Y NINGUNA ES OPCIONAL.
+
+    1. `entorno_limpio` (autouse, conftest raiz) borra TODA variable del proyecto
+       antes de cada test. Un test que llegue a la base **a traves de la
+       configuracion de la aplicacion** —y no con un DSN explicito— necesita
+       reponerlas.
+
+    2. `get_settings` es `lru_cache(maxsize=1)`, y los tests de sondas de
+       `test_app_health.py` lo envenenan a proposito apuntando `DATABASE_URL` a
+       un puerto cerrado para probar el 503. `monkeypatch` restaura la variable
+       al terminar; el objeto `Settings` mal construido se queda en la cache. Sin
+       el `cache_clear()`, los tests que dependen de la configuracion **pasan
+       solos y fallan en la suite completa**, conectandose al puerto muerto que
+       dejo otro archivo.
+
+    EL `dsn` ES PARAMETRO Y NO UNA CONSTANTE DE ACA, que es el motivo de que esto
+    sea una funcion y no un fixture compartido: las sondas de salud corren con el
+    rol PROPIETARIO y los routers con el de APLICACION. Un fixture unico tendria
+    que elegir uno, y elegir el equivocado no falla — hace que un test pruebe con
+    permisos que la aplicacion no tiene.
+
+    Aparecio con el tercer archivo que lo necesitaba. Con dos estaba duplicado a
+    proposito; al tercero, la duplicacion ya era la fuente de verdad.
+    """
+    monkeypatch.setenv("DATABASE_URL", dsn)
+    monkeypatch.setenv("REDIS_URL", URL_REDIS)
+    monkeypatch.setenv("KEYCLOAK_CLIENT_SECRET", "no-se-usa-en-este-test")
+    monkeypatch.setenv("S3_ACCESS_KEY", "no-se-usa-en-este-test")
+    monkeypatch.setenv("S3_SECRET_KEY", "no-se-usa-en-este-test")
+    monkeypatch.setenv("TENANT_SECRETS_MASTER_KEY", "no-se-usa-en-este-test")
+    get_settings.cache_clear()

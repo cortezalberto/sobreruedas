@@ -24,6 +24,8 @@ from fastapi.testclient import TestClient
 from app.config import get_settings
 from app.main import create_app
 
+from .soporte import reponer_entorno
+
 pytestmark = pytest.mark.integration
 
 
@@ -80,13 +82,7 @@ def entorno_real(monkeypatch: pytest.MonkeyPatch) -> None:
     test; aca se reponen las que hacen falta para hablar con los servicios de
     verdad.
     """
-    monkeypatch.setenv("DATABASE_URL", DSN_POSTGRES)
-    monkeypatch.setenv("REDIS_URL", URL_REDIS)
-    monkeypatch.setenv("KEYCLOAK_CLIENT_SECRET", "no-se-usa-en-este-test")
-    monkeypatch.setenv("S3_ACCESS_KEY", "no-se-usa-en-este-test")
-    monkeypatch.setenv("S3_SECRET_KEY", "no-se-usa-en-este-test")
-    monkeypatch.setenv("TENANT_SECRETS_MASTER_KEY", "no-se-usa-en-este-test")
-    get_settings.cache_clear()
+    reponer_entorno(monkeypatch, dsn=DSN_POSTGRES)
 
 
 def test_ready_contra_servicios_reales(entorno_real: None) -> None:

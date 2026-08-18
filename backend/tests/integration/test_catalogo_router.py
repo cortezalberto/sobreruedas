@@ -17,10 +17,9 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import get_settings
 from app.main import create_app
 
-from .soporte import DSN_APLICACION, URL_REDIS
+from .soporte import DSN_APLICACION, reponer_entorno
 
 pytestmark = pytest.mark.integration
 
@@ -34,13 +33,7 @@ def cliente(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     el tercer archivo que lo necesite, se mueve al conftest. Con dos, moverlo
     cambiaria el DSN con el que corren las sondas de salud.
     """
-    monkeypatch.setenv("DATABASE_URL", DSN_APLICACION)
-    monkeypatch.setenv("REDIS_URL", URL_REDIS)
-    monkeypatch.setenv("KEYCLOAK_CLIENT_SECRET", "no-se-usa-en-este-test")
-    monkeypatch.setenv("S3_ACCESS_KEY", "no-se-usa-en-este-test")
-    monkeypatch.setenv("S3_SECRET_KEY", "no-se-usa-en-este-test")
-    monkeypatch.setenv("TENANT_SECRETS_MASTER_KEY", "no-se-usa-en-este-test")
-    get_settings.cache_clear()
+    reponer_entorno(monkeypatch, dsn=DSN_APLICACION)
 
     # `with` y no `TestClient(...)` a secas: sin el context manager, starlette
     # abre un portal —y con el un event loop— POR PEDIDO, y el engine cacheado
