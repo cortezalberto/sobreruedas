@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 
+import { AtajosDeTeclado } from '@/components/AtajosDeTeclado';
 import { NavegacionPrincipal } from '@/components/NavegacionPrincipal';
 
 import './globals.css';
@@ -72,6 +73,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="min-h-screen bg-white text-neutro-enfasis antialiased">
         <NavegacionPrincipal />
         {children}
+        {/* Sin salida visual propia: escucha el teclado y abre su ayuda. */}
+        <AtajosDeTeclado />
       </body>
     </html>
   );

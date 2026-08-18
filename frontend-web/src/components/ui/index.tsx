@@ -16,24 +16,28 @@
  *   4. Etiqueta       — estado de un registro (vehiculo, lead, agencia)
  *   5. EstadoVacio    — "no hay nada todavia" + accion (brand book)
  *   6. Esqueleto      — carga, ya usado por los `loading.tsx`
- *   7. Campo          — texto con etiqueta y error accesible          [pendiente]
- *   8. Seleccion      — desplegable, base del selector en cascada     [pendiente]
- *   9. Casilla        — booleano                                      [pendiente]
- *  10. Tabla          — listados densos con encabezado fijo           [pendiente]
- *  11. Modal          — el brand book lo EXIGE para el destructivo    [pendiente]
- *  12. Migas          — navegacion jerarquica                         [pendiente]
+ *   7. Seleccion      — desplegable, base del selector en cascada
+ *   8. Migas          — navegacion jerarquica
+ *   9. Tabla          — listados densos
+ *  10. Modal          — panel de ayuda; el brand book lo EXIGE para el destructivo
+ *  11. Campo          — texto con etiqueta y error accesible          [pendiente]
+ *  12. Casilla        — booleano                                      [pendiente]
  *  13. Paginacion     — sobre el cursor que ya expone el backend      [pendiente]
  *
- * Los seis primeros son los que las pantallas existentes ya piden. Los otros
- * siete se implementan cuando exista la pantalla que los use: un primitivo sin
- * consumidor se disena a ciegas y se termina reescribiendo.
+ * Los tres pendientes esperan una pantalla que los use: `Campo` y `Casilla`
+ * necesitan formularios —y no hay formularios hasta que haya identidad—, y
+ * `Paginacion` necesita un listado que no entre en una pantalla. Un primitivo
+ * sin consumidor se disena a ciegas y se termina reescribiendo.
  *
- * ⚠️ NO HAY LIBRERIA DE COMPONENTES. El stack declara Radix UI, y entra cuando
- * haga falta comportamiento accesible dificil de escribir a mano —foco atrapado
- * en el modal, navegacion por teclado del desplegable—. Un boton y una tarjeta
- * no lo necesitan, y traer la dependencia para eso agrega superficie sin
- * comprar nada.
+ * RADIX ENTRA SOLO EN EL MODAL. El stack lo declara, y el criterio para usarlo
+ * es que haga falta comportamiento accesible dificil de escribir a mano. Un
+ * boton, una tarjeta y un `<select>` nativo no lo necesitan. Un dialogo SI:
+ * atrapar el foco, devolverlo al cerrar, inertizar el fondo y cerrar con `Esc`
+ * son cuatro cosas que se implementan mal casi siempre.
  */
+'use client';
+
+import * as Dialog from '@radix-ui/react-dialog';
 import type { ReactNode } from 'react';
 
 // ── 1. Boton ────────────────────────────────────────────────────────────────
@@ -391,5 +395,59 @@ export function Tabla({
         <tbody>{children}</tbody>
       </table>
     </div>
+  );
+}
+
+// ── 10. Modal ───────────────────────────────────────────────────────────────
+
+/**
+ * Dialogo modal, sobre Radix.
+ *
+ * ES LA UNICA PIEZA DE ESTE ARCHIVO QUE USA UNA LIBRERIA, y el criterio esta en
+ * el encabezado: un dialogo accesible exige atrapar el foco adentro, devolverlo
+ * al elemento que lo abrio, inertizar el fondo para los lectores de pantalla y
+ * cerrar con `Esc`. Son cuatro cosas que se implementan mal casi siempre, y
+ * ninguna se ve rota hasta que alguien navega con teclado.
+ *
+ * El titulo es obligatorio: Radix lo usa como nombre accesible del dialogo. Sin
+ * el, un lector anuncia "dialogo" y nada mas — y ademas Radix avisa en consola,
+ * asi que omitirlo es ruido garantizado.
+ *
+ * `Esc` lo maneja Radix. Es el atajo que `knowledge-base/06` pide para cerrar
+ * modales, y no hace falta cablearlo aparte.
+ */
+export function Modal({
+  abierto,
+  alCerrar,
+  titulo,
+  descripcion,
+  children,
+}: {
+  abierto: boolean;
+  alCerrar: () => void;
+  titulo: string;
+  descripcion?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Dialog.Root open={abierto} onOpenChange={(sigueAbierto) => !sigueAbierto && alCerrar()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-neutro-enfasis/40" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 w-[min(32rem,90vw)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-neutro-borde bg-white p-6 shadow-lg">
+          <Dialog.Title className="text-lg font-semibold tracking-tight">{titulo}</Dialog.Title>
+          {descripcion && (
+            <Dialog.Description className="mt-1 text-sm text-neutro-texto">
+              {descripcion}
+            </Dialog.Description>
+          )}
+          <div className="mt-4">{children}</div>
+          <div className="mt-6 flex justify-end">
+            <Dialog.Close asChild>
+              <Boton variante="secundario">Cerrar</Boton>
+            </Dialog.Close>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
