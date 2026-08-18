@@ -39,9 +39,15 @@ fuera de lecturas es la definicion del modelo. La version inmediatamente
 anterior sigue funcionando con esta migracion aplicada, que es lo que la regla
 exige.
 
-⚠️ El lint de DDL destructivo NO mira los `REVOKE` — cubre `DROP TABLE/COLUMN`,
-`RENAME`, `SET NOT NULL` y `ADD CONSTRAINT`. O sea que esta comprobacion la hizo
-una persona y no el gate. Queda anotado como hueco del control.
+Escribir esto destapo que **el lint de DDL destructivo no miraba los `REVOKE`**,
+y al ir a arreglarlo aparecieron otros tres agujeros del mismo gate: no veia el
+SQL fuera de `op.execute()`, ni el que vive en funciones auxiliares, ni el
+envuelto en `sa.text()`. Los cuatro quedaron cerrados el 18-ago-2026 — ver
+`tests/unit/test_migraciones_compatibles.py`.
+
+Por eso esta migracion lleva el marcador `# migracion-contract:` en `upgrade()`:
+ahora el gate la ve, y la excepcion tiene que ser declarada y visible en el diff
+en vez de depender de que alguien se acuerde de mirar.
 
 Revision ID: 010
 Revises: 009
@@ -74,6 +80,10 @@ BENEFICIARIOS = sa.text(
 
 
 def upgrade() -> None:
+    # migracion-contract: se reviso `app/` entero y nada escribe `plans` — la
+    # unica mencion fuera de lecturas es la definicion del modelo. La version
+    # inmediatamente anterior sigue funcionando con esta migracion aplicada, que
+    # es lo que exige la regla dura 13.
     conexion = op.get_bind()
 
     for rol in conexion.execute(BENEFICIARIOS, {"tabla": TABLA}).scalars().all():

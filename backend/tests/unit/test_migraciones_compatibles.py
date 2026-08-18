@@ -16,12 +16,27 @@ Ademas el agente de despliegue corre las migraciones ANTES de levantar el stack
 nuevo, con todo el trafico todavia en el viejo. Ese orden es seguro *solo* si
 esta regla se cumple.
 
-POR QUE SOLO SE MIRA `upgrade()`
-─────────────────────────────────
+QUE SE MIRA — TODO MENOS `downgrade()`
+───────────────────────────────────────
 `downgrade()` esta LLENO de DDL destructivo, y ahi es correcto: un downgrade
-debe borrar lo que su upgrade creo. Mirar el archivo entero marcaria las cuatro
-migraciones que ya existen. Lo que se analiza es exclusivamente el cuerpo de
-`upgrade()`.
+debe borrar lo que su upgrade creo. Se analiza el resto del modulo.
+
+⚠️ **Hasta el 18-ago-2026 esto miraba solo el cuerpo de `upgrade()`, y tenia
+CUATRO agujeros por los que pasaba SQL sin ser visto.** Los cuatro se
+descubrieron escribiendo las migraciones `009` y `010`, que usan exactamente los
+patrones que el analisis no cubria:
+
+  1. **Solo `op.execute()`.** Un `op.get_bind().execute(...)` pasaba entero, y
+     por ahi pasa cualquier cosa: `DROP TABLE`, `SET NOT NULL`, lo que sea.
+  2. **Solo el cuerpo de `upgrade()`.** El DDL que vive en funciones auxiliares
+     —que es como estan escritas estas migraciones— quedaba afuera.
+  3. **Solo argumentos literales.** El idioma real es `execute(sa.text("..."))`,
+     y el analisis veia una `Call` y leia cadena vacia.
+  4. **`REVOKE` no estaba en la lista.** No toca el esquema, pero rompe hacia
+     atras igual: si la version anterior escribia esa tabla, deja de poder.
+
+Cada uno tiene su test negativo mas abajo. Un gate ciego pasa igual de verde que
+uno que funciona, y este estuvo verde todo ese tiempo.
 
 QUE ES DESTRUCTIVO Y QUE NO
 ───────────────────────────
@@ -79,6 +94,18 @@ SQL_DESTRUCTIVO = (
     (re.compile(r"\bRENAME\s+(?:TO|COLUMN)\b", re.IGNORECASE), "RENAME"),
     (re.compile(r"\bSET\s+NOT\s+NULL\b", re.IGNORECASE), "SET NOT NULL"),
     (re.compile(r"\bADD\s+CONSTRAINT\b", re.IGNORECASE), "ADD CONSTRAINT"),
+    # ⚠️ AGREGADO EL 18-AGO-2026, y el gate estuvo ciego a esto hasta entonces.
+    #
+    # Un `REVOKE` no toca el esquema, asi que no parece DDL destructivo. Pero
+    # rompe hacia atras exactamente igual: si la version anterior de la
+    # aplicacion escribia esa tabla, deja de poder — y en un despliegue
+    # azul-verde el stack viejo sigue sirviendo trafico mientras tanto.
+    #
+    # Se descubrio escribiendo la migracion `010`, que revoca la escritura de
+    # `plans`. Esa revision es segura y se comprobo A MANO que nada en `app/`
+    # escribe la tabla; el problema es que **el gate no lo verificaba**, asi que
+    # la garantia dependia de que alguien se acordara de mirar.
+    (re.compile(r"\bREVOKE\b", re.IGNORECASE), "REVOKE"),
 )
 
 
@@ -97,6 +124,19 @@ def _texto_literal(nodo: ast.AST) -> str:
             for parte in nodo.values
             if isinstance(parte, ast.Constant) and isinstance(parte.value, str)
         )
+    # Envoltorios tipo `sa.text("...")`. Es el CUARTO nivel del mismo agujero:
+    # el SQL no llega como literal sino como argumento de una llamada, asi que
+    # sin desenvolver esto el analisis ve una `Call` y devuelve vacio.
+    #
+    # Se concatenan TODOS los argumentos y no solo el primero: las migraciones
+    # de este proyecto parten el SQL en varias cadenas adyacentes, y una palabra
+    # como `REVOKE` puede quedar en cualquiera.
+    if isinstance(nodo, ast.Call):
+        return " ".join(_texto_literal(argumento) for argumento in nodo.args)
+    # Cadenas partidas en varias lineas: `"SELECT ..." "FROM ..."` es un `BinOp`
+    # cuando llevan `+`, y adyacentes ya las une el parser en un `Constant`.
+    if isinstance(nodo, ast.BinOp):
+        return f"{_texto_literal(nodo.left)} {_texto_literal(nodo.right)}"
     return ""
 
 
@@ -154,15 +194,26 @@ def infracciones(fuente: str) -> list[str]:
 
     arbol = ast.parse(fuente)
 
-    upgrade = next(
-        (
-            nodo
-            for nodo in arbol.body
-            if isinstance(nodo, ast.FunctionDef) and nodo.name == "upgrade"
-        ),
-        None,
-    )
-    if upgrade is None:
+    # `upgrade()` Y TODA FUNCION AUXILIAR DEL MODULO.
+    #
+    # ⚠️ Hasta el 18-ago-2026 esto miraba SOLO el cuerpo de `upgrade()`, y era el
+    # tercer agujero del mismo gate. Una migracion que hace
+    #
+    #     def upgrade(): _sembrar(); _revocar_escritura()
+    #
+    # dejaba todo su SQL fuera del analisis, porque el DDL vive en las auxiliares
+    # y no en `upgrade()`. Es exactamente la forma de las migraciones `009` y
+    # `010`.
+    #
+    # Se incluyen todas las funciones del modulo MENOS `downgrade()`: alla el DDL
+    # destructivo es correcto y esperado — un downgrade que no borra lo que el
+    # upgrade creo no revierte nada.
+    funciones = [
+        nodo
+        for nodo in arbol.body
+        if isinstance(nodo, ast.FunctionDef) and nodo.name != "downgrade"
+    ]
+    if not any(nodo.name == "upgrade" for nodo in funciones):
         return []
 
     constantes = _constantes_de_modulo(arbol)
@@ -173,7 +224,9 @@ def infracciones(fuente: str) -> list[str]:
     # sin ella el gate marca `003_claves_de_idempotencia`, que crea la tabla y
     # su constraint unica en la misma operacion, y es correcta.
     nacidas: set[str] = set()
-    for nodo in ast.walk(upgrade):
+    nodos = [n for funcion in funciones for n in ast.walk(funcion)]
+
+    for nodo in nodos:
         if isinstance(nodo, ast.Call) and _operacion(nodo) == "create_table":
             nombre = _tabla(nodo.args[0] if nodo.args else None, constantes)
             if nombre:
@@ -181,7 +234,7 @@ def infracciones(fuente: str) -> list[str]:
 
     problemas: list[str] = []
 
-    for nodo in ast.walk(upgrade):
+    for nodo in nodos:
         if not isinstance(nodo, ast.Call):
             continue
 
@@ -226,12 +279,28 @@ def infracciones(fuente: str) -> list[str]:
                 "en un despliegue posterior."
             )
 
-        # SQL crudo.
-        if operacion == "execute" and nodo.args:
+        # SQL crudo — por CUALQUIER `.execute(...)`, no solo `op.execute(...)`.
+        #
+        # ⚠️ HASTA EL 18-AGO-2026 ESTO MIRABA UNICAMENTE `op.execute()`, y ese
+        # era un agujero grande: una migracion que hace
+        #
+        #     conexion = op.get_bind()
+        #     conexion.execute(sa.text("DROP TABLE ..."))
+        #
+        # pasaba entera sin ser vista. No es hipotetico — es el patron que usan
+        # las migraciones `009` y `010`, escritas ese mismo dia. Lo que ejecutan
+        # es seguro, pero el gate no tenia forma de saberlo: la garantia dependia
+        # de que alguien se acordara de mirar el diff.
+        #
+        # Se mira el nombre del metodo y no el receptor, porque el receptor puede
+        # llamarse como sea (`conexion`, `bind`, `sesion`). En un archivo de
+        # migracion, todo `.execute()` es SQL.
+        es_execute = isinstance(nodo.func, ast.Attribute) and nodo.func.attr == "execute"
+        if es_execute and nodo.args:
             sql = _texto_literal(nodo.args[0])
             for patron, etiqueta in SQL_DESTRUCTIVO:
                 if patron.search(sql):
-                    problemas.append(f"linea {nodo.lineno}: op.execute() con {etiqueta}")
+                    problemas.append(f"linea {nodo.lineno}: execute() con {etiqueta}")
 
     return problemas
 
@@ -400,3 +469,76 @@ def upgrade() -> None:
     op.alter_column("vehiculos", "notas", nullable=True)
 """
     assert infracciones(aditivo) == []
+
+
+# ── Los cuatro agujeros que este gate tuvo hasta el 18-ago-2026 ─────────────
+#
+# Los cuatro se descubrieron escribiendo las migraciones `009` y `010`, que usan
+# exactamente el patron que el analisis no veia. Cada uno tiene su test porque
+# un gate ciego pasa igual de verde que uno que funciona.
+
+
+def test_detecta_revoke() -> None:
+    """Un `REVOKE` no toca el esquema, pero rompe hacia atras igual.
+
+    Si la version anterior escribia esa tabla, deja de poder — y en azul-verde
+    el stack viejo sigue sirviendo trafico mientras tanto.
+    """
+    fuente = "def upgrade():\n" "    op.execute('REVOKE INSERT, UPDATE ON plans FROM \"app\"')\n"
+
+    assert any("REVOKE" in problema for problema in infracciones(fuente))
+
+
+def test_detecta_sql_ejecutado_fuera_de_op() -> None:
+    """`op.get_bind().execute(...)` es la puerta que dejaba pasar TODO.
+
+    No solo el `REVOKE`: por esta via pasaban `DROP TABLE`, `SET NOT NULL` y
+    cualquier otra cosa, porque el analisis solo reconocia `op.<algo>()`.
+    """
+    fuente = (
+        "def upgrade():\n"
+        "    conexion = op.get_bind()\n"
+        "    conexion.execute('DROP TABLE vehiculos')\n"
+    )
+
+    assert any("DROP TABLE" in problema for problema in infracciones(fuente))
+
+
+def test_detecta_sql_en_una_funcion_auxiliar() -> None:
+    """El DDL de estas migraciones vive en auxiliares, no en `upgrade()`."""
+    fuente = (
+        "def upgrade():\n"
+        "    _limpiar()\n"
+        "\n"
+        "def _limpiar():\n"
+        "    op.execute('ALTER TABLE vehiculos ALTER COLUMN dominio SET NOT NULL')\n"
+    )
+
+    assert any("SET NOT NULL" in problema for problema in infracciones(fuente))
+
+
+def test_detecta_sql_envuelto_en_sa_text() -> None:
+    """El idioma real del proyecto: `conexion.execute(sa.text("..."))`.
+
+    Sin desenvolver la llamada, el analisis ve una `Call` y lee cadena vacia.
+    """
+    fuente = "def upgrade():\n" "    op.get_bind().execute(sa.text('DROP TABLE vehiculos'))\n"
+
+    assert any("DROP TABLE" in problema for problema in infracciones(fuente))
+
+
+def test_el_downgrade_sigue_sin_contar_aunque_tenga_auxiliares() -> None:
+    """Ampliar el analisis a las auxiliares no puede arrastrar al downgrade.
+
+    Alla el DDL destructivo es correcto: un downgrade que no borra lo que su
+    upgrade creo no revierte nada.
+    """
+    fuente = (
+        "def upgrade():\n"
+        "    op.create_table('vehiculos')\n"
+        "\n"
+        "def downgrade():\n"
+        "    op.execute('DROP TABLE vehiculos')\n"
+    )
+
+    assert infracciones(fuente) == []

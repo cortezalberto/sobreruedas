@@ -287,6 +287,9 @@ def _sembrar() -> None:
 
 
 def _revocar_escritura() -> None:
+    # migracion-contract: el REVOKE es seguro porque las dos tablas NACEN en
+    # esta misma migracion. No existe version anterior de la aplicacion que
+    # pudiera estar escribiendolas, asi que no hay nada que romper hacia atras.
     """El catalogo se LEE y no se escribe. Hay que REVOCAR, no otorgar.
 
     ⚠️ La primera version de esta funcion hacia `GRANT SELECT`, y era al reves.
