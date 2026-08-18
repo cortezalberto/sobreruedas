@@ -46,17 +46,19 @@ export default function ErrorDeCatalogo({ reset }: { error: Error; reset: () => 
         // `role="alert"` para que un lector de pantalla lo anuncie al aparecer,
         // en vez de dejarlo pasar como texto cualquiera.
         role="alert"
-        className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4"
+        className="mt-6 rounded-lg border-l-4 border-estado-advertencia bg-neutro-fondo p-4"
       >
-        <p className="font-medium text-amber-900">No se pudo cargar el catalogo de vehiculos.</p>
-        <p className="mt-1 text-sm text-amber-800">
+        <p className="font-medium text-estado-advertencia">
+          No se pudo cargar el catalogo de vehiculos.
+        </p>
+        <p className="mt-1 text-sm text-neutro-texto">
           El servicio no respondio. Si estas en desarrollo, revisa que el backend este levantado.
         </p>
 
         <button
           type="button"
           onClick={reintentar}
-          className="mt-4 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100"
+          className="mt-4 rounded-md border border-neutro-borde bg-white px-3 py-1.5 text-sm font-medium text-marca hover:bg-neutro-fondo"
         >
           Reintentar
         </button>
