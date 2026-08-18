@@ -59,7 +59,9 @@ Cubre la capability `platform/configuration`. Los tests van primero.
 - [x] 4.6 Implementar la validación al arranque con muerte temprana y mensaje que nombra la variable
 - [x] 4.7 Implementar el enmascarado de campos sensibles y el singleton `get_settings()` cacheado
 - [x] 4.8 Verificar que `.env.example` y los grupos de `Settings` cubren exactamente el mismo conjunto de variables
-  > Automatizado en [`tools/check-config-parity.py`](../../../tools/check-config-parity.py), que cruza **tres** fuentes: `ADR-013` (35), `.env.example` (35) y `Settings` (32). La diferencia de 3 es el bloque `Frontend`, excluido de forma explícita porque lo lee Next.js. Además verifica que **toda variable marcada sensible en `ADR-013` sea `SecretStr`** en `Settings`: declararla no alcanza, si no es `SecretStr` se filtra por `repr` y el enmascarado es decorativo. Validado contra divergencias inyectadas a propósito.
+  > Automatizado en [`tools/check-config-parity.py`](../../../tools/check-config-parity.py), que cruza **tres** fuentes: `ADR-013` (36), `.env.example` (36) y `Settings` (33). La diferencia de 3 es el bloque `Frontend`, excluido de forma explícita porque lo lee Next.js. Además verifica que **toda variable marcada sensible en `ADR-013` sea `SecretStr`** en `Settings`: declararla no alcanza, si no es `SecretStr` se filtra por `repr` y el enmascarado es decorativo. Validado contra divergencias inyectadas a propósito.
+  >
+  > ⚠️ **Corregido el 18-ago-2026, y el defecto era doble.** Los conteos decían (35), (35), (32): quedaron viejos cuando `ADR-020` agregó `DATABASE_MIGRATION_URL` y la tabla pasó a 36. Pero lo grave no era el número — era que **el verificador no lo ejecutaba nadie**: no estaba en `ci.yml`, ni en `.pre-commit-config.yaml`, ni lo invocaba ningún test. Un verificador que nadie corre no es un control, y por eso el conteo pudo envejecer sin que nada se pusiera en rojo. Lo ejecuta ahora [`tools/tests/test_check_config_parity.py`](../../../tools/tests/test_check_config_parity.py), que CI corre en el job `test-backend-unit`.
   >
   > **Nota sobre `pyproject.toml`**: está en el árbol del §4.1 pero ninguna tarea `T-XXX` lo declara — ni `T-004` ni `T-005` lo nombran. Se atribuyó a `T-001`, dueña de la estructura, y se creó acá porque sin él no hay forma de correr un test.
 
@@ -596,7 +598,7 @@ Cubre la capability `platform/delivery-pipeline`.
 > |---|---|---|
 > | `IN-22` umbral de cobertura del CI | [`ADR-014`](../../../docs/adr/ADR-014-umbrales-de-cobertura.md) | ✅ 80 % líneas / 60 % ramas, y el gate existe y bloquea |
 > | `IN-29` numeración de ADRs del plan | [`ADR-018`](../../../docs/adr/ADR-018-anclas-de-adr-del-plan-de-implementacion.md) | ✅ corpus inmutable con anotación al pie |
-> | `R-3` no existe tabla canónica de variables | [`ADR-013`](../../../docs/adr/ADR-013-variables-de-entorno.md) | ✅ 35 variables en 12 grupos, sostenido por `tools/check-config-parity.py` con **0 divergencias** entre ADR, `.env.example` y `Settings` |
+> | `R-3` no existe tabla canónica de variables | [`ADR-013`](../../../docs/adr/ADR-013-variables-de-entorno.md) | ✅ 36 variables en 12 grupos, sostenido por `tools/check-config-parity.py` con **0 divergencias** entre ADR, `.env.example` y `Settings` |
 
 > ### ⚠️ Tarea 10.3 — auditoría hecha, y **no da para tildar**
 >
