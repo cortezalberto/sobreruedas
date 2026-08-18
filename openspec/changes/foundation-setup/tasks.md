@@ -245,6 +245,21 @@ Cubre la capability `platform/delivery-pipeline`.
 > `latest` hace que el mismo commit pase hoy y falle mañana, y un hallazgo sin
 > redactar imprime el secreto en un log que queda guardado — detectar la fuga la
 > empeoraría.
+>
+> > **Corrección del 17-ago-2026 — el de `pip-audit` no era un desvío.** Esta
+> > nota lo llamó "desvío deliberado de D-6" y esa lectura sostuvo durante
+> > semanas la idea de que había una contradicción que resolver. No la había.
+> > La [`constitucion`](../../../docs/sdd/deRuedas-constitucion.md) (N0) fija
+> > *"las vulnerabilidades de severidad alta o crítica bloquean el merge"* —
+> > un **piso**, y nunca dice que las bajas no deban bloquear. Ser más estricto
+> > que el piso no se desvía de nada.
+> >
+> > Lo que sí era un problema: el motivo vivía **solo en este comentario y en
+> > el de `ci.yml`**, y por el **Principio 5** una decisión implícita no es
+> > vinculante. Peor, un escenario de la delta spec —que está por promoverse a
+> > vigente— afirmaba lo contrario. Enmendado: la política es ahora parte del
+> > requisito, y [`test_auditoria_de_dependencias.py`](../../../backend/tests/unit/test_auditoria_de_dependencias.py)
+> > la sostiene contra el `ci.yml` real.
 
 > **Tarea 8.6 — la tensión testcontainers vs compose, resuelta.** La regla dura 8
 > del proyecto manda testcontainers; la tarea 8.6 pide `docker-compose.test.yml`.
@@ -444,6 +459,10 @@ Cubre la capability `platform/delivery-pipeline`.
 
 > ### Estado de `platform/delivery-pipeline`: **11 de 15**
 >
+> > **Superada el 17-ago-2026 — la capability va hoy en 15 de 16.** Este cuadro
+> > es de la corrida original y se deja para que el movimiento se pueda seguir.
+> > El estado vigente está en la auditoría de la tarea 10.3, más abajo.
+>
 > | Escenario | Evidencia o motivo |
 > |---|---|
 > | Cobertura bajo el umbral de líneas | 19 tests de `check-coverage.py` |
@@ -457,7 +476,7 @@ Cubre la capability `platform/delivery-pipeline`.
 > | Propuesta de cambio abierta | PR #1 disparó las corridas |
 > | Duración de la ejecución | 1 m 04 s contra un presupuesto de 15 min |
 > | Secreto filtrado en el cambio | Corridas `31944844892` (texto plano) y `31944989894` (OOXML) |
-> | **Vulnerabilidad de severidad baja (solo reporta)** | ⛔ Hay que hallar un paquete con vulnerabilidad baja y **solo** baja |
+> | ~~**Vulnerabilidad de severidad baja (solo reporta)**~~ | ✅ **Enmendado el 17-ago-2026** → *"Severidad por debajo del piso"*, cubierto por `test_auditoria_de_dependencias.py`. El escenario pedía hallar un paquete con vulnerabilidad baja y **solo** baja porque afirmaba un techo que ningún documento vinculante pone |
 > | **Integración exitosa a la rama principal** | ⛔ Bloque 9 (reescrito sobre `ADR-023`) |
 > | **Fallo de las pruebas de humo** | ⛔ Bloque 9 (reescrito sobre `ADR-023`) |
 > | **Trazabilidad del despliegue** | ⛔ Bloque 9 (reescrito sobre `ADR-023`) |
@@ -473,6 +492,15 @@ Cubre la capability `platform/delivery-pipeline`.
 - [ ] 9.1 Provisionar el VPS en Hostinger: sistema operativo, actualizaciones de seguridad desatendidas, y reloj sincronizado
 - [ ] 9.2 Cerrar el servidor: firewall con solo 22, 80 y 443 abiertos, SSH **únicamente por clave** y sin acceso directo de `root`
 - [ ] 9.2.b Crear en el init de PostgreSQL **los dos roles** de [`ADR-020`](../../../docs/adr/ADR-020-rol-de-conexion-sin-bypass-de-rls.md): el propietario del esquema y el de aplicación (`NOSUPERUSER NOBYPASSRLS`), con su `ALTER DEFAULT PRIVILEGES`, y dos secretos distintos para `DATABASE_URL` y `DATABASE_MIGRATION_URL`
+> **Sospecha del 17-ago-2026 sobre 9.2.b, verificada y descartada.** Quedó anotado que *"el propietario de PostgreSQL es superusuario por la imagen oficial"* y que había que contrastarlo con esta tarea. Contrastado contra la base corriendo:
+>
+> | Rol | `rolsuper` | `rolbypassrls` | Papel |
+> |---|---|---|---|
+> | `deruedas` | **t** | **t** | propietario del esquema / migraciones |
+> | `mitutu` | f | f | aplicación |
+>
+> **No hay defecto.** Lo que `ADR-020` garantiza es que el rol **de aplicación** no saltee RLS, y se cumple. Que el propietario sea superusuario es inherente al `initdb` de la imagen oficial —`POSTGRES_USER` nace superusuario— y es exactamente **por qué** hace falta el segundo rol. Ya está sostenido por `test_el_rol_de_la_aplicacion_no_puede_saltear_rls` (verifica los dos atributos) y `test_el_rol_de_la_aplicacion_no_es_dueno_de_las_tablas_con_rls`. Lo que sí seguiría siendo un defecto es apuntar `DATABASE_URL` al propietario, y eso ya tiene test.
+
 - [ ] 9.2.c Verificar el rol corriendo `tests/integration/test_rol_de_conexion.py` contra staging — ⚠️ **su pregunta abierta desapareció**: preguntaba si la base gestionada del proveedor permitiría un rol de esquema sin `BYPASSRLS`, y con PostgreSQL autoalojado el `initdb` es nuestro (`ADR-023`). La tarea sobrevive, pero ahora solo confirma que el init se aplicó
 - [ ] 9.3 Instalar Docker y Docker Compose, y crear el usuario de despliegue sin privilegios fuera de Docker
 - [ ] 9.4 Configurar el reverse proxy (Caddy o Traefik) con TLS automático y los dos *upstreams* azul y verde
@@ -525,6 +553,27 @@ Cubre la capability `platform/delivery-pipeline`.
 
 > **El worker del stack inactivo va en cero réplicas.** Durante los cinco minutos de humo el stack nuevo está levantado pero el proxy no conmutó. Si su worker se conectara al broker compartido, **consumiría trabajo real de producción antes de ser promovido**, y el humo —que solo mira HTTP— no lo vería.
 
+> ### 🔴 Defecto 13, encontrado el 17-ago-2026: las redes de producción y de desarrollo se llamaban igual
+>
+> La prueba local del 17-ago había dejado **12 defectos** corregidos y este anotado como *"sugerido, no ejecutado"*. Ejecutado ahora, y **era peor de lo que decía la nota**.
+>
+> `docker-compose.prod.yml` declaraba sus dos redes como `external: true` con los nombres **`deruedas_default` y `deruedas_observability`** — exactamente los que `docker-compose.yml` **crea** en desarrollo. Como son externas, Compose no las crea: las busca. Y las encontraba: las del entorno de desarrollo.
+>
+> **No fallaba. Arrancaba.** Un stack de producción levantado en una máquina de desarrollo se enganchaba en silencio a la red de desarrollo, con la base de desarrollo al alcance por DNS de Docker.
+>
+> Y el lugar donde **nunca** se habría visto es el VPS, porque allá no hay entorno de desarrollo. Se habría visto justo donde probamos — que es el mismo patrón de los otros 12: `docker compose config` lo renderizaba sin una queja.
+>
+> **Corregido** a `deruedas_prod_default` / `deruedas_prod_observability` en `docker-compose.prod.yml`, `infra/vps/deploy/humo.sh` (variable `RED_DOCKER`), `infra/vps/README.md` (runbook 03) y `ADR-025`.
+>
+> **Verificado ejecutando**, no leyendo — con un compose mínimo contra cada nombre:
+>
+> | Red declarada `external` | Resultado |
+> |---|---|
+> | `deruedas_prod_default` (nueva) | **exit 1** · `network ... declared as external, but could not be found` |
+> | `deruedas_default` (vieja) | **exit 0** · el contenedor arrancó **en la red de desarrollo** |
+>
+> Ese `exit 0` era el defecto. Ahora, si el runbook 03 no corrió, el despliegue corta en vez de adivinar.
+
 > **Deuda preexistente detectada, fuera del alcance de este bloque**: el servicio `worker` invoca `celery -A app.core.events`, pero `app/core/events.py` es el publisher de Redis Streams y **no define ninguna app de Celery** — solo existe el campo `celery_broker_url` en `config.py:138`. Ese servicio hoy no arranca. Se trata aparte.
 
 > **Deriva silenciosa — pérdida asumida, no olvidada.** La tarea 9.15 anterior verificaba que ArgoCD detectara y reportara un cambio manual sobre el cluster. Sin GitOps esa detección **no existe**, y un cambio hecho a mano sobre el VPS no lo denuncia nadie. `ADR-023` lo registra entre sus contras asumidas. No se reemplaza por una tarea equivalente porque no la hay sin reintroducir la pieza que se descartó.
@@ -558,7 +607,19 @@ Cubre la capability `platform/delivery-pipeline`.
 > |---|---|---|---|
 > | `platform/service-health` | 10 | **10** | ✅ completa |
 > | `platform/configuration` | 10 | **10** | ✅ completa |
-> | `platform/delivery-pipeline` | 15 | **13** | ⚠️ faltan 2 |
+> | `platform/delivery-pipeline` | 16 | **15** | ⚠️ falta 1 |
+>
+> > **Actualizado el 17-ago-2026 — 35 de 36, y el único que falta espera el
+> > servidor.** El escenario *"Vulnerabilidad de severidad baja"* **no
+> > necesitaba un test: necesitaba una decisión**, y se tomó (salida A, ver la
+> > entrada de abajo). Quedó reescrito como *"Severidad por debajo del piso"* y
+> > se le sumó *"Auditor que afloja por debajo del piso"* —de ahí que la
+> > capability pase de 15 a 16 escenarios—, los dos cubiertos por
+> > [`test_auditoria_de_dependencias.py`](../../../backend/tests/unit/test_auditoria_de_dependencias.py).
+> >
+> > **El único escenario sin test es "Integración exitosa a la rama principal",
+> > y es el que espera el VPS.** El trabajo que se puede hacer sin servidor
+> > está terminado.
 >
 > > **Actualizado el 17-ago-2026 — de 31 a 33 de 35.** Dos de los cuatro que
 > > faltaban estaban trabados por una razón que **dejó de existir**: la auditoría
@@ -621,24 +682,44 @@ Cubre la capability `platform/delivery-pipeline`.
 >
 > **Los 2 que faltan, y por qué ninguno se arregla escribiendo un test:**
 >
-> - 🔴 **"Vulnerabilidad de severidad baja" — no falta un test, hay una
->   contradicción entre la spec y la implementación.** El escenario pide que las
->   vulnerabilidades bajas o medias *"se reporten sin bloquear"*.
->   `npm audit --audit-level=high` hace exactamente eso. **`pip-audit` no**:
->   bloquea ante **cualquier** severidad, a propósito, porque la herramienta no
->   expone severidad y filtrarla obligaría a mantener una lista a mano
->   (`ci.yml:356`).
+> - ✅ **"Vulnerabilidad de severidad baja" — CERRADO el 17-ago-2026, y el
+>   planteo estaba mal.** Esta auditoría lo describió como *"contradicción
+>   entre la spec y la implementación"*, con `pip-audit` bloqueando ante
+>   cualquier severidad mientras el escenario pedía reportar sin bloquear.
 >
->   La decisión de ser más estricto es defendible. Lo que no lo es, es **dónde
->   vive**: en un comentario de código. Por el **Principio 5** una decisión
->   implícita no es vinculante, y acá además **contradice un escenario de una
->   spec que está por promoverse a vigente**.
+>   Al ir al corpus fuente apareció que **la contradicción no era con ningún
+>   documento vinculante**. La [`constitucion`](../../../docs/sdd/deRuedas-constitucion.md)
+>   (N0) dice *"las vulnerabilidades de severidad alta o crítica bloquean el
+>   merge"* — un **piso**. El `plan-implementacion` (N2) repite lo mismo.
+>   **Ninguno de los dos pone techo.** El *"se reportan sin bloquear"* era una
+>   invención de la propia delta spec de C-01: había convertido un piso en un
+>   techo, y después medía al pipeline contra ese techo inventado.
 >
->   Tres salidas posibles: enmendar el escenario para que describa lo que el
->   sistema hace; registrar el desvío como ADR dejando el escenario intacto; o
->   cambiar `pip-audit` por una herramienta que exponga severidad.
->   **Pendiente de decisión del Tech Lead** — no se puede tildar honestamente
->   hasta entonces.
+>   Lo que sí era real es **dónde vivía la decisión**: en un comentario de
+>   código. Por el **Principio 5** eso no es vinculante.
+>
+>   **Salida elegida: A — enmendar el escenario** (decisión del Tech Lead,
+>   17-ago-2026). Se descartó el ADR con el escenario intacto porque dejaría
+>   dos artefactos vinculantes diciendo lo contrario, y se descartó cambiar de
+>   herramienta porque baja el nivel de protección actual para cumplir una
+>   frase que nadie con autoridad escribió.
+>
+>   Qué cambió: el requisito ahora dice que el umbral es **piso y no techo**, y
+>   que un auditor que no expone severidad debe bloquear ante cualquier
+>   hallazgo. El escenario pasó a *"Severidad por debajo del piso"* y se sumó
+>   *"Auditor que afloja por debajo del piso"*, que es el que le da dientes:
+>   [`test_auditoria_de_dependencias.py`](../../../backend/tests/unit/test_auditoria_de_dependencias.py)
+>   rechaza `--ignore-vuln`, `|| true` y `continue-on-error` sobre el `ci.yml`
+>   real. Verificado por mutación: agregar `--ignore-vuln` al archivo real pone
+>   2 tests en rojo.
+>
+>   > ⚠️ **Hallazgo al margen, no resuelto acá.** El
+>   > [`plan-seguridad`](../../../docs/sdd/deRuedas-plan-seguridad.md) §1415
+>   > (N3) dice *"pip-audit: bloqueante para críticas; **warning para altas**"*,
+>   > que **contradice a N0**. Por `ADR-000` N3 prevalece sobre N1 en su
+>   > dominio pero **nunca sobre N0**. Hoy es inocuo —bloquear todo satisface a
+>   > los dos—, pero se despierta apenas alguien mueva `pip-audit` hacia una
+>   > herramienta con severidad. Queda anotado; `docs/sdd/` es inmutable.
 >
 > - ⏸️ **"Integración exitosa a la rama principal → se despliega automáticamente
 >   a staging"** — el mecanismo está entero y probado en local, pero este
@@ -650,15 +731,21 @@ Cubre la capability `platform/delivery-pipeline`.
 > > comportamiento del workflow" pero enumeraba **8**, y de ahí salía un total
 > > de 14 sobre 15. Los grupos correctos son 4 + 8 + 3 = 15.
 >
-> **Consecuencia: C-01 sigue sin poder archivarse — 33 de 35.** No es una
+> **Consecuencia: C-01 sigue sin poder archivarse — 35 de 36.** No es una
 > formalidad de proceso: `openspec archive` sincroniza las delta specs contra
 > `openspec/specs/`, y promover a spec vigente un contrato con escenarios sin
 > verificación es declarar cubierto lo que no lo está.
 >
-> Dos de los tres capabilities están enteros. **Quedan 2 escenarios de
-> `delivery-pipeline`, y ninguno depende de escribir un test**: uno espera una
-> **decisión** sobre el conflicto entre la spec y `pip-audit`, y el otro espera
-> **el servidor**. El trabajo de tests se terminó.
+> Dos de los tres capabilities están enteros. **Queda 1 escenario de
+> `delivery-pipeline`: "Integración exitosa a la rama principal", que afirma
+> que el despliegue a staging *ocurre*.** Eso solo lo demuestra un servidor
+> recibiendo un despliegue de verdad — se cierra con las tareas 9.20 y 9.1-9.3.
+> **El VPS es lo único que separa a C-01 del archivado.**
+>
+> > **Actualizado el 17-ago-2026.** Este párrafo decía "2 escenarios, y ninguno
+> > depende de escribir un test". Seguía siendo cierto para el del servidor; el
+> > otro esperaba una decisión, se tomó, y su enmienda sí trajo tests. De ahí
+> > que el denominador pase de 35 a 36: la enmienda partió un escenario en dos.
 
 > ### ✅ Tarea 10.2 — historial escaneado y limpio, con un punto ciego cerrado a mano
 >

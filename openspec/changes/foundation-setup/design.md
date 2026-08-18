@@ -127,11 +127,27 @@ Seis jobs paralelos donde se puede, con dependencias mínimas:
 | `test-backend-unit` | `pytest -m 'not integration'` con cobertura — **gate 80 % / 60 %** | Sí |
 | `test-backend-integration` | `docker compose -f docker-compose.test.yml up` + `pytest -m integration` | Sí |
 | `test-frontend` | `vitest run` con cobertura | Sí |
-| `security` | `pip-audit` · `npm audit` · `gitleaks` | Sí (alta/crítica; **cualquier** secreto) |
+| `security` | `pip-audit` · `npm audit` · `gitleaks` | Sí — ver abajo |
 
 Disparadores: propuesta de cambio contra `main` y push a `main`. Caché de dependencias de `pip` y `npm` para sostener el presupuesto de 15 minutos.
 
-`gitleaks` corre además en pre-commit (regla dura 4), pero se repite en CI: un hook local es una cortesía, no un control.
+`gitleaks` corre además en pre-commit, pero **el control es CI**: un hook local es una cortesía — se saltea con `--no-verify`.
+
+> **Corregido el 17-ago-2026.** Esta línea afirmaba el hook de pre-commit cuando **`.pre-commit-config.yaml` no existía**, igual que la regla dura 4 y `knowledge-base/12`. No era un agujero de seguridad —CI tenía el control de verdad— sino un documento que describía mal el sistema. Lo creó [`ADR-027`](../../../docs/adr/ADR-027-escaneres-de-seguridad-declarados-vs-reales.md), que además descartó `trufflehog` con motivo registrado y agregó `trivy` entre el build y la firma de imágenes.
+
+**Umbral de bloqueo del job `security` — enmendado el 17-ago-2026.** La versión anterior de este cuadro decía *"alta/crítica"* a secas, y de ahí salió un escenario de `platform/delivery-pipeline` que afirmaba que las bajas y medias *"se reportan sin bloquear"*. **Eso último no lo pedía nadie**: la [`constitucion`](../../../docs/sdd/deRuedas-constitucion.md) (N0) dice *"las vulnerabilidades de severidad alta o crítica bloquean el merge"* y no pone techo. El escenario había convertido un **piso en un techo**.
+
+| Auditor | Expone severidad | Política | Relación con el piso de N0 |
+|---|---|---|---|
+| `npm audit --audit-level=high` | Sí | Bloquea alta y crítica, informa el resto | Lo cumple exacto |
+| `pip-audit` | **No** | Bloquea ante **cualquier** hallazgo | Más estricto, a propósito |
+| `gitleaks` | N/A | Bloquea ante cualquier detección | Otro requisito, sin umbral |
+
+Ser más estricto que el piso está permitido; bajar de él, no. La alternativa para `pip-audit` —filtrar por una severidad que la herramienta no reporta— obliga a mantener a mano una lista de excepciones, y cada build rojo se vuelve una invitación a agregarle una entrada sin saber qué tapa.
+
+**Dónde vive la decisión.** Hasta esta enmienda vivía **solo en un comentario de `ci.yml`**, y por el **Principio 5** una decisión implícita no es vinculante. Ahora la fija el requisito *"Seguridad de dependencias y secretos"* de la delta spec y la sostiene [`test_auditoria_de_dependencias.py`](../../../backend/tests/unit/test_auditoria_de_dependencias.py), que rechaza `--ignore-vuln`, `|| true` y `continue-on-error` sobre el `ci.yml` real.
+
+> ⚠️ **Hallazgo al margen, sin resolver.** El [`plan-seguridad`](../../../docs/sdd/deRuedas-plan-seguridad.md) §1415 (N3) dice *"pip-audit: bloqueante para vulnerabilidades críticas; **warning para altas**"*, que **contradice a N0**. Por [`ADR-000`](../../../docs/adr/ADR-000-precedencia-documental.md) N3 prevalece sobre N1 en seguridad pero **nunca sobre N0**, así que el plan está equivocado en ese renglón. Hoy no rompe nada —bloquear todo satisface a los dos—, pero cualquier movimiento hacia una herramienta que exponga severidad lo despierta. No se corrige acá: `docs/sdd/` es corpus fuente inmutable.
 
 ### D-7 — Despliegue a staging: VPS único con Docker Compose
 

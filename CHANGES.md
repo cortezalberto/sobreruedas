@@ -107,8 +107,8 @@ Las 14 inconsistencias bloqueantes **no tienen un change dedicado**. Cada una es
 | `IN-31` | SLA por plan: 99.9/99.9/99.95 (spec) vs 99.0/99.5/99.9 (SRE + GTM). El SLO interno de 99.7 % es **inferior** al SLA que la spec promete — insostenible. | **C-03** | 0 |
 | `IN-03` | Límites por plan (usuarios / vehículos / sucursales) + la **cuota de mensajes de WhatsApp que no existe como columna**. Bloquea el seed de `plans` y `PlanLimitsService`. | **C-04** | 0 |
 | `IN-04` | Moneda: ARS vs USD. `plans.price_ars` **no tiene columna de moneda**, así que el esquema no puede representar el pricing del GTM. | **C-04** | 0 |
-| `IN-06` | `users.password_hash NOT NULL` contra "la aplicación nunca maneja contraseñas" (ADR-007). Define si `/auth/login` es callback OIDC o proxy de credenciales (ROPC). | **C-05** | 0 |
-| `IN-12` (a) | `accept-invitation`: `POST /api/v1/users/…` (T-024) vs `POST /auth/…` (T-054) — **contradicción interna del plan**. | **C-05** | 0 |
+| ~~`IN-06`~~ ✅ | **RESUELTO 17-ago-2026** por [`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md): sin `password_hash`, login Authorization Code + PKCE, sobreviven 2 de los 8 endpoints de `/auth`. | ~~C-05~~ | 0 |
+| ~~`IN-12` (a)~~ ✅ | **RESUELTO 17-ago-2026** por [`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) §4 → `POST /api/v1/auth/accept-invitation`. | ~~C-05~~ | 0 |
 | `IN-10` | Etapas del pipeline por defecto: 5 vs 6 vs 7 vs 8. Es seed data que corre en el onboarding de **cada tenant**; cambiarla con clientes vivos es una migración de datos. | **C-11** | 1.1 |
 | `IN-12` (b) | Borrado de etapa: `DELETE /pipeline/stages/{id}` vs `POST /pipeline/stages/{id}/archive`. | **C-11** | 1.1 |
 | `IN-07` | `vehicles.domain_plate` `NOT NULL` (spec + constitución) vs nullable (plan). Un 0 km o una permuta recién recibida **no tienen patente**. | **C-14** | 1.2 |
@@ -341,9 +341,10 @@ Tres observaciones sobre la cadena:
     - 🔲 **Pendiente, necesita el servidor**: provisionar y endurecer el VPS (9.1-9.3), claves `age` y SOPS (9.5-9.7), verificación extremo a extremo (9.18, 9.20), y backup con restauración fechada (9.21, 9.22).
     - ⚠️ `ADR-025` destapó que **el azul-verde no puede aplicarse a todo el stack**: cinco de los diez servicios tienen estado y no se pueden duplicar. La base queda compartida, así que **la reversión deja de ser gratis** — de ahí la **regla dura 13** (migraciones compatibles hacia atrás) y sus dos gates de CI.
     - ✅ El **conflicto con el plan de SRE** (nodo único vs. *"DR en región alternativa"* y 99.9 % de Enterprise) quedó **cerrado el 17-ago-2026** por [`ESC-001`](docs/escalaciones/ESC-001-sla-sobre-nodo-unico.md) / `PA-30`: Dirección + SRE decidió **ajustar lo publicado**. Enterprise baja a **99.5 %** y se retiran el DR en región alternativa y la réplica de PostgreSQL. Enterprise deja de diferenciarse por disponibilidad — consecuencia asumida, no descuido.
-  - 🔲 **Bloque 10 (cierre)**: `10.4` y `10.5` hechas. `10.1`, `10.2` y `10.3` abiertas.
-  - **C-01 no se puede archivar todavía — 33 de 35 escenarios** (actualizado 17-ago-2026). `platform/service-health` **10/10** y `platform/configuration` **10/10** están enteras; `platform/delivery-pipeline` va **13/15**. Archivar promovería a spec vigente un contrato sin verificación.
-    - **El trabajo de tests se terminó.** Los 2 que faltan no se arreglan escribiendo tests: uno espera una **decisión** —la spec pide que las vulnerabilidades bajas se reporten sin bloquear, y `pip-audit` bloquea ante cualquier severidad a propósito, con el desvío viviendo solo en un comentario de código— y el otro espera **el servidor**, porque afirma que el despliegue a staging ocurre.
+  - 🔲 **Bloque 10 (cierre)**: `10.1`, `10.2`, `10.4` y `10.5` hechas. **Solo queda `10.3`**, y solo por el escenario que espera el servidor.
+  - **C-01 no se puede archivar todavía — 35 de 36 escenarios** (actualizado 17-ago-2026). `platform/service-health` **10/10** y `platform/configuration` **10/10** están enteras; `platform/delivery-pipeline` va **15/16**. Archivar promovería a spec vigente un contrato sin verificación.
+    - **El VPS es lo único que separa a C-01 del archivado.** El escenario que falta es *"Integración exitosa a la rama principal"*: afirma que el despliegue a staging **ocurre**, y eso solo lo demuestra un servidor recibiendo un despliegue de verdad.
+    - ✅ **La decisión que faltaba se tomó el 17-ago-2026 (salida A).** El escenario de vulnerabilidades bajas partía de un error de lectura: decía que las bajas *"se reportan sin bloquear"*, pero la constitución fija *"alta o crítica bloquean"* como **piso, no techo** — el techo lo había inventado la propia delta spec. `pip-audit` no contradecía a nadie con autoridad. Se enmendó el requisito, el escenario pasó a *"Severidad por debajo del piso"* y se sumó *"Auditor que afloja por debajo del piso"*, sostenido por [`test_auditoria_de_dependencias.py`](backend/tests/unit/test_auditoria_de_dependencias.py), que rechaza `--ignore-vuln`, `|| true` y `continue-on-error` sobre el `ci.yml` real. De ahí que el denominador pase de 35 a 36.
   - Detalle y evidencia por tarea en [`openspec/changes/foundation-setup/tasks.md`](openspec/changes/foundation-setup/tasks.md).
 - **Rango**: `T-001` … `T-008` (8 tareas)
 - **Scope**:
@@ -409,6 +410,7 @@ Tres observaciones sobre la cadena:
 - **Governance**: **ALTO** — define el audit trail (evidencia de compliance) y los umbrales de alerta que gobiernan la operación. Proponer y esperar revisión.
 - **Bloqueantes a resolver (al inicio del change)**:
   - **`IN-13`** — retención de `audit_logs`: **5 años** (spec §3.9, §6.5 y §8.8, repetido tres veces con justificación contable) vs **24 meses** (plan de seguridad §6.4 y plan de SRE §4) vs **escalonada por plan** (GTM: Starter 30 días / Pro 12 meses / Enterprise 24 meses). Triple impacto: particionado y storage a 5 años; una afirmación de **compliance legal** que el propio documento de compliance contradice; y el GTM convirtiendo la auditoría en feature comercial, incompatible con un mínimo legal uniforme. **Un mínimo legal no puede ser un feature de plan** — lo que sí puede variar por plan es cuánto histórico ve el cliente en la UI. Hay una pregunta legal previa (¿aplica la Resolución 4717/2020 de AFIP a `audit_logs`?).
+  - ✅ ~~**`ESC-002`**~~ — **CERRADA el 17-ago-2026, opción A.** Tres SLO internos eran inalcanzables por construcción: por `ADR-023` los nueve servicios comparten el nodo, y **ningún componente puede estar más disponible que la máquina que lo hospeda** — la cola de eventos declaraba 99.95 % (21,6 min/mes) contra una API de 99.7 % (130 min/mes) en la misma máquina. Frontend, webhooks y cola pasan a **99.7 %**. ⚠️ **Para este change**: hay **un solo** SLO de disponibilidad con cuatro nombres, así que cuatro alertas con umbrales distintos dispararían juntas ante el mismo evento y producirían cuatro páginas por un incidente. Va **una** alerta de disponibilidad del nodo, y las de la cola miden `lag` y `DLQ`, que es lo que la cola hace. Ver [`ESC-002`](docs/escalaciones/ESC-002-slo-internos-sobre-nodo-unico.md).
   - **`IN-23`** — objetivos de latencia p95. Listado: **200 ms** (constitución Art. 4 + spec) vs **300 ms** (SRE + testing). Búsqueda full-text: **500 ms** (constitución + spec) vs **2.000 ms** (SRE + testing) — el plan de SRE es **4× más permisivo que la norma vinculante**. Define los umbrales de Prometheus, los thresholds de k6/Locust y la Definición de Terminado de las historias. La KB sugiere que son dos cosas distintas nunca escritas como tales: **objetivo de ingeniería** (constitución/spec) vs **SLO comprometido con presupuesto de error** (SRE). Decidir y documentar la relación.
   - ✅ ~~**`IN-31`**~~ — **RESUELTO** por `ADR-000`: **99.0 / 99.5 / 99.9**, por competencia de dominio de SRE. C-03 lo aplica, no lo re-decide. El análisis original se conserva abajo porque explica *por qué* la escala de SRE es la única internamente coherente. SLA de disponibilidad por plan: **99.9 / 99.9 / 99.95** (spec §6.2 y §9.7) vs **99.0 / 99.5 / 99.9** (SRE §3.1 + GTM). Es un compromiso contractual con créditos económicos (5 %, 10 %, 25 % de la suscripción). Para Starter la diferencia es **43 minutos vs 7h12min** de downtime mensual aceptable. Y el **SLO interno del SRE (99.7 %) es inferior al SLA que la spec le promete a Starter y Pro (99.9 %)** — matemáticamente insostenible: nunca se promete un SLA por encima del SLO interno. La escala del SRE/GTM es la única internamente coherente.
 - **Leer antes**:
@@ -419,7 +421,16 @@ Tres observaciones sobre la cadena:
   - `knowledge-base/09_decisiones_y_supuestos.md` §Parte A (Art. 4 de la constitución)
 
 ### [C-04] `tenancy-planes-y-limites`
-- **Estado**: `[ ]` pendiente
+- **Estado**: ✅ **completo — 51/51 tareas** (17-ago-2026). **413 tests verdes, cobertura 97.56 %** (subió desde 97.00 %). Listo para archivar.
+  - ✅ **`IN-03` y `IN-04` cerrados** por decisión de Dirección. Límites de `plan-gtm`; se conserva `price_ars`. **Los precios no pueden salir del mismo documento que los límites** —`plan-gtm` cotiza en USD y la columna es en pesos—, así que el seed toma límites de `plan-gtm` y precios de `mejoras-y-saas` (ARS 45.000 / 95.000 / 195.000). Mezcla deliberada, en `design.md` `D-2` y `D-3`.
+  - ✅ **Cinco migraciones** verificadas contra la base: PostGIS, `plans` + seed idempotente, `tenants`, `branches` y `subscriptions`. `branches` y `subscriptions` con RLS, `FORCE` y política — comprobado en `pg_class` y `pg_policies`.
+  - ✅ **Módulo `tenancy` completo**: `models`, `schemas`, `repository`, `service` y `limits`. **Los cinco al 100 % de líneas y ramas.** Sin `router.py`: los endpoints son C-05.
+  - ✅ **Auditoría de escenarios 22/22** — `tenancy/organization` 10/10 y `tenancy/plan-limits` 12/12, con **133 tests**. Los tres de aislamiento se verificaron no vacíos: 7 filas en la tabla, 1 visible con contexto, 0 sin contexto.
+  - ✅ **Validador de CUIT** (`core/validadores_ar.py`) con dígito verificador, prefijo de AFIP y normalización canónica.
+  - ✅ **`PlanLimitsService`**. No sabe contar `users` ni `vehicles` a propósito —son C-05 y C-14—; cada módulo registra su contador al nacer, y **falla cerrado**: recurso sin contador registrado levanta en vez de permitir.
+  - ⚠️ **Hallazgo**: **PostGIS no estaba instalado**. `branches.geo_point` es `geography(Point,4326)` y la migración de extensiones de C-02 nunca lo creó, aunque la imagen es `postgis/postgis:16-3.4-alpine`. Se agrega en la migración `004`.
+  - 🔜 **Lo que habilita**: C-05 puede montar sus endpoints sobre `tenants`, y C-14 registrar su contador de vehículos. ⚠️ `tenants` queda con **dos capas de aislamiento y no tres** (`design.md` `D-1`) — C-05 debe filtrar por el `id` del token, **nunca** por un `id` del path.
+  - Detalle por tarea en [`openspec/changes/tenancy-planes-y-limites/tasks.md`](openspec/changes/tenancy-planes-y-limites/tasks.md).
 - **Rango**: `T-017`, `T-018`, `T-019`, `T-020`, `T-059` (5 tareas) — ver **D-4**
 - **Scope**:
   - Migración `tenants`: `id`, `name`, `slug`, `cuit`, `billing_email`, `status`, `plan_id` (FK temporal NULL hasta T-019), `trial_ends_at`, `timezone`, `locale`, `settings`, timestamps, `deleted_at`
@@ -442,21 +453,27 @@ Tres observaciones sobre la cadena:
   - `knowledge-base/01_vision_y_objetivos.md` §Alcance del MVP
 
 ### [C-05] `identidad-auth-y-tenant-endpoints`
-- **Estado**: `[ ]` pendiente
+- **Estado**: 📝 **especificado, sin implementar** (17-ago-2026). Los dos bloqueantes propios están cerrados; **falta `E-001`**.
+  - ✅ **Change creado con los cuatro artefactos**: proposal, design (`D-1`…`D-9`), **2 delta specs** (`identity/user-management` 6 requisitos/21 escenarios, `identity/session` 4/9) y **60 tareas**. `openspec validate --strict` verde.
+  - ⛔ **NO se escribió una línea de código, y es deliberado.** `E-001` nombra la *"migración inicial de `users`"* entre lo que bloquea, y `ADR-017` —que fija los 3 valores de `user_role_enum`— está aceptado **condicionado** a esa ratificación. Si se rechaza el 20-ago, el catálogo cambia y **quitar un valor de un enum es destructivo** (regla dura 13, prohibido en un paso). Regla dura 12.
+  - ⚠️ **Hallazgo: `mfa_secret` es el segundo `password_hash`.** `spec-tecnica` §3.3 le da a `users` una columna `mfa_secret varchar(255)` justo al lado de la de contraseña. Es una credencial: `plan-seguridad` §112 pone la MFA del lado de Keycloak y [`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) ya retiró los endpoints `/auth/mfa/*`. **`IN-06` documentó la contradicción de la contraseña y pasó de largo por la de al lado.** Tampoco se crea `mfa_enabled`: es un hecho de Keycloak y copiarlo agrega un espejo que envejece en silencio. Ver `design.md` `D-2`.
+  - ✅ **Guardián extendido**: `tests/unit/test_arquitectura.py` ya recorría el AST de `app/**` bloqueando `password_hash`; ahora también `mfa_secret`. Verificado por sonda: detecta la columna declarada. Se agregó **antes** de que exista la migración, que es cuando la columna se copiaría de la spec sin que nadie la mire.
+  - 🔜 **El 20-ago la implementación es una sola pasada** contra un contrato ya revisado. La tarea `0.1` es la puerta: verificar que `E-001` está ratificada y registrada, o detenerse.
+  - Detalle en [`openspec/changes/identidad-auth-y-tenant-endpoints/tasks.md`](openspec/changes/identidad-auth-y-tenant-endpoints/tasks.md).
 - **Rango**: `T-021`, `T-022`, `T-023`, `T-024`, `T-025`, `T-026`, `T-027` (7 tareas)
 - **Scope**:
-  - Migración `users` + `user_branches` (N:M usuario↔sucursal) con `user_role_enum` — la forma del enum sale de `IN-01`/`IN-02` (resueltos en C-02) y la columna `password_hash` de `IN-06`
+  - Migración `users` + `user_branches` (N:M usuario↔sucursal) con `user_role_enum` — la forma del enum sale de `IN-01`/`IN-02` (resueltos en C-02). **`password_hash` NO se crea** ([`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md))
   - Módulo `users`: schemas, repository, service (invitación, aceptación, desactivación)
-  - Endpoints `users` — incluye `accept-invitation`, cuyo path resuelve `IN-12(a)`
+  - Endpoints `users` — invitación, aceptación, desactivación. `accept-invitation` va bajo `/auth` (`ADR-026` §4), no bajo `/users`
   - Endpoints `tenancy`: gestión de sucursales y configuración del tenant
-  - Endpoints de auth: `login`, `refresh`, `logout`, `me` — su naturaleza (callback OIDC vs proxy de credenciales) sale de `IN-06`
+  - Endpoints de auth: **solo `GET /auth/me` y `POST /auth/logout`** (`ADR-026` §3). `login`, `refresh`, `forgot-password`, `reset-password` y los dos de MFA **se retiran**: los presta Keycloak
   - Realm de Keycloak configurado + sincronización bidireccional de usuarios (ADR-007)
   - **Tests críticos de aislamiento multi-tenant** (`T-027`) — quality gate bloqueante según el plan de testing
 - **Dependencias**: `C-01`, `C-02`, `C-04`
 - **Governance**: **CRÍTICO** — es el dominio de autenticación y autorización completo. Solo análisis y propuesta; ningún código sin aprobación humana explícita.
-- **Bloqueantes a resolver (al inicio del change)**:
-  - **`IN-06`** — `users.password_hash NOT NULL`. `spec-tecnica` §3.3 define la columna (*"hash argon2id"*), pero §8.3 y ADR-007 dicen que la autenticación **se delega íntegramente a Keycloak** y que *"la aplicación nunca maneja contraseñas"*; el plan de seguridad confirma que el hash argon2id vive **en Keycloak**. Sin embargo spec §4.2.1 y el plan definen `POST /api/v1/auth/login` como endpoint propio. Decide dos cosas: (a) si `users` lleva `password_hash`, y (b) si el login es **redirect OIDC (Authorization Code + PKCE)** o **proxy de credenciales (ROPC)** —este último desaconsejado y en vías de deprecación en OAuth 2.1—. Resolución propuesta: eliminar la columna, tratar `users` como espejo local del usuario de Keycloak, y definir `/auth/login` como callback OIDC.
-  - **`IN-12(a)`** — `accept-invitation` tiene **dos paths en el mismo documento**: `POST /api/v1/users/accept-invitation` (T-024) y `POST /auth/accept-invitation` (T-054, que consume C-12). Distinto prefijo y distinto namespace. Es una contradicción interna del plan de implementación. Elegir uno y escribirlo en `docs/openapi.yaml` — de ahí el frontend genera sus tipos.
+- **Bloqueantes**: ✅ **los dos cerrados el 17-ago-2026** por [`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) (gobernanza CRÍTICA, decidido por el Tech Lead).
+  - ~~**`IN-06`**~~ ✅ — **`users` no lleva `password_hash`**: es el espejo local del usuario de Keycloak, vinculado por el `sub` del token. **El login es Authorization Code + PKCE** con el frontend como cliente OIDC; ROPC descartado. **De los 8 endpoints de `/auth` de spec §4.2.1 sobreviven 2**: `GET /auth/me` y `POST /auth/logout`. Los otros seis los presta Keycloak — escribirlos sería *"construir autenticación a medida"*, que N0 prohíbe. ⚠️ **No deben aparecer en `docs/openapi.yaml`**, o C-08 genera un cliente que llama a rutas inexistentes.
+  - ~~**`IN-12(a)`**~~ ✅ — `accept-invitation` va a **`POST /api/v1/auth/accept-invitation`**: es público (token de invitación, sin sesión) y deja `/api/v1/users/*` uniformemente autenticado. **Su alcance se achica**: fijar la contraseña pasa a ser trabajo de Keycloak; el endpoint activa el espejo local y lo vincula.
   - *Heredados de C-02, ya decididos*: `IN-01` (catálogo de roles) e `IN-02` (`super_admin`) determinan el `CREATE TYPE user_role_enum` y la nulabilidad de `users.tenant_id` de este change. **No re-decidir: aplicar.**
 - **Riesgos**: ~~**R-2**~~ ✅ **cerrado** por [`ADR-024`](docs/adr/ADR-024-matriz-rbac-canonica.md) — los tests de autorización de `T-027` ya tienen contra qué escribirse. Las celdas de `users`, `branches` y `tenant` están en §6 del ADR; ojo con el conjunto `[perfil]` de autoedición, que el ADR define y la vista vieja dejaba como *"campos no privilegiados"* sin enumerar.
 - **Leer antes**:
@@ -508,13 +525,13 @@ Tres observaciones sobre la cadena:
 - **Rango**: `T-039`, `T-040`, `T-041`, `T-042` (4 tareas)
 - **Scope**:
   - Cliente API tipado con TanStack Query, generado desde `docs/openapi.yaml`; interceptor de refresh de token; manejo de `problem+json`
-  - NextAuth conectado al realm de Keycloak (OIDC) — el flujo concreto depende de cómo se haya resuelto `IN-06` en C-05
+  - NextAuth conectado al realm de Keycloak como **cliente OIDC con Authorization Code + PKCE** ([`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md)). **El frontend es el cliente OIDC**; el backend nunca ve una contraseña
   - Página de login + recuperación de contraseña
   - Dashboard placeholder y middleware de rutas protegidas por rol
   - Tests: que una ruta protegida redirija sin sesión; que el refresh de token no dispare un bucle
 - **Dependencias**: `C-01`, `C-05`, `C-07`
 - **Governance**: **ALTO** — es el manejo de sesión y tokens del cliente. Proponer y esperar revisión antes de escribir.
-- **Bloqueantes a resolver**: ninguno propio; **aplica** la resolución de `IN-06` tomada en C-05 (si el login es callback OIDC, esta capa no toca contraseñas nunca).
+- **Bloqueantes a resolver**: ninguno propio; **aplica** [`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md): el login es Authorization Code + PKCE, así que **esta capa no toca contraseñas nunca** — y es la que hace el flujo, porque el cliente OIDC es el frontend. ⚠️ De los 8 endpoints de `/auth` de la spec, el backend solo expone `me` y `logout`: el resto lo llama contra Keycloak.
 - **Leer antes**:
   - `knowledge-base/07_flujos_principales.md` §Flujo 1 — Autenticación y sesión
   - `knowledge-base/03_actores_y_roles.md` §Cómo se aplica la autorización, §Rutas públicas (sin autenticación)
@@ -600,7 +617,7 @@ Tres observaciones sobre la cadena:
 - **Estado**: `[ ]` pendiente
 - **Rango**: `T-054`, `T-055`, `T-056`, `T-057`, `T-061` (5 tareas)
 - **Scope**:
-  - Página pública de aceptación de invitación (sin sesión) — consume el path que C-05 fijó al resolver `IN-12(a)`
+  - Página pública de aceptación de invitación (sin sesión) — consume **`POST /api/v1/auth/accept-invitation`** ([`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) §4). ⚠️ **No pide contraseña**: fijarla es trabajo de Keycloak, así que la página confirma la identidad y deriva al flujo de Keycloak
   - Página de configuración de la agencia
   - Página de gestión de sucursales
   - Página de gestión de usuarios: invitar, cambiar rol, asignar sucursales, desactivar
@@ -1077,7 +1094,7 @@ Tres observaciones sobre la cadena:
 | C-02 | `core-backend-primitives` | 0 | T-009…T-016, T-032, T-033 | 9 | **CRÍTICO** | C-01 | `IN-01`, `IN-02` |
 | C-03 | `observabilidad-y-auditoria-base` | 0 | T-011, T-028…T-031 | 5 | ALTO | C-01, C-02 | `IN-13`, `IN-23`, `IN-31` |
 | C-04 | `tenancy-planes-y-limites` | 0 | T-017…T-020, T-059 | 5 | **CRÍTICO** | C-02 | `IN-03`, `IN-04` |
-| C-05 | `identidad-auth-y-tenant-endpoints` | 0 | T-021…T-027 | 7 | **CRÍTICO** | C-01, C-02, C-04 | `IN-06`, `IN-12(a)` |
+| C-05 | `identidad-auth-y-tenant-endpoints` | 0 | T-021…T-027 | 7 | **CRÍTICO** | C-01, C-02, C-04 | ~~`IN-06`~~ ✅, ~~`IN-12(a)`~~ ✅ |
 | C-06 | `storage-y-notificaciones` | 0 | T-034, T-035 | 2 | MEDIO | C-01, C-02, C-05 | — |
 | C-07 | `design-system-y-shell-web` | 0 | T-036…T-038 | 3 | BAJO | C-01 | — |
 | C-08 | `auth-frontend-y-api-client` | 0 | T-039…T-042 | 4 | ALTO | C-01, C-05, C-07 | — |

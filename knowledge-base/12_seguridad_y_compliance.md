@@ -45,7 +45,7 @@ Threat model resumido de la spec técnica (§8.1), consistente: filtración cros
 
 **Bloqueo por fuerza bruta** (escalonado): 5 intentos → 5 min · 10 intentos → 30 min · 20 intentos → **24 h + notificación al usuario**.
 
-⚠️ **Tensión no resuelta**: la tabla `users` tiene `password_hash NOT NULL`, pero el plan de seguridad dice que la aplicación nunca maneja contraseñas. Ver `IN-06` (bloqueante).
+✅ **Tensión resuelta el 17-ago-2026 por [`ADR-026`](../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md)**: `users` **no lleva** `password_hash`. El plan de seguridad tenía razón — el hash argon2id vive en Keycloak y *"deRuedas no tiene acceso al hash"* (§160). Consecuencia para esta sección: **no hay superficie propia de credenciales que auditar** — ni hash que filtrar, ni endpoint de login que sufra *credential stuffing*, ni lógica de reseteo propia.
 
 ## Autorización
 
@@ -85,7 +85,7 @@ Controles:
 
 **Enmascaramiento en logs**: obligatorio para toda PII. Los DNI aparecen como `***12345`.
 
-**Sin secretos en código, config ni logs**: `gitleaks` + `trufflehog` en pre-commit y en CI.
+**Sin secretos en código, config ni logs**: **`gitleaks` en CI** —historia completa + texto de los `.docx`— y en `pre-commit` como conveniencia. **`trufflehog` descartado** por [`ADR-027`](../docs/adr/ADR-027-escaneres-de-seguridad-declarados-vs-reales.md) §3.
 
 ## Protección de datos personales
 
@@ -154,7 +154,7 @@ Campos: `trace_id`, `user_id`, `tenant_id`, `ip`, `user_agent`, `action`, `entit
 | `pip-audit` | SCA Python | **Bloqueante** en crítico; warning en alto |
 | `npm audit` | SCA JS | **Bloqueante** en crítico |
 | `Trivy` | Imágenes Docker | **Bloqueante** en crítico |
-| `gitleaks` / `trufflehog` | Secretos | **Bloqueante** ante cualquier detección |
+| `gitleaks` | Secretos | **Bloqueante** ante cualquier detección. `trufflehog` descartado — `ADR-027` §3 |
 | `sbom-generator` | SPDX, por release | — |
 | `cosign` (Sigstore) | Firma de imágenes | — |
 | **OWASP ZAP** | DAST, passive scan sobre staging con el tráfico de los tests E2E | *high* bloquea |

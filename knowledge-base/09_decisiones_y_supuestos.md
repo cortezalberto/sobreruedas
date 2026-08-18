@@ -92,7 +92,7 @@ Cuando dos principios entran en tensión, **gana el que aparece primero**, salvo
 **Decisión**: Keycloak como servicio de identidad, autohospedado. JWT RS256.
 **Alternativas**: *Auth a medida* — descartado por regla constitucional (Artículo 3). *Auth0 / Cognito* — descartado por costo a escala y dependencia de proveedor.
 **Trade-offs**: operar Keycloak agrega carga operacional. Mitigación: documentación operativa específica.
-⚠️ **Tensión interna no resuelta**: la tabla `users` de la spec tiene `password_hash NOT NULL`, mientras que §8.3 dice que "la aplicación nunca maneja contraseñas". Ver `IN-06`.
+✅ **Tensión resuelta el 17-ago-2026 por [`ADR-026`](../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md)**: la columna `password_hash` **no se crea**. `users` es el espejo local del usuario de Keycloak, y el login es Authorization Code + PKCE con el frontend como cliente OIDC. La spec se contradecía a sí misma (§221 daba la columna, §1546 decía que la aplicación nunca maneja contraseñas); ganó §1546, respaldada por N0, N3 y T-040.
 
 ### DD-08 — ADR-008: Object storage S3-compatible *[Aceptado]*
 

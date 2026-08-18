@@ -136,11 +136,11 @@ Cada change de `CHANGES.md` declara: scope, nivel de gobernanza, dependencias, r
 1. **NUNCA una query sin contexto de tenant** → `SET LOCAL app.current_tenant` + política RLS + `tenant_id` en la query. Las tres capas, siempre. `tenant_id` va **excluido de todo schema Pydantic de entrada** — se deriva del token, nunca del body.
    *Principio 4 · ADR-006 · override `O-3`*
 2. **NUNCA hashear ni verificar contraseñas en la aplicación** → la autenticación se delega **enteramente** a Keycloak. Si ves `password_hash`, `get_password_hash` o `verify_password`, está mal.
-   *Art. 3 · ADR-007 · override `O-1` · bloqueante `IN-06`*
+   *Art. 3 · ADR-007 · [`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) · override `O-1`* — `IN-06` **resuelto** el 17-ago-2026: `users` no lleva `password_hash` y el login es Authorization Code + PKCE.
 3. **NUNCA borrado físico** → soft delete universal. `db.delete(obj)` está prohibido.
    *Principio 3 · override `O-2`*
-4. **NUNCA secretos en claro en el repositorio** → solo `.env.example` sin valores reales. Los secretos de despliegue se versionan **cifrados con SOPS + age**; la clave privada vive únicamente en el VPS y no se versiona nunca. `gitleaks` + `trufflehog` corren en pre-commit y en CI, y deben seguir detectando un secreto en claro que se cuele junto a los cifrados.
-   *Art. 3 · ADR-023*
+4. **NUNCA secretos en claro en el repositorio** → solo `.env.example` sin valores reales. Los secretos de despliegue se versionan **cifrados con SOPS + age**; la clave privada vive únicamente en el VPS y no se versiona nunca. **`gitleaks` es el control**, y corre en CI sobre la historia completa **y** sobre el texto extraído de los `.docx`; debe seguir detectando un secreto en claro que se cuele junto a los cifrados. También corre en `pre-commit`, pero eso es **conveniencia**: un hook local se saltea con `--no-verify`. **`trufflehog` no se usa** — su aporte sobre `gitleaks` es verificar credenciales contra APIs reales, y eso implica llamadas de red con secretos encontrados desde el runner ([`ADR-027`](docs/adr/ADR-027-escaneres-de-seguridad-declarados-vs-reales.md) §3).
+   *Art. 3 · ADR-023 · [`ADR-027`](docs/adr/ADR-027-escaneres-de-seguridad-declarados-vs-reales.md)*
    > La parte constitucional es **"nunca secretos en el repositorio"**, y sigue intacta: lo que se versiona es texto cifrado, no un secreto legible. Lo que cambió es el gestor. La versión anterior de esta regla nombraba AWS Secrets Manager / Google Secret Manager, que provenía de `spec-tecnica` §1554 (N1) y no existe en este despliegue.
 5. **Cobertura de tests: 80 % de líneas, backend, global** — y **no decrece entre commits**. Un PR que la baje no se mergea sin justificación documentada.
    *Art. 2 — esto resuelve `IN-22` a favor de la constitución, contra el 70 %/60 % del plan de testing*

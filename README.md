@@ -91,7 +91,7 @@ Cuando dos documentos se contradicen, manda [`ADR-000`](docs/adr/ADR-000-precede
 Derivan de `docs/sdd/deRuedas-constitucion.md`. La lista completa, con sus anclas, está en [`CLAUDE.md`](CLAUDE.md).
 
 1. **Ninguna query sin contexto de tenant.** Tres capas simultáneas: `SET LOCAL app.current_tenant`, política RLS y `tenant_id` en la query. `tenant_id` se deriva del token, nunca del body.
-2. **Las contraseñas no se tocan.** La autenticación se delega enteramente a Keycloak. Si aparece `password_hash` o `verify_password`, está mal.
+2. **Las contraseñas no se tocan.** La autenticación se delega enteramente a Keycloak ([`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md)). Si aparece `password_hash`, `mfa_secret` o `verify_password`, está mal — un test recorre el AST y lo frena.
 3. **Nunca borrado físico.** Soft delete universal.
 4. **Nunca secretos en el repositorio.** Solo `.env.example` con valores ficticios.
 5. **Cobertura: 80 % de líneas y 60 % de ramas**, backend, global — y no decrece entre commits ([`ADR-014`](docs/adr/ADR-014-umbrales-de-cobertura.md)).

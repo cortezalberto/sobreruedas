@@ -3,7 +3,7 @@
 > Este archivo es el **resultado del chequeo de consistencia cruzada** sobre los 11 documentos fuente (~19.900 líneas, leídos íntegramente).
 > Se documentaron **54 inconsistencias reales**: **14 bloqueantes** (Parte 1) + **40 no bloqueantes** (Parte 2). Bloqueante significa que no se puede escribir la migración, el enum, el quality gate o el contrato de API correspondiente sin una decisión humana previa.
 >
-> **Bloqueantes (14):** ~~`IN-01`~~ ✅, ~~`IN-02`~~ ✅, `IN-03`, `IN-04`, `IN-05`, `IN-06`, `IN-07`, `IN-10`, `IN-12`, `IN-13`, ~~`IN-22`~~ ✅, `IN-23`, ~~`IN-29`~~ ✅, ~~`IN-31`~~ ✅. **Quedan 9 abiertos.**
+> **Bloqueantes (14):** ~~`IN-01`~~ ✅, ~~`IN-02`~~ ✅, ~~`IN-03`~~ ✅, ~~`IN-04`~~ ✅, `IN-05`, ~~`IN-06`~~ ✅, `IN-07`, `IN-10`, `IN-12` ⚠️ *(a) cerrado, 4 filas abiertas*, `IN-13`, ~~`IN-22`~~ ✅, `IN-23`, ~~`IN-29`~~ ✅, ~~`IN-31`~~ ✅. **Quedan 5 abiertos** (`IN-05`, `IN-07`, `IN-10`, `IN-13`, `IN-23`) más las 4 filas restantes de `IN-12`.
 >
 > ✅ **Cerrados al 13-ago-2026, con el ADR que los cierra:**
 >
@@ -122,7 +122,7 @@ Además, `users.tenant_id` es `FK NOT NULL` — un `super_admin` de deRuedas **n
 
 ---
 
-## 🔴 IN-06 — `users.password_hash NOT NULL` contradice la delegación total a Keycloak
+## ✅ ~~IN-06~~ — RESUELTO por [`ADR-026`](../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) (17-ago-2026)
 
 **`spec-tecnica.md`** §3.3, tabla `users`: `password_hash varchar(255) NOT NULL` — *"Hash argon2id. Nunca se loguea ni serializa."*
 **`spec-tecnica.md`** §8.3: *"La autenticación se delega **íntegramente** a Keycloak. **La aplicación nunca maneja contraseñas** en texto plano."*
@@ -132,7 +132,13 @@ Sin embargo, **`spec-tecnica.md`** §4.2.1 y **`plan-implementacion.md`** define
 
 **Impacto**: define si la tabla `users` lleva la columna `password_hash` o no, y si el flujo de login es *redirect a Keycloak* (Authorization Code + PKCE) o *proxy de credenciales* (Resource Owner Password Credentials, un grant desaconsejado y en vías de deprecación en OAuth 2.1).
 
-**Resolución propuesta**: eliminar `password_hash` de `users`, tratar la tabla como espejo local del usuario de Keycloak, y definir `/auth/login` como el callback del flujo OIDC —no como un endpoint que reciba contraseñas.
+**Resolución adoptada** — [`ADR-026`](../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md), gobernanza CRÍTICA, decidido por el Tech Lead:
+
+1. **`users` NO lleva `password_hash`.** La tabla es el espejo local del usuario de Keycloak; el vínculo es el `sub` del token (`ADR-021`).
+2. **El login es Authorization Code + PKCE**, con el frontend como cliente OIDC (NextAuth en web, `expo-auth-session` en móvil). El backend solo valida el JWT. **ROPC descartado** explícitamente.
+3. **De los 8 endpoints de `/auth` de §4.2.1 sobreviven 2**: `GET /auth/me` (el espejo local, que Keycloak no conoce) y `POST /auth/logout` (dispara el *end-session*). Los otros seis los presta Keycloak — escribirlos sería *"construir autenticación a medida"*, que N0 prohíbe.
+
+> **El planteo original de este bloqueante era desbalanceado.** Presentaba dos lados como si pesaran igual. Del lado de "la app nunca ve la contraseña" están **N0, N1 §1546, N3 §160 y §503, y N2 T-040** (*"NextAuth con Keycloak provider; PKCE habilitado"*); del otro lado, **una columna y una línea de endpoint**. Y la `spec-tecnica` **se contradice a sí misma**: §1546 dice que la aplicación nunca maneja contraseñas y §221 le da una columna para el hash. No hizo falta desempatar entre documentos — alcanzó con leer el documento completo.
 
 ---
 
@@ -171,11 +177,17 @@ Sin embargo, **`spec-tecnica.md`** §4.2.1 y **`plan-implementacion.md`** define
 | Fusionar contactos | `POST /contacts/merge` | `POST /contacts/{primary_id}/merge` |
 | Eliminar etapa de pipeline | `DELETE /pipeline/stages/{id}` | `POST /pipeline/stages/{id}/archive` |
 | Completar actividad | `PATCH /activities/{id}/complete` | `PATCH /activities/{id}` |
-| Aceptar invitación | `POST /api/v1/users/accept-invitation` (T-024) | `POST /auth/accept-invitation` (T-054) — **contradicción dentro del mismo documento**, distinto prefijo y distinto namespace |
+| ~~Aceptar invitación~~ ✅ | ~~`POST /api/v1/users/accept-invitation` (T-024)~~ | ✅ **RESUELTO** → `POST /api/v1/auth/accept-invitation` por [`ADR-026`](../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) §4 |
 
 **Impacto**: el frontend genera sus tipos desde el `openapi.yaml`. Estos son contratos incompatibles, no variaciones de estilo. El caso de `accept-invitation` es especialmente grave porque es una **contradicción interna del plan de implementación**: dos tareas del mismo documento declaran paths distintos para la misma acción.
 
-**Resolución propuesta**: la spec técnica es la fuente vinculante de contratos de API (§1.1 lo declara). Pero `won`/`lost` como endpoints separados es mejor diseño (evita un payload polimórfico) y es lo que se va a implementar. Decidir uno y actualizar el `openapi.yaml` como fuente única.
+**Resolución propuesta** (para las cuatro filas que siguen abiertas): la spec técnica es la fuente vinculante de contratos de API (§1.1 lo declara). Pero `won`/`lost` como endpoints separados es mejor diseño (evita un payload polimórfico) y es lo que se va a implementar. Decidir uno y actualizar el `openapi.yaml` como fuente única.
+
+> ✅ **`IN-12(a)` cerrado el 17-ago-2026.** `accept-invitation` va a **`POST /api/v1/auth/accept-invitation`** ([`ADR-026`](../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) §4): es un endpoint **público** —se llama con un token de invitación, sin sesión— y todo lo pre-autenticación vive bajo `/auth`; además deja `/api/v1/users/*` uniformemente autenticado, así el middleware lleva una regla en vez de una excepción. Se corrige de paso que T-054 lo escribía **sin el prefijo `/api/v1`**.
+>
+> **Y su alcance se achica**: aceptar una invitación normalmente incluye fijar la contraseña, y eso pasa a ser trabajo de Keycloak. El endpoint activa el espejo local y lo vincula al sujeto. **No recibe ni fija contraseña.**
+>
+> Las otras cuatro filas de `IN-12` siguen abiertas y caen en C-11, C-24, C-25 y C-26.
 
 ---
 
