@@ -13,6 +13,7 @@
 import Link from 'next/link';
 
 import { SelectorDeVehiculo } from '@/components/SelectorDeVehiculo';
+import { REALCE_DE_TARJETA, SUPERFICIE_DE_TARJETA } from '@/lib/tokens';
 import { obtenerMarcas } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -32,7 +33,7 @@ export default async function CatalogoPage() {
         y no lo escribe ninguna.
       </p>
 
-      <section className="mt-8 max-w-lectura rounded-lg border border-neutro-borde p-4">
+      <section className={`mt-8 max-w-lectura p-4 ${SUPERFICIE_DE_TARJETA}`}>
         <h2 className="text-lg font-medium">Buscador</h2>
         <p className="mb-4 mt-1 text-sm text-neutro-texto">
           Elegí una marca y se cargan sus modelos.
@@ -46,7 +47,7 @@ export default async function CatalogoPage() {
           <li key={marca.id}>
             <Link
               href={`/catalogo/${marca.slug}`}
-              className="block rounded-lg border border-neutro-borde p-3 hover:border-marca"
+              className={`block p-3 ${SUPERFICIE_DE_TARJETA} ${REALCE_DE_TARJETA}`}
             >
               <span className="font-medium">{marca.name}</span>
               {marca.origin_country && (

@@ -40,6 +40,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import type { ReactNode } from 'react';
 
+// Las superficies viven en `lib/tokens` y NO acá. Este modulo es `'use client'`,
+// y una constante exportada desde un modulo cliente le llega a un Server
+// Component como referencia al cliente, no como string. Ver el encabezado de
+// `SUPERFICIE_DE_TARJETA`.
+import { REALCE_DE_TARJETA, SUPERFICIE_DE_TARJETA } from '@/lib/tokens';
+
 // ── 1. Boton ────────────────────────────────────────────────────────────────
 
 type VarianteDeBoton = 'primario' | 'secundario' | 'destructivo';
@@ -170,11 +176,7 @@ export function Tarjeta({
   interactiva?: boolean;
 }) {
   return (
-    <div
-      className={`rounded-lg border border-neutro-borde p-4 ${
-        interactiva ? 'hover:border-marca' : ''
-      }`}
-    >
+    <div className={`${SUPERFICIE_DE_TARJETA} p-4 ${interactiva ? REALCE_DE_TARJETA : ''}`}>
       {children}
     </div>
   );
@@ -259,12 +261,7 @@ export function EstadoVacio({
  * ristra de nada.
  */
 export function Esqueleto({ alto = 'h-24' }: { alto?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={`animate-pulse rounded-lg border border-neutro-borde ${alto}`}
-    />
-  );
+  return <div aria-hidden="true" className={`animate-pulse ${SUPERFICIE_DE_TARJETA} ${alto}`} />;
 }
 
 // ── 7. Seleccion ────────────────────────────────────────────────────────────
@@ -433,7 +430,9 @@ export function Modal({
     <Dialog.Root open={abierto} onOpenChange={(sigueAbierto) => !sigueAbierto && alCerrar()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-neutro-enfasis/40" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 w-[min(32rem,90vw)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-neutro-borde bg-white p-6 shadow-lg">
+        <Dialog.Content
+          className={`fixed left-1/2 top-1/2 w-[min(32rem,90vw)] -translate-x-1/2 -translate-y-1/2 bg-white p-6 shadow-lg ${SUPERFICIE_DE_TARJETA}`}
+        >
           <Dialog.Title className="text-lg font-semibold tracking-tight">{titulo}</Dialog.Title>
           {descripcion && (
             <Dialog.Description className="mt-1 text-sm text-neutro-texto">

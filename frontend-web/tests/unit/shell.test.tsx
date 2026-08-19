@@ -19,6 +19,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { Encabezado } from '@/components/Encabezado';
 import { NavegacionPrincipal } from '@/components/NavegacionPrincipal';
+import { SUPERFICIE_DE_TARJETA } from '@/lib/tokens';
 import { SECCIONES } from '@/lib/secciones';
 
 const { usePathname } = vi.hoisted(() => ({ usePathname: vi.fn() }));
@@ -85,6 +86,60 @@ describe('el landmark de contenido es del shell', () => {
 
     expect(layout.match(/<main[\s>]/g)).toHaveLength(1);
     expect(layout).toContain('</main>');
+  });
+});
+
+describe('la superficie de tarjeta sale del design system', () => {
+  it('ninguna pantalla la copia a mano', () => {
+    // Habia cuatro copias del string en `/` y `/catalogo`. Una copia no rompe
+    // nada el dia que se escribe: rompe el dia que el design system cambia el
+    // radio o el borde y estas cuatro se quedan con el anterior, sin que
+    // ningun test se entere porque cada pantalla sigue renderizando igual.
+    //
+    // Se compara contra la constante y no contra un literal repetido acá: si
+    // alguien cambia la superficie, este control sigue midiendo la vigente.
+    //
+    // ⚠️ Sin ancla. La primera version buscaba `"${SUPERFICIE_DE_TARJETA}` —con
+    // la comilla adelante— para no marcar los usos legitimos. No hacia falta:
+    // los usos legitimos son `${SUPERFICIE_DE_TARJETA}` en un template, que
+    // nunca contiene el string literal. Y la comilla dejaba pasar el caso real,
+    // que es la superficie en medio de otras clases (`mt-8 rounded-lg ...`).
+    // El control pasaba con la copia puesta: lo delato la mutacion.
+    const culpables = archivosDeApp().filter((ruta) =>
+      contenido(ruta).includes(SUPERFICIE_DE_TARJETA),
+    );
+
+    expect(culpables, `estas pantallas copian la superficie a mano: ${culpables}`).toEqual([]);
+  });
+
+  it('el modulo que la declara sigue siendo seguro para el servidor', () => {
+    /*
+     * ⚠️ ESTE TEST EXISTE POR UN BUG QUE NINGUN TEST PODIA VER.
+     *
+     * Las superficies vivieron un rato en `components/ui/index.tsx`, que lleva
+     * `'use client'`. Cuando un Server Component importa una CONSTANTE de un
+     * modulo cliente, Next no le entrega el valor: le entrega una referencia al
+     * cliente. Interpolarla en un template la convierte en el texto de un stub,
+     * y el `className` renderizado quedaba:
+     *
+     *   "mt-8 p-4 function() { throw new Error(\"Attempted to call
+     *    SUPERFICIE_DE_TARJETA() from the server ...\"); }"
+     *
+     * La tarjeta se quedaba sin borde y sin radio, en silencio.
+     *
+     * `vitest` importa los modulos directo, sin frontera RSC, asi que ahi la
+     * constante es un string de verdad y todo pasa. `tsc` y `eslint` tampoco lo
+     * ven. Lo encontro mirar la pagina corriendo — y por eso el unico control
+     * posible es este: que el modulo NO se vuelva cliente.
+     */
+    // Sin comentarios, por segunda vez en este archivo: `tokens.ts` EXPLICA en
+    // su encabezado por que no puede ser `'use client'`, y para explicarlo lo
+    // escribe. La directiva de verdad es una sentencia y sobrevive al filtro.
+    const tokens = sinComentarios(
+      readFileSync(resolve(__dirname, '../../src/lib/tokens.ts'), 'utf8'),
+    );
+
+    expect(tokens).not.toContain('use client');
   });
 });
 

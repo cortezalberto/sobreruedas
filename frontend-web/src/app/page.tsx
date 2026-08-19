@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+import { SUPERFICIE_DE_TARJETA } from '@/lib/tokens';
+
 /**
  * Home — T-006.
  *
@@ -22,7 +24,7 @@ export default function HomePage() {
       <h1 className="text-3xl font-semibold tracking-tight">deRuedas Gestion</h1>
       <p className="mt-2 text-neutro-texto">Sistema de gestion para agencias de vehiculos.</p>
 
-      <div className="mt-8 rounded-lg border border-neutro-borde p-4">
+      <div className={`mt-8 p-4 ${SUPERFICIE_DE_TARJETA}`}>
         <h2 className="font-medium">
           <Link href="/planes" className="underline underline-offset-4 hover:text-neutro-texto">
             Planes
@@ -33,7 +35,9 @@ export default function HomePage() {
         </p>
       </div>
 
-      <div className="mt-4 rounded-lg border border-neutro-borde bg-neutro-fondo p-4 text-sm text-neutro-texto">
+      <div
+        className={`mt-4 bg-neutro-fondo p-4 text-sm text-neutro-texto ${SUPERFICIE_DE_TARJETA}`}
+      >
         <p className="font-medium">Ola 0 — fundacion</p>
         <p className="mt-1">
           Lo que se ve es catalogo publico. Todo lo que dependa de una agencia necesita identidad, y

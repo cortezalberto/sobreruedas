@@ -127,3 +127,37 @@ export const CONTRASTE_AA_GRANDE = 3;
  * lo que es: un criterio del proyecto, no una cita.
  */
 export const SEPARACION_DE_TONO_MINIMA = 20;
+
+// ── Superficies ─────────────────────────────────────────────────────────────
+
+/**
+ * La superficie de una tarjeta: radio y borde, sin relleno ni fondo.
+ *
+ * SE EXPORTA PORQUE A VECES LA TARJETA TIENE QUE **SER** OTRO ELEMENTO. En el
+ * catalogo, cada marca es un `<Link>` que ocupa toda la caja. Envolverlo en
+ * `<Tarjeta>` dejaria el padding afuera del area clickeable — achicar el
+ * destino tactil para poder reusar un componente es cambiar el producto por la
+ * arquitectura, y en un piso de venta el destino tactil es lo que importa.
+ *
+ * ⚠️ VIVE ACA Y NO EN `components/ui`, Y NO ES ORGANIZACION: ES CORRECTITUD.
+ *
+ * `components/ui/index.tsx` lleva `'use client'`. Cuando un Server Component
+ * importa una CONSTANTE de un modulo cliente, Next no le entrega el valor: le
+ * entrega una referencia al cliente. Interpolarla en un template la convierte en
+ * texto de un stub, y el `className` renderizado termina siendo:
+ *
+ *   "mt-8 p-4 function() { throw new Error(\"Attempted to call
+ *    SUPERFICIE_DE_TARJETA() from the server but ... is on the client\"); }"
+ *
+ * O sea: la tarjeta se queda sin borde y sin radio, en silencio. Paso de verdad
+ * —commit de esta misma tanda— y **ningun test lo vio**: vitest importa el
+ * modulo directo, sin frontera RSC, asi que ahi la constante es un string de
+ * verdad. `tsc` y `eslint` tampoco lo ven. Lo encontro mirar la pagina corriendo.
+ *
+ * Este modulo no lleva `'use client'` y no lo puede llevar: lo importa
+ * `tailwind.config.ts`, que corre en Node.
+ */
+export const SUPERFICIE_DE_TARJETA = 'rounded-lg border border-neutro-borde';
+
+/** El borde se tiñe de marca al pasar el mouse. Solo para lo que se puede abrir. */
+export const REALCE_DE_TARJETA = 'hover:border-marca';
