@@ -18,7 +18,7 @@ import Link from 'next/link';
  */
 export default function HomePage() {
   return (
-    <main className="mx-auto max-w-2xl p-8">
+    <div className="mx-auto max-w-2xl">
       <h1 className="text-3xl font-semibold tracking-tight">deRuedas Gestion</h1>
       <p className="mt-2 text-neutro-texto">Sistema de gestion para agencias de vehiculos.</p>
 
@@ -40,6 +40,6 @@ export default function HomePage() {
           el inicio de sesion contra Keycloak entra con C-05. El design system, con C-07.
         </p>
       </div>
-    </main>
+    </div>
   );
 }

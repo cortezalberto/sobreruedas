@@ -41,7 +41,7 @@ export default function ErrorDePlanes({ reset }: { error: Error; reset: () => vo
   }
 
   return (
-    <main className="mx-auto max-w-4xl p-8">
+    <div className="mx-auto max-w-4xl">
       <h1 className="text-3xl font-semibold tracking-tight">Planes</h1>
 
       <Alerta tono="advertencia" titulo="No se pudo cargar el catalogo.">
@@ -54,6 +54,6 @@ export default function ErrorDePlanes({ reset }: { error: Error; reset: () => vo
           </Boton>
         </div>
       </Alerta>
-    </main>
+    </div>
   );
 }

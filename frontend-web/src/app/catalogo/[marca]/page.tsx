@@ -58,7 +58,7 @@ export default async function ModelosDeMarcaPage({
   }
 
   return (
-    <main className="mx-auto max-w-4xl p-8">
+    <div className="mx-auto max-w-4xl">
       <Migas
         tramos={[{ texto: 'Catalogo', href: '/catalogo' }, { texto: marca.replace(/-/g, ' ') }]}
       />
@@ -88,6 +88,6 @@ export default async function ModelosDeMarcaPage({
           </Tabla>
         </div>
       )}
-    </main>
+    </div>
   );
 }

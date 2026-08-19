@@ -94,7 +94,7 @@ export default async function PlanesPage() {
   const planes = await obtenerPlanes();
 
   return (
-    <main className="mx-auto max-w-4xl p-8">
+    <div className="mx-auto max-w-4xl">
       <h1 className="text-3xl font-semibold tracking-tight">Planes</h1>
       <p className="mt-2 text-neutro-texto">
         Datos servidos por el backend desde PostgreSQL. Sin mocks.
@@ -105,6 +105,6 @@ export default async function PlanesPage() {
           <TarjetaDePlan key={plan.id} plan={plan} />
         ))}
       </div>
-    </main>
+    </div>
   );
 }

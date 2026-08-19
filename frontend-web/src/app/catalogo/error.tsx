@@ -41,7 +41,7 @@ export default function ErrorDeCatalogo({ reset }: { error: Error; reset: () => 
   }
 
   return (
-    <main className="mx-auto max-w-4xl p-8">
+    <div className="mx-auto max-w-4xl">
       <h1 className="text-3xl font-semibold tracking-tight">Catalogo</h1>
 
       <Alerta tono="advertencia" titulo="No se pudo cargar el catalogo de vehiculos.">
@@ -54,6 +54,6 @@ export default function ErrorDeCatalogo({ reset }: { error: Error; reset: () => 
           </Boton>
         </div>
       </Alerta>
-    </main>
+    </div>
   );
 }

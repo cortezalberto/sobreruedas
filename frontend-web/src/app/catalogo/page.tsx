@@ -25,7 +25,7 @@ export default async function CatalogoPage() {
   const marcas = await obtenerMarcas();
 
   return (
-    <main className="mx-auto max-w-4xl p-8">
+    <div className="mx-auto max-w-4xl">
       <h1 className="text-3xl font-semibold tracking-tight">Catalogo</h1>
       <p className="mt-2 text-neutro-texto">
         {marcas.length} marcas del mercado argentino. Catalogo compartido: lo lee cualquier agencia
@@ -56,6 +56,6 @@ export default async function CatalogoPage() {
           </li>
         ))}
       </ul>
-    </main>
+    </div>
   );
 }

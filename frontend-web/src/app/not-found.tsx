@@ -18,7 +18,7 @@ export const metadata = {
 
 export default function NoEncontrado() {
   return (
-    <main className="mx-auto max-w-2xl p-8">
+    <div className="mx-auto max-w-2xl">
       <h1 className="text-3xl font-semibold tracking-tight">No encontrado</h1>
       <p className="mt-2 text-neutro-texto">
         La pagina que buscas no existe. Puede que el enlace este mal escrito o que el contenido ya
@@ -28,6 +28,6 @@ export default function NoEncontrado() {
       <Link href="/" className="mt-6 inline-block text-sm underline underline-offset-4">
         Volver al inicio
       </Link>
-    </main>
+    </div>
   );
 }

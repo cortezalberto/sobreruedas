@@ -21,7 +21,7 @@ import { Esqueleto } from '@/components/ui';
 
 export default function CargandoCatalogo() {
   return (
-    <main className="mx-auto max-w-4xl p-8">
+    <div className="mx-auto max-w-4xl">
       <h1 className="text-3xl font-semibold tracking-tight">Catalogo</h1>
 
       {/* `aria-busy` en vez de un spinner decorativo: es lo que un lector de
@@ -33,6 +33,6 @@ export default function CargandoCatalogo() {
           <Esqueleto key={posicion} alto="h-48" />
         ))}
       </div>
-    </main>
+    </div>
   );
 }

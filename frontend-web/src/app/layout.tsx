@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 
 import { AtajosDeTeclado } from '@/components/AtajosDeTeclado';
+import { Encabezado } from '@/components/Encabezado';
 import { NavegacionPrincipal } from '@/components/NavegacionPrincipal';
 
 import './globals.css';
@@ -71,8 +72,25 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="es-AR" className={inter.variable}>
       <body className="min-h-screen bg-white text-neutro-enfasis antialiased">
-        <NavegacionPrincipal />
-        {children}
+        {/* ── El shell: encabezado, barra lateral y area de contenido ──────
+            EL LANDMARK `<main>` ES DE ACA, NO DE CADA PAGINA. Antes lo
+            declaraba cada `page.tsx`, `loading.tsx` y `error.tsx` —nueve
+            archivos repitiendo `mx-auto max-w-4xl p-8`—, y durante el streaming
+            convivian DOS: el del esqueleto de carga y el del contenido. Dos
+            landmarks `main` en un documento rompen la navegacion por landmarks
+            de un lector de pantalla, que es justo para quien existen.
+
+            Las paginas ponen adentro su propio contenedor de ancho: el inicio y
+            el 404 se leen mejor angostos que un listado. */}
+        <Encabezado />
+        <div className="flex">
+          <aside className="w-56 shrink-0 border-r border-neutro-borde">
+            <NavegacionPrincipal />
+          </aside>
+          {/* `min-w-0`: sin esto, una tabla ancha estira el flex item y empuja
+              la barra lateral fuera de la pantalla en vez de scrollear sola. */}
+          <main className="min-w-0 flex-1 p-8">{children}</main>
+        </div>
         {/* Sin salida visual propia: escucha el teclado y abre su ayuda. */}
         <AtajosDeTeclado />
       </body>
