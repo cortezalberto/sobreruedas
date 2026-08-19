@@ -49,6 +49,33 @@ PERMITIDOS = (
 # habilite tacitamente uno cross-tenant en la misma carpeta.
 PUERTA_DE_CATALOGO = "sesion_de_catalogo"
 
+# La TERCERA puerta, y la unica que es legitima para datos de negocio.
+#
+# `sesion_de_tenant` SI acota por tenant — no es un agujero por si misma. El
+# agujero es COMO se la llama: recibe el tenant por parametro, y nada en su
+# firma impide pasarle uno sacado de la ruta, del cuerpo o de una cabecera. Ahi
+# se cae la regla dura 1 sin que nada falle, porque la consulta anda: acota, solo
+# que al tenant equivocado.
+#
+# Por eso la aplicacion la llama desde UN solo lugar: `db/dependencias.py`, que
+# saca el tenant del token verificado y no tiene por donde recibir otro. El
+# resto de `app/` pide `SesionDeTenant` y no toca esta funcion.
+PUERTA_CON_TENANT = "sesion_de_tenant"
+
+PERMITIDOS_CON_TENANT = (
+    # El puente entre el token y la base. Ver su encabezado.
+    "db/dependencias.py",
+    # Idempotencia. RECIBE el tenant de su llamador y abre transacciones cortas
+    # propias —reservar la clave, liberarla, guardar la respuesta— que no pueden
+    # compartir la del endpoint: si compartieran, un rollback del endpoint se
+    # llevaria puesta la reserva y el reintento del cliente crearia el recurso
+    # dos veces.
+    #
+    # No es una excepcion a la regla: su llamador es un endpoint, y el endpoint
+    # saco el tenant del token. La cadena sigue empezando en el claim.
+    "core/idempotency.py",
+)
+
 PERMITIDOS_CATALOGO = (
     # `plans` es catalogo comercial compartido (`RN-MT-09`). El router del
     # modulo lo publica; el resto del modulo trabaja con datos de tenant y usa
@@ -149,7 +176,61 @@ def test_la_sesion_de_catalogo_no_se_usa_fuera_de_donde_viven_los_catalogos() ->
     )
 
 
+def test_la_sesion_de_tenant_solo_se_abre_desde_la_dependency() -> None:
+    """La regla dura 1, del lado del codigo.
+
+    `sesion_de_tenant` recibe el tenant por parametro. Nada en su firma impide
+    pasarle uno tomado de `/vehicles/{tenant_id}/...`, y esa consulta ANDA — solo
+    que acota al tenant equivocado. Es el modo de fallar que no se ve.
+
+    La aplicacion la abre desde un solo lugar, que saca el tenant del token y no
+    tiene por donde recibir otro. Un uso nuevo fuera de ahi es una decision que
+    tiene que leerse en un diff.
+    """
+    infractores = {
+        ruta
+        for ruta in usos_de(PUERTA_CON_TENANT, RAIZ_APP)
+        if not any(ruta.startswith(p) for p in PERMITIDOS_CON_TENANT)
+    }
+
+    assert not infractores, (
+        f"`{PUERTA_CON_TENANT}` se abre fuera de la dependency: {sorted(infractores)}. "
+        "Un endpoint no elige su tenant — lo trae el token. Pedi `SesionDeTenant`"
+    )
+
+
 # ── Probar el detector, no solo usarlo ───────────────────────────────────────
+
+
+def test_el_detector_encuentra_un_uso_infractor_de_sesion_de_tenant(tmp_path: Path) -> None:
+    """El caso concreto que este guard existe para atajar: el tenant del path."""
+    infractor = tmp_path / "modules" / "stock" / "router.py"
+    infractor.parent.mkdir(parents=True)
+    infractor.write_text(
+        "from app.db.session import sesion_de_tenant\n"
+        "async def listar(tenant_id):\n"
+        "    async with sesion_de_tenant(tenant_id) as s:\n"
+        "        return s\n",
+        encoding="utf-8",
+    )
+
+    permitido = tmp_path / "db" / "dependencias.py"
+    permitido.parent.mkdir(parents=True)
+    permitido.write_text(
+        "from app.db.session import sesion_de_tenant\n"
+        "async def sesion_del_tenant_actual(sujeto):\n"
+        "    async with sesion_de_tenant(sujeto.tenant_id) as s:\n"
+        "        yield s\n",
+        encoding="utf-8",
+    )
+
+    infractores = {
+        ruta
+        for ruta in usos_de(PUERTA_CON_TENANT, tmp_path)
+        if not any(ruta.startswith(p) for p in PERMITIDOS_CON_TENANT)
+    }
+
+    assert infractores == {"modules/stock/router.py"}
 
 
 def test_el_detector_encuentra_un_uso_infractor_de_catalogo(tmp_path: Path) -> None:
