@@ -48,6 +48,26 @@ RE_ADR_SENSIBLE = re.compile(r"^\| `([A-Z][A-Z0-9_]*)` \|.*\| \U0001f512 \|$", r
 RE_SECRETO = re.compile(
     r"(?:SecretStr|SecretoOpcional)[^=]*=\s*Field\([^)]*validation_alias=\"([A-Z0-9_]+)\"", re.S
 )
+# Asignacion de `.env.example`, con su valor. `RE_ENV` solo captura el nombre.
+RE_ENV_CON_VALOR = re.compile(r"^([A-Z][A-Z0-9_]*)=(.*)$", re.M)
+
+# El marcador de "esto lo completas vos". Es la convencion del `.env.example`
+# real, y vale tambien adentro de un DSN: `DATABASE_URL` no es un secreto
+# suelto, es una URL con el secreto adentro.
+MARCADOR = "cambiame"
+
+# Sensibles cuyo valor de ejemplo NO es un marcador, una por una y con motivo —
+# mismo criterio que las exclusiones de cobertura de ADR-014: una excepcion que
+# nadie puede auditar es un agujero. Agregar una entrada acá es un diff visible;
+# aflojar la regla, no.
+SENSIBLES_CON_VALOR_PUBLICO = {
+    # Nombre de usuario del OpenSearch del compose local, no una credencial. La
+    # credencial del par, OPENSEARCH_PASSWORD, va con marcador.
+    "OPENSEARCH_USER": "admin",
+    # Identificador de acceso por defecto de MinIO, publicado en su propia
+    # documentacion. El secreto del par, S3_SECRET_KEY, va con marcador.
+    "S3_ACCESS_KEY": "minioadmin",
+}
 
 
 def leer(path: Path) -> str:
@@ -63,6 +83,31 @@ def informar(titulo: str, faltantes: set[str]) -> int:
     for nombre in sorted(faltantes):
         print(f"           {nombre}")
     return 1
+
+
+def secretos_en_claro(adr_txt: str, env_txt: str) -> set[str]:
+    """Sensibles cuyo valor en `.env.example` no es vacio ni un marcador.
+
+    Es la mitad del escenario *"El contrato no filtra secretos"* que `gitleaks`
+    no cubre: gitleaks encuentra lo que PARECE un secreto —alta entropia,
+    formatos conocidos de token—, y un `SMTP_PASSWORD=Verano2026` no le llama la
+    atencion a nadie. Es justo la forma que tiene la contraseña que alguien pega
+    sin pensar mientras hace andar su entorno local.
+
+    ⚠️ Devuelve NOMBRES, nunca valores. Ver `informar`.
+    """
+    sensibles = set(RE_ADR_SENSIBLE.findall(adr_txt))
+    valores = dict(RE_ENV_CON_VALOR.findall(env_txt))
+
+    culpables = set()
+    for nombre in sensibles:
+        valor = valores.get(nombre, "").strip()
+        if not valor or MARCADOR in valor.lower():
+            continue
+        if valor == SENSIBLES_CON_VALOR_PUBLICO.get(nombre):
+            continue
+        culpables.add(nombre)
+    return culpables
 
 
 def main() -> int:
@@ -102,6 +147,14 @@ def main() -> int:
     )
     fallas += informar(
         "son SecretStr pero ADR-013 no las marca sensibles", cfg_secretos - adr_sensibles
+    )
+
+    # Acá NO se filtra por SOLO_FRONTEND: `NEXTAUTH_SECRET` no pasa por
+    # `Settings`, pero vive en el mismo `.env.example` versionado y filtra
+    # exactamente igual.
+    fallas += informar(
+        "sensibles con un valor en .env.example que no es vacio ni un marcador",
+        secretos_en_claro(adr_txt, env_txt),
     )
 
     print("-----------------------------------------------------------------")

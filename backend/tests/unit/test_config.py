@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from typing import get_args
 
 import pytest
 
-from app.config import ConfigurationError, Settings, get_settings
+from app.config import Ambiente, ConfigurationError, Settings, get_settings
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4.1 — Tipos y defaults
@@ -237,7 +238,22 @@ def test_app_env_rechaza_lo_demas(
     with pytest.raises(ConfigurationError) as capturado:
         get_settings.cache_clear()
         get_settings()
-    assert "APP_ENV" in str(capturado.value)
+    mensaje = str(capturado.value)
+    assert "APP_ENV" in mensaje
+
+    # El escenario *"Ambiente no reconocido"* pide que el mensaje ENUMERE los
+    # valores permitidos, y no solo que nombre la variable. Hoy lo cumple
+    # gratis: es el texto que pydantic arma para un `Literal`. Por eso mismo
+    # hace falta afirmarlo — cambiar `Ambiente` por un `str` con un validador a
+    # mano deja el test verde por el assert de arriba, y a quien se equivoco
+    # escribiendo `prod` sin la lista de lo que si puede escribir.
+    #
+    # ⚠️ Se busca en la LINEA de APP_ENV, no en el mensaje entero: "ci" es
+    # substring de "configuracion", que esta en el encabezado del error. Contra
+    # el mensaje completo la afirmacion pasaria sola.
+    linea = next(ln for ln in mensaje.splitlines() if "APP_ENV" in ln)
+    for permitido in get_args(Ambiente):
+        assert permitido in linea, f"el error no enumera '{permitido}': {linea}"
 
 
 @pytest.mark.parametrize(
