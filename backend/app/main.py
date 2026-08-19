@@ -29,6 +29,7 @@ from app.core.observability import (
     get_correlation_id,
 )
 from app.modules.stock.router import router as stock_router
+from app.modules.stock.router_importacion import router as importacion_router
 from app.modules.tenancy.router import router as tenancy_router
 from app.modules.tenancy.router_agencia import router as agencia_router
 
@@ -147,6 +148,11 @@ def create_app() -> FastAPI:
     # que exige token y acota al tenant del claim. Ver su encabezado: todavia no
     # tiene `require_permission` — eso es el bloque 6 de C-02.
     app.include_router(stock_router)
+
+    # Importacion masiva. Router aparte del de stock porque monta dos prefijos
+    # distintos —`/vehicles/import` y `/imports`— y mezclarlos obligaria a que
+    # el de stock declare rutas que no son de vehiculos.
+    app.include_router(importacion_router)
 
     # Agencia y sucursales. Tambien con `SesionDeTenant` — ver su encabezado para
     # por que estos endpoints no esperan a `E-001` y los de `/users` si.

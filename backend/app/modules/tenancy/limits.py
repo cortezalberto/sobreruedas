@@ -119,7 +119,7 @@ class PlanLimitsService:
         """Un usuario desactivado SIGUE ocupando licencia; uno dado de baja, no."""
         await self._assert_cabe(tenant_id, Recurso.USERS)
 
-    async def assert_can_add_vehicle(self, tenant_id: uuid.UUID) -> None:
+    async def assert_can_add_vehicle(self, tenant_id: uuid.UUID, cantidad: int = 1) -> None:
         """El limite es de vehiculos EN STOCK, no de vehiculos vendidos en la historia.
 
         Vender no debe consumir cuota, o el plan se agota solo con el tiempo y
@@ -135,13 +135,19 @@ class PlanLimitsService:
         altas concurrentes, sobre planes cuyo techo se mide en decenas o
         centenas. El arreglo esta identificado de antemano — el dia que un
         tenant Enterprise cargue por API en paralelo, es ese `FOR UPDATE`.
+
+        ⚠️ `cantidad` existe por la importacion masiva (C-17, `RN-ST-13`): el
+        techo se verifica contra el TOTAL de la planilla y no fila por fila.
+        Preguntando de a una, una agencia con 78 de 80 sube 500 vehiculos,
+        entran 2 y las otras 498 salen como errores individuales — un reporte
+        de 498 lineas para un solo problema, que ademas no es de los datos.
         """
-        await self._assert_cabe(tenant_id, Recurso.VEHICLES)
+        await self._assert_cabe(tenant_id, Recurso.VEHICLES, cantidad)
 
     async def assert_can_add_branch(self, tenant_id: uuid.UUID) -> None:
         await self._assert_cabe(tenant_id, Recurso.BRANCHES)
 
-    async def _assert_cabe(self, tenant_id: uuid.UUID, recurso: Recurso) -> None:
+    async def _assert_cabe(self, tenant_id: uuid.UUID, recurso: Recurso, cantidad: int = 1) -> None:
         contador = self._contadores.get(recurso)
         if contador is None:
             # Falla cerrado. Ver el encabezado: devolver "permitido" acá es como
@@ -159,7 +165,7 @@ class PlanLimitsService:
             return
 
         usados = await contador(self._sesion, tenant_id)
-        if usados >= limite:
+        if usados + cantidad > limite:
             raise PlanQuotaExceeded(recurso=recurso.value, limite=limite, usados=usados)
 
     async def _limite_del_plan(self, tenant_id: uuid.UUID, recurso: Recurso) -> int:

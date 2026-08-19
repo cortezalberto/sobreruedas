@@ -24,6 +24,10 @@ dependencies = [
     # API. Entra en uso en el bloque 5 (T-005), pero el CMD del Dockerfile y el
     # servicio `backend` del compose ya lo invocan.
     "fastapi>=0.111,<1",
+    # Lo exige `UploadFile` — sin esto, FastAPI levanta un `RuntimeError` al
+    # ARMAR la ruta, o sea al importar la aplicacion. No es una dependencia
+    # opcional del endpoint de importacion: sin ella no arranca nada.
+    "python-multipart>=0.0.9,<1",
     "uvicorn[standard]>=0.30,<1",
 
     # Persistencia. Bloque 6 (T-007) y en adelante.
@@ -110,6 +114,17 @@ addopts = "--strict-markers --strict-config"
 [tool.coverage.run]
 source = ["app"]
 branch = true          # sin esto no hay cobertura de ramas que medir
+
+# ⚠️ SIN ESTO, COVERAGE MIENTE. SQLAlchemy async ejecuta el codigo sincronico
+# dentro de un GREENLET (`greenlet_spawn`), y el trazador de coverage no lo
+# sigue: lineas que corren de verdad —probadas, con su assert verde— figuran
+# como no cubiertas. Se detecto con el `except IntegrityError` de
+# `importacion_servicio.py`, que un test ejercitaba y el reporte daba por
+# muerto.
+#
+# El sintoma es traicionero: no dice "falta probar", dice "esto no se ejecuta".
+# Y esconde lo que SI falta entre las lineas que solo la herramienta no ve.
+concurrency = ["greenlet", "thread"]
 omit = [
     # Exclusiones UNA POR UNA, con motivo. ADR-014 prohibe expresamente los
     # comodines amplios: una exclusion que nadie puede auditar es un agujero
@@ -172,3 +187,16 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = ["asyncpg.*"]
 ignore_missing_imports = true
+
+# Celery tampoco publica `py.typed`. Mismo criterio que asyncpg: el override es
+# POR MODULO. `disallow_untyped_decorators` se relaja solo para `app.core.tasks`
+# —el unico archivo que usa `@app.task`— y no globalmente: un decorador sin
+# tipar borra la firma de lo que decora, y eso solo se acepta donde el
+# decorador es de terceros y no hay alternativa.
+[[tool.mypy.overrides]]
+module = ["celery.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["app.core.tasks"]
+disallow_untyped_decorators = false

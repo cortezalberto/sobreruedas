@@ -293,35 +293,27 @@ services:
       start_period: 20s
     networks: [default, observability]
 
-  # ── Worker de Celery — DECLARADO, pero todavia sin trabajo que hacer ────────
+  # ── Worker de Celery — ya tiene trabajo, arranca con el resto ───────────────
   #
-  # ⚠️ NO arranca con `docker compose up -d`. Esta detras de un profile a
-  #    proposito, y no es pereza: HOY NO EXISTE NINGUNA TAREA DE CELERY.
+  # Estuvo detras de un profile hasta el 18-ago-2026 porque NO EXISTIA NINGUNA
+  # TAREA DE CELERY, y un worker sin cola que consumir moria al arrancar y
+  # ensuciaba cada `docker compose up`.
   #
-  # El comando anterior era `celery -A app.core.events worker`, y estaba mal por
-  # una confusion de dos cosas distintas:
+  # C-17 le dio su primera tarea —`stock.importar`, en `app/core/tasks.py`— asi
+  # que el profile se fue. Un poco de historia que conviene no perder:
   #
   #   app/core/events.py  ES el publicador y consumidor de eventos de dominio
   #                       sobre Redis Streams (C-02). Tiene grupos, reintentos
   #                       con backoff y cola de irrecuperables. NO es una app de
-  #                       Celery y nunca va a serlo.
+  #                       Celery y nunca va a serlo. El comando original apuntaba
+  #                       ahi, y por eso el contenedor no levantaba.
   #
-  #   Celery             lo fija ADR-009 y es real, pero su PRIMERA tarea nace
-  #                       en C-17 (importacion-csv-de-stock): ImportService
-  #                       ejecutandose en background. Hasta entonces un worker
-  #                       de Celery no tiene absolutamente nada que consumir.
+  #   app/core/tasks.py   SI es la app de Celery. Es a donde apunta `-A`.
   #
-  # Con el comando viejo el servicio moria al arrancar —el modulo no expone una
-  # app de Celery— y ensuciaba cada `docker compose up` del entorno local.
-  #
-  # CUANDO C-17 LO NECESITE: crear la app de Celery, apuntar el comando ahi y
-  # BORRAR el profile. La ruta de abajo es una propuesta, no una decision
-  # tomada: la fija C-17.
-  #
-  # Nombrarlo explicitamente lo levanta igual, sin activar el profile a mano:
-  #   docker compose up -d worker
+  # ⚠️ El worker NO migra: no lleva `DATABASE_MIGRATION_URL` y se conecta con el
+  #    rol de aplicacion, igual que el backend. Una tarea de dominio que pudiera
+  #    hacer DDL seria un agujero de aislamiento con horario nocturno.
   worker:
-    profiles: ["worker"]
     build:
       context: ./backend
     command: ["celery", "-A", "app.core.tasks", "worker", "--loglevel=INFO"]

@@ -34,8 +34,11 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Query, status
+from fastapi.responses import PlainTextResponse
 
+from app.core.auth import SujetoActual
 from app.db.dependencias import SesionDeTenant
+from app.modules.stock.importacion import PLANTILLA
 from app.modules.stock.schemas import (
     FiltrosDeBusqueda,
     VehiculoCambioDeEstado,
@@ -114,3 +117,46 @@ async def cambiar_estado(
 )
 async def dar_de_baja(vehiculo_id: uuid.UUID, sesion: SesionDeTenant) -> None:
     await _servicio(sesion).dar_de_baja(vehiculo_id)
+
+
+@router.get(
+    "/import/template",
+    response_class=PlainTextResponse,
+    summary="Plantilla CSV de importacion",
+    responses={200: {"content": {"text/csv": {}}}},
+    description=(
+        "La planilla vacia con una fila de ejemplo. Se descarga, se completa en "
+        "Excel y se sube a `POST /vehicles/import`."
+    ),
+)
+async def plantilla_de_importacion(_: SujetoActual) -> PlainTextResponse:
+    """`T-096`. Va con token aunque no devuelva datos de nadie.
+
+    Podria ser publica —es texto fijo, sin una sola fila de ninguna agencia—
+    pero exentar una ruta es una decision de seguridad, y no se toma para
+    ahorrarle un header a un endpoint que solo usa alguien ya logueado.
+
+    ⚠️ El parametro `_: SujetoActual` NO es decorativo, y por eso no se puede
+    borrar "porque no se usa": es lo unico que hace que FastAPI resuelva la
+    identidad antes de entrar acá. Sin el, la ruta queda abierta — la primera
+    version de este endpoint no lo tenia, el docstring ya decia "va con token",
+    y quien lo detecto fue el gate de `test_auth_rutas.py`, no la lectura.
+
+    Se pide `SujetoActual` y no `SesionDeTenant` porque no hay nada que
+    consultar: abrir una transaccion contra PostgreSQL para devolver una
+    constante es gasto sin contrapartida.
+
+    ⚠️ La declaracion va DESPUES de `/{vehiculo_id}` en el archivo y aun asi
+    resuelve bien: `import/template` son dos segmentos y aquella ruta toma uno.
+    Si alguna vez nace `/vehicles/import` a secas, tiene que quedar ARRIBA de
+    `/{vehiculo_id}` o se la come el UUID — y el sintoma seria un 422 diciendo
+    que "import" no es un UUID valido.
+
+    `Content-Disposition` para que el navegador ofrezca guardar en vez de
+    mostrar el CSV como texto plano en una pestaña.
+    """
+    return PlainTextResponse(
+        content=PLANTILLA,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="plantilla-stock.csv"'},
+    )

@@ -74,6 +74,18 @@ PERMITIDOS_CON_TENANT = (
     # No es una excepcion a la regla: su llamador es un endpoint, y el endpoint
     # saco el tenant del token. La cadena sigue empezando en el claim.
     "core/idempotency.py",
+    # Importacion masiva ejecutandose en el WORKER de Celery (C-17). No hay
+    # request ni token: la tarea recibe el tenant en su mensaje, y ese mensaje
+    # lo encolo un endpoint que si lo saco del token.
+    #
+    # La cadena sigue empezando en el claim, con un eslabon mas — y ese eslabon
+    # es el que hay que mirar en una revision: si alguien encola la tarea con un
+    # tenant de otra procedencia, acá no se nota. Por eso el UNICO lugar que
+    # llama a `importar_stock.delay()` es el router, con `sesion.info`.
+    #
+    # Ademas la tarea abre varias transacciones cortas y no puede recibir una
+    # sesion ya abierta: el commit por lote es lo que hace visible el progreso.
+    "modules/stock/importacion_servicio.py",
 )
 
 PERMITIDOS_CATALOGO = (
