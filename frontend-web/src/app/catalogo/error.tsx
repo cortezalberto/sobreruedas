@@ -1,7 +1,7 @@
 /**
  * Que se ve cuando el backend no responde.
  *
- * POR QUE EXISTE ESTE ARCHIVO. `/planes` es `force-dynamic`: sale a buscar los
+ * POR QUE EXISTE ESTE ARCHIVO. `/catalogo` es `force-dynamic`: sale a buscar los
  * datos en cada pedido. Si el backend esta caido —y en desarrollo se cae seguido,
  * es un `docker compose stop`— sin esto Next muestra su pantalla de error
  * generica, que en produccion es una pagina en blanco con "Application error".
