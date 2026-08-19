@@ -611,6 +611,57 @@ Cubre la capability `platform/delivery-pipeline`.
 > | `platform/configuration` | 10 | **10** | ✅ completa |
 > | `platform/delivery-pipeline` | 16 | **15** | ⚠️ falta 1 |
 >
+> > **Re-auditado el 19-ago-2026 — el 35 de 36 se sostiene, pero cinco de esos
+> > 35 no se sostenían en un test.** La tarea pide escenarios cubiertos por
+> > tests **ejecutables**, y ahí la auditoría anterior había sido generosa
+> > consigo misma en dos formas distintas:
+> >
+> > **1. Tres escenarios descansaban en una sonda, no en un test.** *"Violación
+> > de reglas de linting"*, *"Error de tipado estático"* y *"Secreto filtrado en
+> > el cambio"* figuraban cubiertos por las sondas que esta misma nota
+> > menciona — corridas de CI donde se plantó una infracción a propósito y el
+> > pipeline se puso rojo. Eso prueba que el gate funcionaba **ese día**. No
+> > vuelve a correr nunca.
+> >
+> > Y el agujero no era teórico: hasta el 19-ago se le podía agregar `|| true`
+> > al `gitleaks` del `ci.yml` y los 625 tests seguían verdes. El único control
+> > declarado del secreto en claro se apagaba sin ruido — y lo decía un
+> > comentario del propio `ci.yml` (*"gitleaks corre también en pre-commit, y
+> > ESTE es el control"*), que por el Principio 5 no obliga a nadie.
+> > [`test_gates_bloqueantes.py`](../../../backend/tests/unit/test_gates_bloqueantes.py)
+> > convierte las tres sondas en regresión permanente: ocho gates declarados
+> > como datos, cada uno verificado contra el borrado, el `continue-on-error` y
+> > la neutralización del código de salida. De paso cubre los dos escenarios de
+> > *"Ejecución del pipeline en cada propuesta de cambio"*, que tampoco tenían
+> > test — el disparador contra `main` y el techo de 15 minutos por job.
+> >
+> > **2. Dos escenarios tenían una cláusula `AND` sin afirmar.**
+> > `platform/configuration` figuraba entera, y lo estaba a nivel de escenario;
+> > no a nivel de lo que cada escenario dice:
+> >
+> > - *"El contrato no filtra secretos"* pide que las sensibles estén **vacías o
+> >   con un valor evidentemente ficticio**. Nadie miraba el valor:
+> >   `check-config-parity` comparaba nombres y tipos, `test_secretos_no_se_exponen`
+> >   mira lo que la aplicación imprime en runtime, y `gitleaks` encuentra lo que
+> >   **parece** un secreto. Un `SMTP_PASSWORD=Verano2026` pasaba los tres.
+> > - *"Ambiente no reconocido"* pide que el error **enumere los valores
+> >   permitidos**. El test solo afirmaba que nombrara `APP_ENV`.
+> >
+> > Los dos cerrados y **verificados por mutación**: plantar un valor real en el
+> > `.env.example` de verdad pone el gate en rojo sin imprimir el valor, y
+> > cambiar `Ambiente` por un `str` pelado tira los 5 casos de
+> > `test_app_env_rechaza_lo_demas`.
+> >
+> > **El denominador no se movió: sigue 35 de 36.** Lo que cambió es qué
+> > sostiene a esos 35. **10.3 sigue sin tildarse**, y por el mismo motivo de
+> > siempre: *"Integración exitosa a la rama principal"* necesita un servidor
+> > recibiendo un despliegue, y el VPS está **pausado por decisión de Dirección**
+> > (18-ago-2026), no pendiente de trabajo.
+> >
+> > ⚠️ El encabezado de esta nota dice "los **35** escenarios" y la tabla suma
+> > **36**. El 35 quedó de antes de que la enmienda de `pip-audit` partiera un
+> > escenario en dos. El número bueno es 36.
+
 > > **Re-verificado el 18-ago-2026 — el 35 de 36 sigue en pie, y no se tildó.**
 > > No se repitió la auditoría: se comprobó que siga siendo cierta, que es
 > > distinto. Los conteos de escenarios de las tres delta specs siguen dando
