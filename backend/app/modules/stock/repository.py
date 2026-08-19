@@ -22,13 +22,13 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.stock.models import Vehicle
-from app.modules.stock.schemas import FiltrosDeBusqueda
+from app.modules.stock.schemas import EstadoDeVehiculo, FiltrosDeBusqueda
 
-__all__ = ["VehicleRepository"]
+__all__ = ["VehicleRepository", "contar_vehiculos"]
 
 
 class VehicleRepository:
@@ -101,3 +101,33 @@ class VehicleRepository:
             Vehicle.tenant_id == self._tenant_id,
             Vehicle.deleted_at.is_(None),
         )
+
+
+async def contar_vehiculos(sesion: AsyncSession, tenant_id: uuid.UUID) -> int:
+    """Vehiculos que OCUPAN cuota del plan. Lo llama `PlanLimitsService`.
+
+    Es funcion suelta y no metodo del repositorio porque la firma la fija
+    `limits.py` (`Contador = (AsyncSession, UUID) -> int`) y quien la invoca no
+    tiene —ni debe tener— un repositorio construido con un tenant adentro.
+
+    QUE NO CUENTA, Y POR QUE CADA EXCLUSION
+    ────────────────────────────────────────
+      - **Dados de baja** (`deleted_at`): la fila sobrevive por la regla dura 3,
+        pero un vehiculo borrado no esta en el stock de nadie.
+      - **Vendidos** (`sold`): lo promete `assert_can_add_vehicle` desde C-04.
+        Si vender consumiera cuota, el plan se agotaria solo con el tiempo y el
+        cliente que mas vende seria el primero en quedarse sin lugar.
+
+    `archived` SI cuenta: es "lo saque de la vitrina", no "ya no lo tengo". El
+    dia que eso se discuta, la respuesta esta en `RN-ST-05`, no acá.
+    """
+    consulta = (
+        select(func.count())
+        .select_from(Vehicle)
+        .where(
+            Vehicle.tenant_id == tenant_id,
+            Vehicle.deleted_at.is_(None),
+            Vehicle.status != EstadoDeVehiculo.VENDIDO.value,
+        )
+    )
+    return int((await sesion.execute(consulta)).scalar_one())

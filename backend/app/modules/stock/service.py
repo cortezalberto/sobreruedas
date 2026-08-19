@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import DomainError
 from app.modules.stock.models import Vehicle
-from app.modules.stock.repository import VehicleRepository
+from app.modules.stock.repository import VehicleRepository, contar_vehiculos
 from app.modules.stock.schemas import (
     EstadoDeVehiculo,
     FiltrosDeBusqueda,
@@ -28,6 +28,7 @@ from app.modules.stock.schemas import (
     VehiculoCrear,
     es_transicion_valida,
 )
+from app.modules.tenancy.limits import PlanLimitsService, Recurso
 
 __all__ = ["StockService", "TransicionInvalida", "VehiculoDuplicado", "VehiculoNoEncontrado"]
 
@@ -69,6 +70,17 @@ class StockService:
         self._tenant_id = tenant_id
         self._repositorio = VehicleRepository(sesion, tenant_id)
 
+        # El contador de vehiculos lo registra ESTE modulo, que es el dueño de
+        # la tabla. `limits.py` sabe de planes y de cuotas, no de la forma de
+        # `vehicles` — asi C-05 y C-17 pueden registrar los suyos sin tocarlo.
+        #
+        # ⚠️ Que esta linea faltara es como el sistema quedo sin techo de
+        # facturacion: `assert_can_add_vehicle` existia desde C-04 y nadie lo
+        # llamaba, asi que la falla-cerrado de `limits.py` nunca tuvo ocasion
+        # de dispararse. Ver `tests/integration/test_cuota_de_vehiculos.py`.
+        self._limites = PlanLimitsService(sesion)
+        self._limites.registrar(Recurso.VEHICLES, contar_vehiculos)
+
     async def listar(self, filtros: FiltrosDeBusqueda) -> list[Vehicle]:
         return list(await self._repositorio.listar(filtros))
 
@@ -79,7 +91,15 @@ class StockService:
         return vehiculo
 
     async def crear(self, datos: VehiculoCrear) -> Vehicle:
-        """Alta. El estado inicial lo fija la regla, no el cliente (`RN-ST-04`)."""
+        """Alta. El estado inicial lo fija la regla, no el cliente (`RN-ST-04`).
+
+        La cuota del plan se verifica ANTES del INSERT y antes del chequeo de
+        duplicados: si la agencia llego a su techo, que el dominio este repetido
+        o no da lo mismo, y un 422 de duplicado escondiendo un 402 de cuota
+        manda a corregir la patente en vez de a subir de plan.
+        """
+        await self._limites.assert_can_add_vehicle(self._tenant_id)
+
         if datos.domain_plate is not None and await self._repositorio.existe_dominio(
             datos.domain_plate
         ):
