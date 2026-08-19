@@ -28,6 +28,7 @@ from app.core.observability import (
     configure_logging,
     get_correlation_id,
 )
+from app.modules.stock.router import router as stock_router
 from app.modules.tenancy.router import router as tenancy_router
 
 VERSION = "0.1.0"
@@ -140,6 +141,11 @@ def create_app() -> FastAPI:
     # `tenant_id` ni requiere identidad — ver el encabezado de `router.py`. Los
     # endpoints de agencias y usuarios siguen siendo C-05.
     app.include_router(tenancy_router)
+
+    # Primer router con datos de una agencia. Cada endpoint pide `SesionDeTenant`,
+    # que exige token y acota al tenant del claim. Ver su encabezado: todavia no
+    # tiene `require_permission` — eso es el bloque 6 de C-02.
+    app.include_router(stock_router)
 
     @app.get("/health", tags=["salud"], summary="Sonda de vida")
     async def health() -> dict[str, Any]:

@@ -58,6 +58,15 @@ async def sesion_del_tenant_actual(sujeto: SujetoActual) -> AsyncIterator[AsyncS
     vea (`design.md` D-3 de C-02).
     """
     async with sesion_de_tenant(sujeto.tenant_id) as sesion:
+        # El tenant queda en `sesion.info` para que el router no tenga que pedir
+        # el sujeto por separado. Es deliberado: con dos parametros —la sesion y
+        # el sujeto— un endpoint podria acotar la consulta a uno y leer el otro,
+        # y esa incoherencia no la detecta nadie. Asi hay una sola fuente.
+        #
+        # `.info` es el diccionario que SQLAlchemy reserva para esto y vive con
+        # la sesion, o sea con la transaccion: no puede sobrevivirla ni filtrarse
+        # a otra peticion.
+        sesion.info["tenant_id"] = sujeto.tenant_id
         yield sesion
 
 
