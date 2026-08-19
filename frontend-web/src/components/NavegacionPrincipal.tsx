@@ -8,26 +8,22 @@
  * paginas— sigue renderizando en el servidor. Poner el `'use client'` en el
  * layout habria arrastrado al cliente todo lo que contiene.
  *
- * ⚠️ Provisorio en lo visual, no en la estructura. El design system es C-07
- * (riesgo `R-4`: la especificacion todavia no existe), asi que los colores y
- * espaciados de aca son de andamio y se reemplazan. Lo que no cambia es que la
- * navegacion viva en un solo lugar.
+ * QUE SECCIONES MUESTRA — no las decide este archivo
+ * ────────────────────────────────────────────────────
+ * Salen de `lib/secciones.ts`, que es la fuente unica que comparte con la ayuda
+ * de atajos y con el acorde `G`. Antes cada uno tenia su lista y podian derivar:
+ * agregar una seccion acá no le agregaba el atajo, y un atajo podia llevar a una
+ * ruta que la barra no conocia.
+ *
+ * `seccionesVisibles()` deja afuera lo que todavia no tiene pantalla. Un item de
+ * menu que lleva a un 404 le enseña al usuario a desconfiar del menu entero.
  */
 'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-interface Seccion {
-  href: string;
-  etiqueta: string;
-}
-
-const SECCIONES: readonly Seccion[] = [
-  { href: '/', etiqueta: 'Inicio' },
-  { href: '/planes', etiqueta: 'Planes' },
-  { href: '/catalogo', etiqueta: 'Catalogo' },
-];
+import { seccionesVisibles } from '@/lib/secciones';
 
 function esActual(pathname: string, href: string): boolean {
   // `/` solo coincide exacto: si no, seria "actual" en todas las rutas.
@@ -43,7 +39,7 @@ export function NavegacionPrincipal() {
         <span className="font-semibold tracking-tight">deRuedas</span>
 
         <ul className="flex gap-4 text-sm">
-          {SECCIONES.map((seccion) => {
+          {seccionesVisibles().map((seccion) => {
             const actual = esActual(pathname, seccion.href);
             return (
               <li key={seccion.href}>

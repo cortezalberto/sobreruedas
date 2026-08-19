@@ -36,6 +36,8 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
+import { SECCIONES, destinoDelAcorde } from '@/lib/secciones';
+
 import { Modal, Tabla } from './ui';
 
 /** Cuanto espera el acorde a su segunda tecla. Mas que esto se siente pegajoso. */
@@ -44,44 +46,49 @@ const VENTANA_DEL_ACORDE_MS = 1500;
 interface Atajo {
   teclas: string;
   descripcion: string;
-  destino?: string;
-  /** Sin destino y sin implementar: la seccion no existe todavia. */
+  /** La seccion todavia no tiene pantalla: la ayuda lo dice, el acorde no va. */
   pendiente?: boolean;
 }
 
-const ATAJOS: readonly Atajo[] = [
+/**
+ * Los que no son de navegacion. Se declaran a mano porque no son secciones.
+ *
+ * `Esc` no esta cableado acá: lo maneja Radix adentro del modal. Figura en la
+ * tabla porque la ayuda describe lo que el usuario puede hacer, no lo que este
+ * archivo implementa.
+ */
+const ATAJOS_SUELTOS: readonly Atajo[] = [
   { teclas: '?', descripcion: 'Mostrar esta ayuda' },
-  { teclas: 'G luego C', descripcion: 'Ir al catálogo', destino: '/catalogo' },
-  { teclas: 'G luego P', descripcion: 'Ir a planes', destino: '/planes' },
   { teclas: 'Esc', descripcion: 'Cerrar el diálogo abierto' },
-  { teclas: 'G luego D', descripcion: 'Ir al dashboard', pendiente: true },
-  { teclas: 'G luego S', descripcion: 'Ir al stock', pendiente: true },
-  { teclas: 'G luego L', descripcion: 'Ir a leads', pendiente: true },
-  { teclas: 'G luego M', descripcion: 'Ir a mensajes', pendiente: true },
-  { teclas: 'G luego R', descripcion: 'Ir a reportes', pendiente: true },
   { teclas: 'Ctrl+K', descripcion: 'Buscador global', pendiente: true },
   { teclas: 'Ctrl+N', descripcion: 'Crear nuevo', pendiente: true },
   { teclas: 'Ctrl+S', descripcion: 'Guardar', pendiente: true },
 ];
 
 /**
- * Funcion y no objeto indexado, por lo mismo que los mapeos de los primitivos:
- * `eslint-plugin-security` marca todo acceso por indice como inyeccion. Acá la
- * clave viene del TECLADO —o sea, entrada del usuario— asi que la advertencia
- * ni siquiera es un falso positivo del todo: con un objeto plano, apretar
- * `G` y despues `constructor` devolveria algo. Un `switch` no tiene ese
- * problema.
+ * La tabla de la ayuda, DERIVADA de las secciones.
+ *
+ * ⚠️ Esto es lo que arregla el desfasaje que habia acá. La version anterior
+ * escribia la tabla a mano, con un campo `destino` que **nadie leia para
+ * navegar** —navegaba un `switch` aparte—. La ayuda podia prometer un destino y
+ * el acorde ir a otro lado, o a ninguno, sin que nada lo delatara.
+ *
+ * Ahora `pendiente` sale de `existe`, asi que la ayuda no puede anunciar como
+ * disponible algo a donde `destinoDelAcorde` no lleva.
  */
-function destinoDelAcorde(tecla: string): string | undefined {
-  switch (tecla) {
-    case 'c':
-      return '/catalogo';
-    case 'p':
-      return '/planes';
-    default:
-      return undefined;
-  }
+function atajosDeNavegacion(): readonly Atajo[] {
+  return SECCIONES.filter((seccion) => seccion.tecla).map((seccion) => ({
+    teclas: `G luego ${seccion.tecla}`,
+    descripcion: seccion.ayuda ?? `Ir a ${seccion.etiqueta}`,
+    pendiente: !seccion.existe,
+  }));
 }
+
+const ATAJOS: readonly Atajo[] = [
+  ...ATAJOS_SUELTOS.filter((atajo) => !atajo.pendiente),
+  ...atajosDeNavegacion(),
+  ...ATAJOS_SUELTOS.filter((atajo) => atajo.pendiente),
+];
 
 /**
  * Un atajo no puede dispararse mientras alguien escribe.
