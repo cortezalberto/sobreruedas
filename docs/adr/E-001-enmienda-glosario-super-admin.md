@@ -289,8 +289,8 @@ Texto completo de la enmienda: docs/adr/E-001-enmienda-glosario-super-admin.md
 
 - [x] ~~Resolver el **obstáculo 1**~~ — ✅ 17-ago-2026: decisión unipersonal del Tech Lead
 - [x] ~~Resolver el **obstáculo 2**~~ — ✅ 17-ago-2026: **opción A**, apéndice al final de la constitución
-- [ ] Registrar en `CLAUDE.md`/`AGENTS.md` la **única excepción** a la inmutabilidad de `docs/sdd/`: el historial de enmiendas de la constitución, append-only, por el Artículo 8
-- [ ] Anotar como pendiente la **enmienda al Artículo 8** para contemplar el decisor único (no es de este trámite, pero se descubrió acá)
+- [x] ~~Registrar en `CLAUDE.md`/`AGENTS.md` la **única excepción** a la inmutabilidad de `docs/sdd/`~~ — ✅ **19-ago-2026**, bajo la tabla de precedencia de los dos archivos, que son idénticos byte a byte. No esperaba al cierre: no es un paso del Artículo 8, es dejar de tener dos reglas que leídas sueltas se contradicen —una manda escribir al final de la constitución y la otra prohíbe tocarla—
+- [x] ~~Anotar como pendiente la **enmienda al Artículo 8** para contemplar el decisor único~~ — ✅ **17-ago-2026**: no quedó anotada como pendiente, quedó **abierta** como [`E-002`](E-002-enmienda-articulo-8-decisor-unico.md), con cierre mínimo el 24-ago. No bloquea a `E-001` ni la condiciona
 - [ ] Paso (c) — aprobación, asentada en la tabla de discusión
 - [ ] Paso (d) — pegar el texto de la enmienda con la fecha y el decisor reales
 - [ ] Paso (e) — enviar la comunicación

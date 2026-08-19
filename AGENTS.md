@@ -83,6 +83,12 @@ Cuatro reglas que van con eso:
 
 Los ADRs nuevos del proyecto viven en [`docs/adr/`](docs/adr/) — `docs/sdd/` es corpus fuente inmutable y `knowledge-base/` es material derivado.
 
+> ⚠️ **La inmutabilidad de `docs/sdd/` admite UNA excepción, y una sola**: el historial de enmiendas al final de [`deRuedas-constitucion.md`](docs/sdd/deRuedas-constitucion.md), en modo **append-only** y tramitado por el Artículo 8.
+>
+> No es un desvío: el Artículo 8 cierra diciendo que *"las enmiendas se acumulan al final del documento como historial"*, y por [`ADR-000`](docs/adr/ADR-000-precedencia-documental.md) N0 gana sobre una convención de manejo. El propósito de la inmutabilidad —que nada se reescriba en silencio— lo cumple igual un apéndice que solo agrega. **De la constitución no se reescribe ni una palabra**, y ningún otro documento de `docs/sdd/` se toca por ningún motivo.
+>
+> Decidido el 17-ago-2026 (opción A) en [`E-001`](docs/adr/E-001-enmienda-glosario-super-admin.md) §Obstáculo 2. Queda escrito acá porque las dos reglas, leídas sueltas, se contradicen: una manda escribir al final del documento y la otra prohíbe tocarlo.
+
 `reference/` contiene material del **método** SDD, no del producto. No es fuente de verdad.
 
 ---
