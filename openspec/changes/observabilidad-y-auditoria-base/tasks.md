@@ -16,9 +16,9 @@
 
 ## 1. Dependencias — antes de cualquier código de aplicación
 
-- [ ] 1.1 Agregar a `pyproject.toml`: `python-json-logger`, `prometheus-client`, `sentry-sdk`, `opentelemetry-sdk`, `opentelemetry-exporter-otlp`, `opentelemetry-instrumentation-fastapi`, `opentelemetry-instrumentation-sqlalchemy`
-- [ ] 1.2 Correr `pip-audit` y verificar que las siete pasan el gate. **Si alguna arrastra una vulnerabilidad alta o crítica, se elige otra o se escala** — el gate no se afloja (`ADR-027`), y el precedente es `@vitejs/plugin-react` en el frontend
-- [ ] 1.3 Verificar que `check-config-parity.py` sigue en 0 divergencias: no se agregan variables de entorno, se usan las cuatro que `ADR-013` ya declara
+- [x] 1.1 Agregar a `pyproject.toml`: `python-json-logger`, `prometheus-client`, `sentry-sdk`, `opentelemetry-sdk`, `opentelemetry-exporter-otlp`, `opentelemetry-instrumentation-fastapi`, `opentelemetry-instrumentation-sqlalchemy`
+- [x] 1.2 Correr `pip-audit` y verificar que las siete pasan el gate. **Si alguna arrastra una vulnerabilidad alta o crítica, se elige otra o se escala** — el gate no se afloja (`ADR-027`), y el precedente es `@vitejs/plugin-react` en el frontend
+- [x] 1.3 Verificar que `check-config-parity.py` sigue en 0 divergencias: no se agregan variables de entorno, se usan las cuatro que `ADR-013` ya declara
 
 ## 2. Logging estructurado y correlación — `T-028` · decisión `D-1`
 

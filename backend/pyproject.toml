@@ -57,6 +57,30 @@ dependencies = [
     # validacion de identidad rota en produccion, donde los extras de `dev` no
     # se instalan.
     "httpx>=0.27,<1",
+
+    # Observabilidad. C-03, bloque 1.
+    #
+    # ⚠️ VAN JUNTAS Y SE AUDITAN JUNTAS. `pip-audit` bloquea ante cualquier
+    # vulnerabilidad porque no expone severidad (ADR-027), asi que agregar
+    # siete paquetes de una es siete veces la chance de dejar el pipeline en
+    # rojo. Por eso el bloque 1 del change las instala y las audita ANTES de
+    # escribir codigo de aplicacion: si una tiene que salir, mejor enterarse
+    # el primer dia y no con cuatro modulos colgando de ella.
+    #
+    # El SDK de OpenTelemetry NO es opcional aunque el exportador si lo sea:
+    # los tres pilares se correlacionan por `trace_id` (knowledge-base/13), y
+    # sin el SDK no hay identificador de traza del que colgar los logs. Sin
+    # `OTEL_EXPORTER_OTLP_ENDPOINT` la app arranca igual y no exporta.
+    "python-json-logger>=2.0,<4",
+    "prometheus-client>=0.20,<1",
+    "sentry-sdk>=2.0,<3",
+    "opentelemetry-sdk>=1.25,<2",
+    "opentelemetry-exporter-otlp>=1.25,<2",
+    # Los paquetes `-instrumentation-` llevan su propio versionado `0.x`,
+    # acoplado al `1.x` del SDK pero independiente de el. Por eso el piso se
+    # escribe distinto y no lleva techo de serie mayor.
+    "opentelemetry-instrumentation-fastapi>=0.46b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.46b0",
 ]
 
 [project.optional-dependencies]
