@@ -22,6 +22,7 @@ from app.core.auth import (
     ClavesDelProveedor,
     NoAutenticado,
     Sujeto,
+    _es_clave_de_firma,
     validar_token,
 )
 
@@ -335,3 +336,77 @@ class Reloj:
 
     def avanzar(self, cuanto: timedelta) -> None:
         self._ahora += cuanto
+
+
+# ── El JWKS de un Keycloak de verdad trae mas de una clave ───────────────────
+
+
+async def test_una_clave_de_cifrado_en_el_jwks_no_rompe_la_validacion() -> None:
+    """El defecto que aparecio la primera vez que se hablo con Keycloak real.
+
+    Un realm publica al menos DOS claves: la de firma y una de CIFRADO
+    (`use: "enc"`, `alg: "RSA-OAEP"`). `PyJWK.from_dict` no sabe construir la
+    segunda y levanta `PyJWKError`. Como el diccionario se armaba de una sola
+    comprension, esa excepcion se llevaba puesto el JWKS entero —incluida la
+    clave buena— y **toda** peticion autenticada respondia 500.
+
+    No lo vieron los demas tests porque `EmisorDePrueba` publica un JWKS con una
+    sola clave de firma, que es lo razonable para un doble. Este test mete la de
+    cifrado a proposito.
+    """
+    emisor = EmisorDePrueba()
+    cifrado = {
+        "kid": "clave-de-cifrado",
+        "kty": "RSA",
+        "alg": "RSA-OAEP",
+        "use": "enc",
+        # `n` y `e` de relleno: nunca se llega a construirla, y ese es el punto.
+        "n": "yLtI0d1fSYp7IuquXlEAkxBTTj",
+        "e": "AQAB",
+    }
+
+    async def traer() -> dict[str, Any]:
+        return {"keys": [cifrado, *emisor.jwks["keys"]]}
+
+    claves = ClavesDelProveedor(url="http://no-se-usa", traer=traer)
+
+    sujeto = await validar(emisor.firmar(), claves, emisor.emisor)
+
+    assert sujeto.role == "manager"
+
+
+async def test_la_clave_de_cifrado_no_queda_cargada() -> None:
+    """Se descarta, no se guarda 'por las dudas'.
+
+    Una clave que no puede verificar una firma en el cache solo sirve para que
+    un `kid` malicioso apunte a ella y el fallo aparezca en la validacion en vez
+    de en la carga — mas lejos de su causa.
+    """
+    emisor = EmisorDePrueba()
+
+    async def traer() -> dict[str, Any]:
+        return {
+            "keys": [
+                {"kid": "solo-cifrado", "kty": "RSA", "alg": "RSA-OAEP", "use": "enc"},
+                *emisor.jwks["keys"],
+            ]
+        }
+
+    claves = ClavesDelProveedor(url="http://no-se-usa", traer=traer)
+    await validar(emisor.firmar(), claves, emisor.emisor)
+
+    with pytest.raises(NoAutenticado):
+        await claves.clave_para("solo-cifrado")
+
+
+def test_una_clave_sin_use_ni_alg_se_acepta() -> None:
+    """La RFC 7517 los marca OPCIONALES.
+
+    Rechazar por ausencia dejaria afuera proveedores que firman perfectamente.
+    Lo que se descarta es lo que se declara como otra cosa, no lo que no se
+    declara.
+    """
+    assert _es_clave_de_firma({"kid": "x", "kty": "RSA"})
+    assert _es_clave_de_firma({"kid": "x", "kty": "RSA", "use": "sig", "alg": "RS256"})
+    assert not _es_clave_de_firma({"kid": "x", "kty": "RSA", "use": "enc"})
+    assert not _es_clave_de_firma({"kid": "x", "kty": "RSA", "alg": "RSA-OAEP"})

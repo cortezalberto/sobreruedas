@@ -71,6 +71,25 @@ CLAIM_ROL = "role"
 # Se impone, no se lee del token. Ver el encabezado.
 ALGORITMOS = ["RS256"]
 
+
+def _es_clave_de_firma(clave: dict[str, Any]) -> bool:
+    """Si esa entrada del JWKS sirve para VERIFICAR una firma.
+
+    Un realm de Keycloak publica tambien una clave de cifrado (`use: "enc"`,
+    `alg: "RSA-OAEP"`), y PyJWT no puede construirla. Ver `_refrescar`.
+
+    Se acepta la que no declara `use` ni `alg`: la RFC 7517 los marca opcionales,
+    y rechazar por ausencia dejaria afuera proveedores que firman bien. Lo que se
+    descarta es lo que se declara COMO OTRA COSA.
+    """
+    uso = clave.get("use")
+    if uso is not None and uso != "sig":
+        return False
+
+    algoritmo = clave.get("alg")
+    return algoritmo is None or algoritmo in ALGORITMOS
+
+
 # Cuanto vive el JWKS cacheado, y cada cuanto se admite un refresco bajo demanda.
 # Sin fuente en el corpus (`design.md` · Open Questions): se arranca conservador
 # y se ajusta con datos de operacion. Cambiarlos no toca specs ni tareas.
@@ -150,11 +169,30 @@ class ClavesDelProveedor:
     _ultimo_bajo_demanda: datetime | None = field(default=None, init=False)
 
     async def _refrescar(self) -> None:
+        """Carga el JWKS, quedandose SOLO con las claves de firma.
+
+        ⚠️ EL FILTRO NO ES UNA OPTIMIZACION: sin el, la aplicacion no puede
+        hablar con un Keycloak de verdad.
+
+        Un realm de Keycloak publica al menos DOS claves: la de firma (`RS256`)
+        y una de cifrado (`use: "enc"`, `alg: "RSA-OAEP"`). `PyJWK.from_dict`
+        no sabe construir la segunda y levanta `PyJWKError: Unable to find an
+        algorithm for key`. Como el diccionario se armaba de una, esa excepcion
+        se llevaba puesto el JWKS ENTERO — incluida la clave buena— y **toda**
+        peticion autenticada moria con 500.
+
+        No lo vieron los tests porque `EmisorDePrueba` publica un JWKS con una
+        sola clave de firma, que es lo razonable para un doble. Aparecio la
+        primera vez que se pidio un token al Keycloak del compose.
+
+        Se descarta por `use` y por `alg`, no por uno de los dos: `use` es
+        opcional en la RFC 7517, y hay proveedores que solo mandan `alg`.
+        """
         documento = await (self.traer() if self.traer else _traer_por_http(self.url))
         self._claves = {
             clave["kid"]: PyJWK.from_dict(clave)
             for clave in documento.get("keys", [])
-            if "kid" in clave
+            if "kid" in clave and _es_clave_de_firma(clave)
         }
         self._vence = self.reloj() + self.ttl
 
