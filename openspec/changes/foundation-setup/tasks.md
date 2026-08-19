@@ -577,6 +577,8 @@ Cubre la capability `platform/delivery-pipeline`.
 > Ese `exit 0` era el defecto. Ahora, si el runbook 03 no corrió, el despliegue corta en vez de adivinar.
 
 > **Deuda preexistente detectada, fuera del alcance de este bloque**: el servicio `worker` invoca `celery -A app.core.events`, pero `app/core/events.py` es el publisher de Redis Streams y **no define ninguna app de Celery** — solo existe el campo `celery_broker_url` en `config.py:138`. Ese servicio hoy no arranca. Se trata aparte.
+>
+> > ✅ **Cerrada el 19-ago-2026, por C-17.** La app de Celery existe: la define [`backend/app/core/tasks.py`](../../../backend/app/core/tasks.py), y `docker-compose.yml` invoca `celery -A app.core.tasks`, no `app.core.events`. `tools/check-services.sh` también quedó al día: condiciona el chequeo del `worker` a que exista `app/core/tasks.py`, así que reporta el estado real en vez de un `PENDIENTE` perpetuo. La nota de arriba se conserva como registro de cuándo se detectó la deuda; lo que afirma en presente ya no vale.
 
 > **Deriva silenciosa — pérdida asumida, no olvidada.** La tarea 9.15 anterior verificaba que ArgoCD detectara y reportara un cambio manual sobre el cluster. Sin GitOps esa detección **no existe**, y un cambio hecho a mano sobre el VPS no lo denuncia nadie. `ADR-023` lo registra entre sus contras asumidas. No se reemplaza por una tarea equivalente porque no la hay sin reintroducir la pieza que se descartó.
 
