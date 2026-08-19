@@ -58,12 +58,12 @@ describe('el catalogo de secciones', () => {
   });
 
   it('declara las seis secciones del menu del producto', () => {
-    // `knowledge-base/15` §Navegacion del producto define el menu principal. Que
-    // esten DECLARADAS es lo que permite que la ayuda las liste como pendientes
-    // —informacion util— sin que la barra las muestre ni el acorde vaya a un 404.
+    // `knowledge-base/15` §Navegacion del producto define el menu principal.
     //
-    // Esta afirmacion no envejece: no dice cuales existen, dice cuales el
-    // producto se comprometio a tener.
+    // Esta afirmacion no envejece, y por eso sobrevive a que las seis pasaran a
+    // tener pantalla: no dice cuales existen —de eso se ocupa el cruce contra
+    // `src/app`—, dice cuales el producto se comprometio a tener. Borrar una de
+    // `SECCIONES` seguiria siendo un incumplimiento aunque todo lo demas pase.
     const etiquetas = SECCIONES.map((s) => s.etiqueta);
 
     for (const seccion of ['Dashboard', 'Stock', 'Leads', 'Mensajes', 'Reportes', 'Configuración'])
@@ -110,38 +110,66 @@ describe('`existe` contra las rutas de verdad', () => {
     }
   });
 
-  it('ninguna seccion pendiente tiene pantalla ya construida', () => {
-    for (const seccion of SECCIONES.filter((s) => !s.existe)) {
+  /**
+   * Reemplaza a `ninguna seccion pendiente tiene pantalla ya construida`.
+   *
+   * Aquel test recorria `SECCIONES.filter((s) => !s.existe)`, y desde que el
+   * menu entero tiene pantalla ese filtro da vacio: un `for` de cero vueltas
+   * pasa sin afirmar nada. Esta forma dice lo mismo en las dos direcciones y no
+   * se vacia nunca — mientras haya secciones declaradas, hay algo que verificar.
+   */
+  it('`existe` dice exactamente si hay pantalla, en las dos direcciones', () => {
+    expect(SECCIONES.length).toBeGreaterThan(0);
+
+    for (const seccion of SECCIONES) {
       expect(
         hayPantalla(seccion.href),
-        `${seccion.href} ya tiene pantalla: falta encenderla en SECCIONES`,
-      ).toBe(false);
+        seccion.existe
+          ? `${seccion.href} se declara existente y no tiene pantalla`
+          : `${seccion.href} ya tiene pantalla: falta encenderla en SECCIONES`,
+      ).toBe(seccion.existe);
     }
+  });
+
+  it('el menu del producto esta entero en pantalla', () => {
+    // Lo que se pidio: que la barra izquierda ofrezca los nueve items, tengan o
+    // no funcionalidad. Una seccion declarada y sin pantalla queda invisible, y
+    // la promesa del menu es justamente que estan todas.
+    const sinPantalla = SECCIONES.filter((s) => !hayPantalla(s.href)).map((s) => s.href);
+
+    expect(sinPantalla, `estas secciones no tienen pantalla: ${sinPantalla.join(', ')}`).toEqual(
+      [],
+    );
   });
 });
 
 describe('destinoDelAcorde', () => {
-  it('lleva a toda seccion que existe y tiene tecla', () => {
-    const navegables = SECCIONES.filter((s) => s.existe && s.tecla);
+  /**
+   * Antes esto eran dos tests: uno recorria las secciones que existen y otro
+   * las pendientes, y el segundo se apoyaba en que hubiera al menos una
+   * pendiente. Desde que el menu entero tiene pantalla no hay ninguna, y aquel
+   * `expect(pendientes.length).toBeGreaterThan(0)` pasaba a fallar por una
+   * razon que no era un defecto.
+   *
+   * La regla que hay que defender no era "hay pendientes": era que el acorde
+   * lleve exactamente a lo que existe y a nada mas. Escrita asi cubre los dos
+   * casos con un solo recorrido, sigue afirmando algo el dia que alguien
+   * declare una seccion nueva sin pantalla, y no depende de que ese dia llegue.
+   */
+  it('lleva exactamente a las secciones que existen, y a ninguna otra', () => {
+    const conTecla = SECCIONES.filter((s) => s.tecla);
 
     // Sin esto el test seria vacuo: con el array vacio, un `for` de cero
     // vueltas pasa igual y no habria afirmado nada.
-    expect(navegables.length).toBeGreaterThan(0);
+    expect(conTecla.length).toBeGreaterThan(0);
 
-    for (const seccion of navegables) {
-      expect(destinoDelAcorde(seccion.tecla!.toLowerCase())).toBe(seccion.href);
-    }
-  });
-
-  it('NO lleva a una seccion que todavia no existe', () => {
-    // El error que este proyecto ya se marco solo: "un redirect a una ruta que
-    // no existe seria un 404 disfrazado de feature".
-    const pendientes = SECCIONES.filter((s) => !s.existe && s.tecla);
-
-    expect(pendientes.length).toBeGreaterThan(0);
-
-    for (const seccion of pendientes) {
-      expect(destinoDelAcorde(seccion.tecla!.toLowerCase())).toBeUndefined();
+    for (const seccion of conTecla) {
+      // El error que este proyecto ya se marco solo: "un redirect a una ruta que
+      // no existe seria un 404 disfrazado de feature".
+      expect(
+        destinoDelAcorde(seccion.tecla!.toLowerCase()),
+        `${seccion.etiqueta} existe=${seccion.existe}`,
+      ).toBe(seccion.existe ? seccion.href : undefined);
     }
   });
 

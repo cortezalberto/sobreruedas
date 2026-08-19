@@ -10,6 +10,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { NavegacionPrincipal } from '@/components/NavegacionPrincipal';
+import { SECCIONES } from '@/lib/secciones';
 
 const { usePathname } = vi.hoisted(() => ({ usePathname: vi.fn() }));
 
@@ -49,6 +50,31 @@ describe('NavegacionPrincipal', () => {
     render(<NavegacionPrincipal />);
 
     expect(screen.getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('muestra los nueve items del menu, tengan funcionalidad o no', () => {
+    // El menu de `knowledge-base/15` completo. Cinco de estas secciones son
+    // pantallas en construccion, y aun asi se ofrecen: la barra es el mapa del
+    // producto, no la lista de lo que ya funciona. Lo que no se puede es que un
+    // item lleve a un 404 — de eso se ocupa `secciones.test.ts`.
+    enRuta('/');
+    render(<NavegacionPrincipal />);
+
+    for (const seccion of SECCIONES) {
+      expect(
+        screen.getByRole('link', { name: seccion.etiqueta }),
+        `falta ${seccion.etiqueta} en la barra`,
+      ).toHaveAttribute('href', seccion.href);
+    }
+  });
+
+  it('no esconde ninguna seccion declarada', () => {
+    // El conteo, aparte de los nombres: un item de mas —una ruta que la barra
+    // ofrece y el catalogo no declara— no lo atrapa el test de arriba.
+    enRuta('/');
+    render(<NavegacionPrincipal />);
+
+    expect(screen.getAllByRole('link')).toHaveLength(SECCIONES.length);
   });
 
   it('la barra se anuncia como navegacion con nombre', () => {

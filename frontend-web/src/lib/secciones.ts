@@ -24,14 +24,22 @@
  * `Inicio` tampoco esta en ese menu: es la portada, no una seccion del
  * producto. Se declara porque la barra la muestra.
  *
- * ⚠️ `existe` NO ES BUROCRACIA. Cinco de las seis secciones del menu no tienen
- * pantalla todavia. Declararlas apagadas es lo que permite que la ayuda las
- * liste como pendientes —que es informacion util— sin que la barra las muestre
- * ni el acorde lleve a un 404. Es el mismo criterio con el que este proyecto ya
- * se corrigio una vez: "un redirect a una ruta que no existe seria un 404
- * disfrazado de feature".
+ * ⚠️ `existe` NO ES BUROCRACIA, y hoy las nueve estan encendidas.
  *
- * El dia que la pantalla exista, se cambia `false` por `true` en un solo lugar.
+ * El campo afirma una sola cosa: **que la ruta tiene pantalla**. No afirma que
+ * la seccion funcione. Seis de las nueve son pantallas en construccion
+ * —`SeccionEnConstruccion`, que dice que falta y que change lo trae—, y estan
+ * encendidas porque la ruta responde: la barra las ofrece y el acorde llega.
+ *
+ * Ese es el criterio de siempre, aplicado: *"un redirect a una ruta que no
+ * existe seria un 404 disfrazado de feature"*. Lo que cambio no es el criterio,
+ * es que las rutas se construyeron. Mientras no existian, apagarlas era lo
+ * correcto; encenderlas ahora tambien.
+ *
+ * Escribirlo a mano se desincroniza en las dos direcciones, y ninguna duele
+ * hasta produccion: encendida de mas da 404, encendida de menos deja una
+ * pantalla construida e inalcanzable. Por eso `secciones.test.ts` cruza este
+ * campo contra `src/app` en ambos sentidos y falla solo.
  */
 
 export interface Seccion {
@@ -61,13 +69,13 @@ export const SECCIONES: readonly Seccion[] = [
     etiqueta: 'Dashboard',
     tecla: 'D',
     ayuda: 'Ir al dashboard',
-    existe: false,
+    existe: true,
   },
-  { href: '/stock', etiqueta: 'Stock', tecla: 'S', ayuda: 'Ir al stock', existe: false },
-  { href: '/leads', etiqueta: 'Leads', tecla: 'L', ayuda: 'Ir a leads', existe: false },
-  { href: '/mensajes', etiqueta: 'Mensajes', tecla: 'M', ayuda: 'Ir a mensajes', existe: false },
-  { href: '/reportes', etiqueta: 'Reportes', tecla: 'R', ayuda: 'Ir a reportes', existe: false },
-  { href: '/configuracion', etiqueta: 'Configuración', existe: false },
+  { href: '/stock', etiqueta: 'Stock', tecla: 'S', ayuda: 'Ir al stock', existe: true },
+  { href: '/leads', etiqueta: 'Leads', tecla: 'L', ayuda: 'Ir a leads', existe: true },
+  { href: '/mensajes', etiqueta: 'Mensajes', tecla: 'M', ayuda: 'Ir a mensajes', existe: true },
+  { href: '/reportes', etiqueta: 'Reportes', tecla: 'R', ayuda: 'Ir a reportes', existe: true },
+  { href: '/configuracion', etiqueta: 'Configuración', existe: true },
 ] as const;
 
 /**
