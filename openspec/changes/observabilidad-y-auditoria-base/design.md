@@ -67,7 +67,41 @@ Por [`ADR-030`](../../../docs/adr/ADR-030-objetivo-de-ingenieria-y-slo-de-latenc
 
 Una lista de prohibidos (`password`, `token`, `dni`…) falla en silencio con el primer campo que nadie anticipó, y con Ley 25.326 encima el costo de ese fallo no es un bug: es una notificación de incidente.
 
-**Se propone**: `send_default_pii=False`, y un `before_send` que **descarta el cuerpo de la petición entero** y conserva solo una lista explícita de cabeceras y campos. El `tenant_id` y el `trace_id` se conservan —hacen falta para diagnosticar y no son datos personales—; el `sub` del usuario se conserva **hasheado**.
+**Decidido**: `send_default_pii=False`, y un `before_send` que **descarta el cuerpo de la petición entero** y conserva solo una lista explícita de cabeceras y campos. El `tenant_id` y el `trace_id` se conservan —hacen falta para diagnosticar y no son datos personales—; el sujeto se conserva **seudonimizado**.
+
+#### D-5.1 — Seudónimo por HMAC, no cifrado y no hash pelado
+
+> **Decidido el 19-ago-2026.** El pedido fue: *"que sirva para agrupar «a esta persona le falla siempre lo mismo»"*. Eso se cumple con cualquiera de las tres formas; las tres protegen distinto.
+
+| Forma | Agrupa | Se puede volver atrás |
+|---|---|---|
+| **Cifrado** | sí | **Sí** — existe la clave. El dato sigue siendo personal, solo que guardado con llave, y ahora la llave también es un problema |
+| **Hash pelado** (`sha256(sub)`) | sí | **En la práctica, sí.** El `sub` es un UUID de un conjunto enumerable: cualquiera con la tabla `users` hashea las N filas y arma la tabla de equivalencias en segundos |
+| **HMAC con clave del servidor** | sí | **No**, sin la clave. Y la clave no sale del servidor ni viaja a Sentry |
+
+Va **HMAC-SHA256**. Es lo único que cumple "agrupar sin identificar" contra alguien que tenga los datos del otro lado, que es exactamente el escenario que Sentry introduce: el proveedor ve los eventos.
+
+**La clave se deriva, no se agrega.** Se usa HKDF sobre `TENANT_SECRETS_MASTER_KEY` con la etiqueta `sentry-subject-pseudonym`. Dos motivos: no se toca `ADR-013` ni la paridad de variables de entorno, y no se reutiliza la clave maestra tal cual para un segundo propósito —separar claves por uso es lo que evita que comprometer una comprometa la otra—.
+
+⚠️ **Consecuencia asumida**: si la clave maestra rota, los seudónimos anteriores dejan de coincidir con los nuevos y el agrupamiento histórico se corta. Es el precio de que no se puedan revertir, y es el lado correcto del que equivocarse.
+
+### D-7 — El presupuesto de RAM se mide, y si no entra se escala
+
+> **Decidido el 19-ago-2026.** Cuatro servicios de observabilidad más sobre el VPS único, que ya corre PostgreSQL, Redis, OpenSearch, Keycloak, MinIO, backend, worker y frontend.
+
+**No se ajusta por lo bajo.** Si medir dice que no entra, la salida **no** es recortar retenciones, bajar el scrape o apagar un pilar en silencio: eso convertiría una restricción de infraestructura en una pérdida de capacidad que nadie decidió y que después nadie recuerda haber aceptado.
+
+La salida es una **escalación**, con el patrón que el proyecto ya tiene: [`ESC-001`](../../../docs/escalaciones/ESC-001-sla-sobre-nodo-unico.md) y [`ESC-002`](../../../docs/escalaciones/ESC-002-slo-internos-sobre-nodo-unico.md) son los dos precedentes, y los dos nacieron del mismo hecho físico —un solo nodo— con el mismo desenlace: se ajustó lo prometido, explícitamente y por escrito.
+
+El techo del 15 % del costo de infraestructura lo fija `knowledge-base/13`. Sobre nodo único puede ser directamente inalcanzable; si lo es, **es un dato para Dirección, no un parámetro para tocar**.
+
+### D-8 — `/metrics` sin autenticar, y solo de puertas para adentro
+
+> **Confirmado el 19-ago-2026.**
+
+Sin autenticación, porque es lo que el recolector espera y meterle credenciales agrega un secreto más para rotar sin agregar seguridad real. Alcanzable **únicamente desde la red interna de Docker**, y **nunca** publicado por el reverse proxy.
+
+⚠️ **La configuración del proxy es del bloque 9 de C-01, que está pausado.** Hasta que exista, el aislamiento depende de no publicar el puerto en `docker-compose.yml` — que es suficiente en dev y **no** es una garantía en producción. Queda como tarea explícita del bloque 9 cuando el VPS se reanude, no como algo que este change deja resuelto.
 
 ### D-6 — Sin backend de observabilidad, la app arranca igual
 
@@ -99,6 +133,10 @@ El orden importa por una razón: **D-1 toca el módulo que ya está en producci�
 
 ## Open Questions
 
-1. **¿El techo del 15 % de costo es alcanzable sobre nodo único?** Si medir dice que no, corresponde una escalación tipo `ESC-002` —el patrón ya existe— y no bajar la retención por lo bajo.
-2. **¿`/metrics` va sin autenticar?** Se propone: sí, pero **solo** en la red interna de Docker, nunca expuesto por el reverse proxy. Necesita confirmación porque la configuración del proxy es del bloque 9 de C-01, que está pausado.
-3. **¿El `sub` del usuario en Sentry va hasheado o no va?** Se propone hasheado: permite agrupar errores de una misma persona sin identificarla. Es una decisión de Ley 25.326 y no hay skill de compliance en el proyecto — la confirma un humano.
+> ✅ **Las tres cerradas el 19-ago-2026 por el decisor humano.** Pasaron a decisiones: `D-7` (presupuesto de RAM), `D-8` (`/metrics`) y `D-5.1` (seudónimo del sujeto). Se conservan acá con su resolución porque el recorrido explica por qué la decisión es la que es.
+
+1. ~~**¿El techo del 15 % de costo es alcanzable sobre nodo único?**~~ → **`D-7`**: se mide, y si no entra **se escala**. No se recortan retenciones por lo bajo.
+2. ~~**¿`/metrics` va sin autenticar?**~~ → **`D-8`**: sí, sin autenticar, y **solo** de puertas para adentro. El aislamiento real depende del bloque 9 de C-01, que está pausado; queda dicho y no dado por resuelto.
+3. ~~**¿El sujeto en Sentry va hasheado o no va?**~~ → **`D-5.1`**: va, **seudonimizado con HMAC**. El pedido fue poder agrupar *"a esta persona le falla siempre lo mismo"*, y eso se cumple sin que el seudónimo se pueda revertir. ⚠️ **No es cifrado** —eso sería reversible y el dato seguiría siendo personal— **ni hash pelado** —el `sub` es un UUID de conjunto enumerable: con la tabla `users` se arma la equivalencia en segundos—.
+
+Ninguna queda abierta. El bloque 0 de `tasks.md` puede tildarse.

@@ -1,6 +1,8 @@
 # Tareas — C-03 `observabilidad-y-auditoria-base`
 
-> **Gobernanza ALTA.** Define el audit trail —evidencia de compliance— y los umbrales de alerta que gobiernan la operación. **Proponer y esperar revisión: ninguna casilla se tilda sin aprobación humana de `design.md`.**
+> **Gobernanza ALTA.** Define el audit trail —evidencia de compliance— y los umbrales de alerta que gobiernan la operación.
+>
+> ✅ **`design.md` aprobado el 19-ago-2026**, con sus tres preguntas abiertas resueltas (`D-5.1`, `D-7`, `D-8`). La implementación puede avanzar. Lo que sigue exigiendo decisión humana son los **dos portones de detención** que quedan: la tarea 1.2 si `pip-audit` marca una vulnerabilidad alta, y la 7.4 si el presupuesto de RAM no entra.
 >
 > **TDD estricto.** Cada tarea de implementación empieza por un test que falla. Los tests que tocan Redis van contra Redis real vía testcontainers (regla dura 8).
 >
@@ -8,8 +10,8 @@
 
 ## 0. Portón de revisión
 
-- [ ] 0.1 `design.md` revisado y aprobado por el decisor humano — **si no, detenerse acá**
-- [ ] 0.2 Confirmar las tres preguntas abiertas de `design.md`: techo de costo del 15 %, exposición de `/metrics`, y el `sub` hasheado en Sentry
+- [x] 0.1 `design.md` revisado y aprobado por el decisor humano — ✅ **19-ago-2026**, con las tres preguntas abiertas resueltas en la misma pasada
+- [x] 0.2 Confirmar las tres preguntas abiertas de `design.md` — ✅ **19-ago-2026**: `D-7` medir y **escalar** si no entra · `D-8` `/metrics` sin autenticar y solo de puertas para adentro · `D-5.1` sujeto **seudonimizado con HMAC**, ni cifrado ni hash pelado
 - [ ] 0.3 Verificar que la consulta legal de `ADR-029` sigue sin respuesta; si llegó, `T-011` (`audit_logs`) vuelve al alcance y este change se replantea
 
 ## 1. Dependencias — antes de cualquier código de aplicación
@@ -57,8 +59,11 @@
 - [ ] 5.1 Test: con `SENTRY_DSN` ausente la aplicación arranca igual y no inicializa nada
 - [ ] 5.2 Test: el `before_send` **descarta el cuerpo de la petición entero**. Lista de permitidos, no de prohibidos: una lista de prohibidos falla en silencio con el primer campo que nadie anticipó
 - [ ] 5.3 Test: no viajan cabeceras de autorización, ni email, ni DNI/CUIT. Se planta un evento con los cuatro y se verifica que ninguno sale
-- [ ] 5.4 Test: **sí** viajan `tenant_id` y `trace_id` —hacen falta para diagnosticar y no son datos personales— y el `sub` del usuario va **hasheado**
-- [ ] 5.5 Implementar la inicialización con `send_default_pii=False` y el `before_send`
+- [ ] 5.4 Test: **sí** viajan `tenant_id` y `trace_id` —hacen falta para diagnosticar y no son datos personales—
+- [ ] 5.5 Test: el sujeto viaja **seudonimizado**, y el mismo `sub` produce **siempre el mismo** seudónimo. Sin esa estabilidad no se puede agrupar, que es lo único para lo que se guarda (`D-5.1`)
+- [ ] 5.6 Test: el seudónimo **no se reconstruye desde la tabla `users`**. Se recorren los `sub` existentes aplicando SHA-256 pelado y ninguno coincide con el seudónimo emitido — que es justo el ataque que un hash sin clave no resiste sobre un conjunto enumerable de UUID
+- [ ] 5.7 Implementar el seudónimo con **HMAC-SHA256**, con la clave derivada por HKDF de `TENANT_SECRETS_MASTER_KEY` bajo la etiqueta `sentry-subject-pseudonym`. Se deriva y no se agrega una variable nueva: no se toca `ADR-013` ni la paridad, y no se reutiliza la clave maestra tal cual para un segundo propósito
+- [ ] 5.8 Implementar la inicialización con `send_default_pii=False` y el `before_send`
 
 ## 6. Alertas — reglas de Prometheus, sin Alertmanager
 
@@ -71,9 +76,19 @@
 - [ ] 6.5 `WorkerQueueLagHigh` (lag > 2 min) y `DLQGrowing` (> 100 eventos/hora), que miden lo que la cola hace y no se deduce de que la máquina esté viva
 - [ ] 6.6 Levantar `prometheus` y `loki` en compose, y enseñarle los cuatro servicios nuevos a `tools/check-services.sh` — si no los conoce, reporta de menos
 
-## 7. Verificación de cierre
+## 7. Presupuesto de RAM — medir y, si no entra, escalar · decisión `D-7`
 
-- [ ] 7.1 Los escenarios de la delta spec `platform/observability` cubiertos por tests ejecutables
-- [ ] 7.2 Cobertura del backend ≥ 80 % de líneas y **sin decrecer** respecto del commit anterior (regla dura 5)
-- [ ] 7.3 `ruff` y `mypy --strict` limpios sobre el código nuevo (regla dura 6)
-- [ ] 7.4 Dejar registrado que `T-011` (`audit_logs`) **no entró**, con el motivo y qué lo destraba, para que el cierre del change no se lea como cobertura completa
+> **No se ajusta por lo bajo.** Si no entra, la salida no es recortar retención, bajar el scrape ni apagar un pilar: eso convierte una restricción de infraestructura en una pérdida de capacidad que nadie decidió.
+
+- [ ] 7.1 Medir el consumo de memoria en reposo y bajo carga nominal de los cuatro servicios nuevos, con los ocho existentes corriendo
+- [ ] 7.2 Contrastar el total contra la memoria del VPS y contra el techo del **15 % del costo de infraestructura** que fija `knowledge-base/13`
+- [ ] 7.3 Si entra: dejar la medición escrita con fecha, para que la próxima vez que alguien agregue un servicio sepa cuánto margen queda
+- [ ] 7.4 Si **no** entra: abrir `ESC-003` con el patrón de [`ESC-001`](../../../docs/escalaciones/ESC-001-sla-sobre-nodo-unico.md) y [`ESC-002`](../../../docs/escalaciones/ESC-002-slo-internos-sobre-nodo-unico.md) —mismo hecho físico, un solo nodo— y **detenerse acá**. La decisión es de Dirección: agrandar el nodo, mover la observabilidad afuera, o achicar lo prometido
+- [ ] 7.5 ⚠️ La medición real necesita el VPS, que está **pausado**. En dev se mide lo que se puede y se anota como estimación, **no** como verificación
+
+## 8. Verificación de cierre
+
+- [ ] 8.1 Los escenarios de la delta spec `platform/observability` cubiertos por tests ejecutables
+- [ ] 8.2 Cobertura del backend ≥ 80 % de líneas y **sin decrecer** respecto del commit anterior (regla dura 5)
+- [ ] 8.3 `ruff` y `mypy --strict` limpios sobre el código nuevo (regla dura 6)
+- [ ] 8.4 Dejar registrado que `T-011` (`audit_logs`) **no entró**, con el motivo y qué lo destraba, para que el cierre del change no se lea como cobertura completa
