@@ -33,10 +33,16 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import PlainTextResponse
 
 from app.core.auth import SujetoActual
+from app.core.rbac import (
+    Concesion,
+    require_permission,
+    verificar_alcance,
+    verificar_transicion,
+)
 from app.db.dependencias import SesionDeTenant
 from app.modules.stock.importacion import PLANTILLA
 from app.modules.stock.schemas import (
@@ -44,6 +50,7 @@ from app.modules.stock.schemas import (
     VehiculoCambioDeEstado,
     VehiculoCrear,
     VehiculoSalida,
+    VehiculoSalidaConCosto,
 )
 from app.modules.stock.service import StockService
 
@@ -59,6 +66,22 @@ router = APIRouter(prefix="/api/v1/vehicles", tags=["stock"])
 SIN_FILTROS = FiltrosDeBusqueda()
 
 
+def _salida(vehiculo: object, concesion: Concesion) -> VehiculoSalida:
+    """El schema que le corresponde a quien pregunta — `RN-ST-12`.
+
+    La eleccion se lee de la concesion y no del rol: preguntar por el rol
+    aca seria una SEGUNDA lectura de la matriz, y la segunda lectura es
+    donde las dos se despegan. `rbac.py` ya resolvio que campos le tocan a
+    este sujeto; esto solo elige la forma que los lleva.
+
+    Se pregunta por el campo concreto y no por `campos is None`: una
+    restriccion futura sobre OTRO campo no debe apagar el costo de rebote.
+    """
+    if concesion.campos is None or "acquisition_cost_ars" in concesion.campos:
+        return VehiculoSalidaConCosto.model_validate(vehiculo)
+    return VehiculoSalida.model_validate(vehiculo)
+
+
 def _servicio(sesion: SesionDeTenant) -> StockService:
     """El tenant sale de la sesion, que lo saco del token.
 
@@ -69,20 +92,36 @@ def _servicio(sesion: SesionDeTenant) -> StockService:
     return StockService(sesion, sesion.info["tenant_id"])
 
 
-@router.get("", response_model=list[VehiculoSalida], summary="Listar el stock")
+@router.get(
+    "",
+    # `response_model=None`: la forma de la respuesta depende de la
+    # concesion, y un `response_model` fijo recortaria el costo tambien a
+    # quien SI puede verlo.
+    response_model=None,
+    summary="Listar el stock",
+)
 async def listar_vehiculos(
     sesion: SesionDeTenant,
+    concesion: Annotated[Concesion, Depends(require_permission("vehicles:read"))],
     # `Query()` explicito: sin eso FastAPI leeria el modelo del CUERPO, y un GET
     # con cuerpo es una peticion que ningun cliente HTTP normal manda.
     filtros: Annotated[FiltrosDeBusqueda, Query()] = SIN_FILTROS,
 ) -> list[VehiculoSalida]:
     vehiculos = await _servicio(sesion).listar(filtros)
-    return [VehiculoSalida.model_validate(v) for v in vehiculos]
+    return [_salida(v, concesion) for v in vehiculos]
 
 
-@router.get("/{vehiculo_id}", response_model=VehiculoSalida, summary="Un vehiculo")
-async def obtener_vehiculo(vehiculo_id: uuid.UUID, sesion: SesionDeTenant) -> VehiculoSalida:
-    return VehiculoSalida.model_validate(await _servicio(sesion).obtener(vehiculo_id))
+@router.get(
+    "/{vehiculo_id}",
+    response_model=None,
+    summary="Un vehiculo",
+)
+async def obtener_vehiculo(
+    vehiculo_id: uuid.UUID,
+    sesion: SesionDeTenant,
+    concesion: Annotated[Concesion, Depends(require_permission("vehicles:read"))],
+) -> VehiculoSalida:
+    return _salida(await _servicio(sesion).obtener(vehiculo_id), concesion)
 
 
 @router.post(
@@ -90,6 +129,7 @@ async def obtener_vehiculo(vehiculo_id: uuid.UUID, sesion: SesionDeTenant) -> Ve
     response_model=VehiculoSalida,
     status_code=status.HTTP_201_CREATED,
     summary="Cargar un vehiculo",
+    dependencies=[Depends(require_permission("vehicles:create"))],
 )
 async def crear_vehiculo(datos: VehiculoCrear, sesion: SesionDeTenant) -> VehiculoSalida:
     return VehiculoSalida.model_validate(await _servicio(sesion).crear(datos))
@@ -102,11 +142,24 @@ async def crear_vehiculo(datos: VehiculoCrear, sesion: SesionDeTenant) -> Vehicu
     description="Solo las transiciones de `RN-ST-05`. Vender exige razon.",
 )
 async def cambiar_estado(
-    vehiculo_id: uuid.UUID, cambio: VehiculoCambioDeEstado, sesion: SesionDeTenant
+    vehiculo_id: uuid.UUID,
+    cambio: VehiculoCambioDeEstado,
+    sesion: SesionDeTenant,
+    sujeto: SujetoActual,
+    concesion: Annotated[Concesion, Depends(require_permission("vehicles:change_status"))],
 ) -> VehiculoSalida:
-    return VehiculoSalida.model_validate(
-        await _servicio(sesion).cambiar_estado(vehiculo_id, cambio)
-    )
+    servicio = _servicio(sesion)
+    # El alcance se verifica CON el registro en la mano y no antes:
+    # `ADR-024` §4 define `own` sobre el `assigned_user_id` que el
+    # vehiculo tiene EN ESTE MOMENTO. Traerlo, comprobar y recien
+    # entonces escribir es lo que hace que reasignar quite el acceso.
+    vehiculo = await servicio.obtener(vehiculo_id)
+    verificar_alcance(concesion, sujeto=sujeto, assigned_user_id=vehiculo.assigned_user_id)
+    # El orden es parte de la regla (`ADR-034`): alcance, despues transicion
+    # por rol, y recien en el servicio la maquina de estados. Quien no
+    # alcanza el registro no se entera de en que estado esta.
+    verificar_transicion(concesion, desde=vehiculo.status, hasta=cambio.status.value)
+    return VehiculoSalida.model_validate(await servicio.cambiar_estado(vehiculo_id, cambio))
 
 
 @router.delete(
@@ -114,6 +167,7 @@ async def cambiar_estado(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Dar de baja",
     description="Borrado logico: la fila sobrevive con `deleted_at` (regla dura 3).",
+    dependencies=[Depends(require_permission("vehicles:archive"))],
 )
 async def dar_de_baja(vehiculo_id: uuid.UUID, sesion: SesionDeTenant) -> None:
     await _servicio(sesion).dar_de_baja(vehiculo_id)
@@ -128,6 +182,7 @@ async def dar_de_baja(vehiculo_id: uuid.UUID, sesion: SesionDeTenant) -> None:
         "La planilla vacia con una fila de ejemplo. Se descarga, se completa en "
         "Excel y se sube a `POST /vehicles/import`."
     ),
+    dependencies=[Depends(require_permission("vehicles:import"))],
 )
 async def plantilla_de_importacion(_: SujetoActual) -> PlainTextResponse:
     """`T-096`. Va con token aunque no devuelva datos de nadie.

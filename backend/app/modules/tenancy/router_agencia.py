@@ -39,9 +39,10 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.errors import DomainError
+from app.core.rbac import Espacio, require_permission
 from app.db.dependencias import SesionDeTenant
 from app.modules.tenancy.repository import BranchRepository, TenantRepository
 from app.modules.tenancy.schemas import SucursalCrear, SucursalSalida, TenantSalida
@@ -67,6 +68,7 @@ def _tenant(sesion: SesionDeTenant) -> uuid.UUID:
     response_model=TenantSalida,
     summary="La agencia del token",
     description="No recibe id: la agencia es la del token y no hay otra que pedir.",
+    dependencies=[Depends(require_permission("tenants:read", espacio=Espacio.TENANT))],
 )
 async def mi_agencia(sesion: SesionDeTenant) -> TenantSalida:
     """`GET /tenant/me`.
@@ -85,13 +87,23 @@ async def mi_agencia(sesion: SesionDeTenant) -> TenantSalida:
     return TenantSalida.model_validate(agencia)
 
 
-@router.get("/branches", response_model=list[SucursalSalida], summary="Sucursales")
+@router.get(
+    "/branches",
+    response_model=list[SucursalSalida],
+    summary="Sucursales",
+    dependencies=[Depends(require_permission("branches:read"))],
+)
 async def listar_sucursales(sesion: SesionDeTenant) -> list[SucursalSalida]:
     sucursales = await BranchRepository(sesion).listar(_tenant(sesion))
     return [SucursalSalida.model_validate(s) for s in sucursales]
 
 
-@router.get("/branches/{sucursal_id}", response_model=SucursalSalida, summary="Una sucursal")
+@router.get(
+    "/branches/{sucursal_id}",
+    response_model=SucursalSalida,
+    summary="Una sucursal",
+    dependencies=[Depends(require_permission("branches:read"))],
+)
 async def obtener_sucursal(sucursal_id: uuid.UUID, sesion: SesionDeTenant) -> SucursalSalida:
     sucursal = await BranchRepository(sesion).obtener(_tenant(sesion), sucursal_id)
     if sucursal is None:
@@ -108,6 +120,7 @@ async def obtener_sucursal(sucursal_id: uuid.UUID, sesion: SesionDeTenant) -> Su
         "Verifica la cuota del plan **antes** de crear. Si la agencia llego a su "
         "techo responde **402**, no 403: ningun cambio de rol lo resuelve."
     ),
+    dependencies=[Depends(require_permission("branches:create"))],
 )
 async def crear_sucursal(datos: SucursalCrear, sesion: SesionDeTenant) -> SucursalSalida:
     """El limite de plan se verifica solo.
@@ -124,6 +137,7 @@ async def crear_sucursal(datos: SucursalCrear, sesion: SesionDeTenant) -> Sucurs
     response_model=SucursalSalida,
     summary="Dar de baja una sucursal",
     description="Baja recuperable: libera cuota del plan y la fila sobrevive.",
+    dependencies=[Depends(require_permission("branches:deactivate"))],
 )
 async def dar_de_baja_sucursal(sucursal_id: uuid.UUID, sesion: SesionDeTenant) -> SucursalSalida:
     """Traduce "esa sucursal no esta" a 404, que sobre HTTP es lo que es.

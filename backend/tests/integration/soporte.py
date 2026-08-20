@@ -27,11 +27,13 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -153,3 +155,51 @@ def reponer_entorno(monkeypatch: pytest.MonkeyPatch, *, dsn: str) -> None:
     monkeypatch.setenv("S3_SECRET_KEY", "no-se-usa-en-este-test")
     monkeypatch.setenv("TENANT_SECRETS_MASTER_KEY", "no-se-usa-en-este-test")
     get_settings.cache_clear()
+
+
+async def agencia_con_sucursal(*, plan: str | None = None) -> tuple[uuid.UUID, uuid.UUID]:
+    """Un tenant y su sucursal, creados con el rol PROPIETARIO.
+
+    Es andamiaje, no lo que se prueba: `tenants` y `branches` los escribe C-05,
+    y el rol de aplicacion no puede crear el tenant porque `tenants` no tiene
+    politica. Se arma la precondicion por la puerta de servicio y se prueba el
+    endpoint por la de adelante.
+
+    `plan` toma el CODIGO del plan —el que sembro la migracion `005`, o uno que
+    el test haya creado a medida—, no su id: el id es un UUID generado en esa
+    migracion y no se puede escribir aca. Sin `plan` el tenant nace sin plan,
+    que `_limite_del_plan` lee como "sin techo" y no como cero.
+
+    Los valores generados (nombre, slug, cuit) salen del UUID del tenant porque
+    `slug` y `cuit` son UNIQUE **globales** y la suite corre contra una base
+    compartida. Ningun test depende de su forma; si alguno llegara a hacerlo,
+    que se siembre el suyo en vez de acoplarse a esta.
+    """
+    tenant_id, branch_id = uuid.uuid4(), uuid.uuid4()
+    async with sesion_de_propietario() as sesion:
+        plan_id = None
+        if plan is not None:
+            plan_id = await sesion.scalar(text("SELECT id FROM plans WHERE code = :c"), {"c": plan})
+            assert plan_id is not None, f"no existe el plan '{plan}'"
+        await sesion.execute(
+            text(
+                "INSERT INTO tenants (id, name, slug, cuit, billing_email, status, plan_id) "
+                "VALUES (:id, :n, :s, :c, :e, 'active', :p)"
+            ),
+            {
+                "id": tenant_id,
+                "n": f"Agencia {tenant_id.hex[:6]}",
+                "s": f"agencia-{tenant_id.hex[:8]}",
+                "c": f"30{tenant_id.int % 10**9:09d}0"[:11],
+                "e": "facturacion@example.com",
+                "p": plan_id,
+            },
+        )
+        await sesion.execute(
+            text(
+                "INSERT INTO branches (id, tenant_id, name, city, province) "
+                "VALUES (:id, :t, 'Casa central', 'Mendoza', 'Mendoza')"
+            ),
+            {"id": branch_id, "t": tenant_id},
+        )
+    return tenant_id, branch_id

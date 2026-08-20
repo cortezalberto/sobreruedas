@@ -37,9 +37,10 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from app.core.auth import SujetoActual
+from app.core.rbac import require_permission
 from app.core.tasks import importar_stock
 from app.db.dependencias import SesionDeTenant
 from app.modules.stock.importacion import LIMITE_DE_BYTES, ArchivoIlegible
@@ -69,6 +70,7 @@ def _servicio(sesion: SesionDeTenant) -> ImportService:
     response_model=ImportacionSalida,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Importar stock desde una planilla",
+    dependencies=[Depends(require_permission("vehicles:import"))],
     description=(
         "Acepta el CSV, lo encola y devuelve la corrida en `pending`. El "
         "progreso se sigue con `GET /imports/{id}`. Maximo **10 MB** y **5.000 "
@@ -131,6 +133,7 @@ async def importar(
     "/imports",
     response_model=list[ImportacionSalida],
     summary="Importaciones de la agencia",
+    dependencies=[Depends(require_permission("vehicles:import"))],
 )
 async def listar_importaciones(sesion: SesionDeTenant) -> list[ImportacionSalida]:
     corridas = await _servicio(sesion).listar()
@@ -141,6 +144,7 @@ async def listar_importaciones(sesion: SesionDeTenant) -> list[ImportacionSalida
     "/imports/{importacion_id}",
     response_model=ImportacionSalida,
     summary="Progreso de una importacion",
+    dependencies=[Depends(require_permission("vehicles:import"))],
     description=(
         "El frontend consulta cada 2 s hasta que `status` sea `completed` o "
         "`failed`. `errors` trae el reporte por fila para corregir la planilla."
