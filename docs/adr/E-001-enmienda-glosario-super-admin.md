@@ -183,6 +183,8 @@ Pero `CLAUDE.md` declara `docs/sdd/` **corpus fuente inmutable**. Las dos reglas
 ## Artefacto para el paso (d) — texto de la enmienda
 
 > Para pegar al final de `deRuedas-constitucion.md` (opción A) o en el archivo de enmiendas (opción B), **una vez aprobado el paso (c)**. Reemplazar `[FECHA]` y el decisor por lo que efectivamente ocurra.
+>
+> ✅ **Ya se pegó, el 20-ago-2026.** El `[FECHA]` de abajo **queda a propósito**: esto es la plantilla como se redactó el 17-ago, y la versión ejecutada —con la fecha y el decisor reales— vive en [`deRuedas-constitucion.md`](../sdd/deRuedas-constitucion.md) §Historial de enmiendas. Conservar las dos por separado es lo que deja ver que el texto no cambió entre la propuesta y la ratificación. **No es un pendiente.**
 
 ```markdown
 # Historial de enmiendas
@@ -246,12 +248,14 @@ como nota:
 ## Artefacto para el paso (e) — comunicación
 
 > Para enviar **después** de registrada la enmienda. El envío es del usuario.
+>
+> ✅ **Fecha completada el 20-ago-2026.** El texto de abajo está listo para enviar tal como está, sin marcadores que reemplazar. **Sigue sin enviarse**: redactarlo y enviarlo son dos cosas distintas, y el paso (e) se marca cumplido recién con el envío.
 
 ```
 Asunto: Constitución v1.1 — se incorpora "Super Admin" al glosario canónico
 
-La enmienda E-001, abierta el 13 de agosto, quedó registrada el [FECHA]. La
-constitución pasa a versión 1.1.
+La enmienda E-001, abierta el 13 de agosto, quedó registrada el 20 de agosto de
+2026. La constitución pasa a versión 1.1.
 
 QUÉ CAMBIA
 
@@ -295,7 +299,7 @@ Texto completo de la enmienda: docs/adr/E-001-enmienda-glosario-super-admin.md
 - [x] ~~Anotar como pendiente la **enmienda al Artículo 8** para contemplar el decisor único~~ — ✅ **17-ago-2026**: no quedó anotada como pendiente, quedó **abierta** como [`E-002`](E-002-enmienda-articulo-8-decisor-unico.md), con cierre mínimo el 24-ago. No bloquea a `E-001` ni la condiciona
 - [x] ~~Paso (c) — aprobación, asentada en la tabla de discusión~~ — ✅ **20-ago-2026**, decisión unipersonal del Tech Lead
 - [x] ~~Paso (d) — pegar el texto de la enmienda con la fecha y el decisor reales~~ — ✅ **20-ago-2026**, apéndice al final de `deRuedas-constitucion.md`. Verificado que las 231 líneas originales quedaron **byte a byte idénticas**: el apéndice solo agrega
-- [ ] Paso (e) — enviar la comunicación. ⚠️ **El envío es del usuario**, no del agente. El texto está listo en §*Artefacto para el paso (e)*; solo hay que reemplazar `[FECHA]` por el 20 de agosto de 2026
+- [ ] Paso (e) — enviar la comunicación. ⚠️ **El envío es del usuario**, no del agente. El texto de §*Artefacto para el paso (e)* quedó **completo y listo para enviar** el 20-ago-2026, ya sin marcadores. Lo único que falta es mandarlo
 - [x] ~~Cambiar el **Estado** de este documento de 🟡 EN DISCUSIÓN a ✅ RATIFICADA~~ — ✅ **20-ago-2026**
 - [x] ~~Quitar el *"aceptado condicionado a esta ratificación"* de [`ADR-017`](ADR-017-catalogo-de-roles-y-super-admin.md)~~ — ✅ **20-ago-2026**, aceptado pleno
 - [x] ~~Desbloquear el **bloque 6 de C-02** (11 tareas)~~ — ✅ **20-ago-2026**: la tarea 6.1 de C-02 (*"verificar que `E-001` está ratificada; si no, detenerse acá"*) queda satisfecha y el portón se abre. Los **21 escenarios de `platform/authorization` siguen sin cerrar** — eso es la implementación, y es trabajo de C-02, no de esta enmienda
