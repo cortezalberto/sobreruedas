@@ -34,12 +34,12 @@
 
 ## 2. El espejo local — `modules/users/`
 
-- [ ] 2.1 `models.py`: `User`, `UserBranch`, `SuperAdmin`
-- [ ] 2.2 Test de arquitectura: **ninguna de las tres declara un campo de credencial**. Reutiliza el guardián de AST de `test_arquitectura.py`, que ya falla ante `password_hash` — extenderlo a `mfa_secret`
-- [ ] 2.3 `schemas.py` con `extra="forbid"` (`D-10` de C-04). **`tenant_id` no se declara** en ninguna entrada
-- [ ] 2.4 Test: un body con `tenant_id` se rechaza, y el campo no existe en `model_fields`
-- [ ] 2.5 `repository.py` con filtro de soft delete por defecto, igual que `tenancy`
-- [ ] 2.6 Test: una persona dada de baja no aparece en el listado ordinario, y sí con `incluir_dadas_de_baja=True`
+- [x] 2.1 [`modules/users/models.py`](../../../backend/app/modules/users/models.py). `User.id` sin `default=uuid4`: es el `sub` de Keycloak y lo trae quien crea la fila — un default invitaría a olvidarse de pasarlo, y el síntoma sería una fila que nunca coincide con ningún token
+- [x] 2.2 `mfa_secret` **ya estaba** en el guardián desde el 17-ago. Lo que faltaba es **`mfa_enabled`, y no va ahí**: no es una credencial sino un hecho de Keycloak, y meterlo en una lista llamada "nombres de contraseña" sería mentir sobre por qué está prohibido. Tiene su propio control en [`test_users_modelos.py`](../../../backend/tests/unit/test_users_modelos.py), sobre las columnas reales de las tres tablas, con su contrapeso
+- [x] 2.3 `PerfilPropio` y `UsuarioEditarPerfil`. Este último es `[perfil]` de `ADR-024` §6 y **no** trae `role`, `status`, `tenant_id`, `email` ni sucursales
+- [ ] 2.4 Pendiente — el endpoint de edición de perfil es del bloque 5.9, y sin él no hay body que rechazar. El schema ya está escrito con `extra="forbid"`
+- [x] 2.5 Dos filtros en toda consulta ordinaria: `tenant_id` explícito **y** `deleted_at IS NULL`. `incluir_dadas_de_baja` es por palabra clave: pedir a los muertos tiene que leerse en el sitio de la llamada
+- [x] 2.6 [`test_users_repositorio.py`](../../../backend/tests/integration/test_users_repositorio.py), con el contrapeso —si nunca devolviera a las dadas de baja, el primer test pasaría igual con un `WHERE false`— y el de que el listado no cruza agencias
 
 ## 3. Sincronización con Keycloak
 
@@ -67,10 +67,11 @@
 
 ## 5. Endpoints — necesitan `rbac.py` del bloque 6 de C-02
 
-- [ ] 5.1 `GET /api/v1/auth/me` — sin ningún parámetro (`D-4`)
-- [ ] 5.2 Test: intentar indicar otra identidad **nunca** devuelve información ajena
-- [ ] 5.3 Test: sin token responde falta de autenticación, distinguible de falta de permisos
-- [ ] 5.4 Test: la respuesta trae sucursales y cuál es la principal, y no falla con cero sucursales
+- [x] 5.1 [`modules/users/router.py`](../../../backend/app/modules/users/router.py). Exige `auth:read_me`, alcance `self` (`ADR-033`). No hace falta `verificar_alcance`: el recurso ES el sujeto por construcción, porque el id con que se busca sale del token
+- [x] 5.2 Las tres formas en que alguien lo intentaría: query string, path y cabecera. Ninguna devuelve al otro
+- [x] 5.3 401 con código `not_authenticated`, distinguible del 403 por código y no solo por estado
+- [x] 5.4 Los dos casos. Cero sucursales es el estado **normal** de alguien recién invitado: devolver 500 ahí convertiría eso en una caída.
+      Además: la respuesta no trae ninguna clave de MFA ni de credencial, ni siquiera como `null`
 - [ ] 5.5 `POST /api/v1/auth/logout` — *end-session* en Keycloak, **sin denylist propia** (`D-4`)
 - [ ] 5.6 Test que documenta la consecuencia asumida: tras el logout, el access token ya emitido **sigue siendo válido hasta vencer**
 - [ ] 5.7 `POST /api/v1/auth/accept-invitation` — **público**, no recibe contraseña (`ADR-026` §4)
@@ -82,11 +83,11 @@
 
 ## 6. Aislamiento multi-tenant — `T-027`, quality gate bloqueante
 
-- [ ] 6.1 Test: listar personas en el contexto de una agencia devuelve solo las suyas
+- [x] 6.1 En `test_users_repositorio.py`
 - [ ] 6.2 Test: sin contexto, cero filas
 - [ ] 6.3 Test: crear una persona atribuida a otra agencia se rechaza — exigir `InsufficientPrivilegeError`, no `Exception` a secas
-- [ ] 6.4 Verificar que los tests no son vacíos: contar filas reales en la tabla antes de afirmar que una sesión ve cero
-- [ ] 6.5 Test cross-tenant sobre `user_branches`: la tabla de unión aísla igual que las dos que une
+- [x] 6.4 Se cuentan las filas de las dos agencias antes de afirmar que no se alcanzan. Sin esto los tests de aislamiento serían verdes sobre una base vacía
+- [x] 6.5 El perfil no lista la sucursal de la otra agencia. Es el agujero clásico: las dos puntas protegidas y el vínculo no
 - [ ] 6.6 Test: un rol de tenant nunca alcanza el espacio administrativo (`ADR-024` §2)
 
 ## 7. Cierre
