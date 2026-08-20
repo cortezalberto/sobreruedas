@@ -26,6 +26,14 @@ help:  ## Muestra esta ayuda
 up:  ## Levanta el entorno local completo
 	$(COMPOSE) up -d --wait
 
+seed:  ## Siembra la agencia demo y los tres usuarios de Keycloak
+# `MSYS_NO_PATHCONV=1`: en Git Bash sobre Windows, MSYS reescribe los
+# argumentos que parecen rutas absolutas, y `/seed/sembrar_dev.py` llega al
+# contenedor como `C:/Program Files/Git/seed/...`. En Linux la variable no
+# existe y no molesta.
+	@$(COMPOSE) exec -T postgres psql -U $${POSTGRES_USER:-deruedas} -d $${POSTGRES_DB:-deruedas} -f - < infra/local/agencia-demo.sql
+	@MSYS_NO_PATHCONV=1 $(COMPOSE) run --rm --no-deps -T -e KEYCLOAK_ADMIN_URL=http://keycloak:8080 -v "$(CURDIR)/infra/local:/seed:ro" backend python /seed/sembrar_dev.py
+
 down:  ## Apaga el entorno CONSERVANDO los datos
 	$(COMPOSE) down
 
