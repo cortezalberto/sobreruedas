@@ -1,14 +1,15 @@
-# E-001 — Propuesta de enmienda a la constitución
+# E-001 — Enmienda a la constitución
 
 ## Incorporar *"Super Admin"* al glosario canónico y ratificar la equivalencia de identificadores de rol
 
-- **Estado**: 🟡 **EN DISCUSIÓN** — paso (b) del Artículo 8
+- **Estado**: ✅ **RATIFICADA** — 20 de agosto de 2026. La constitución pasa a **v1.1**
 - **Apertura**: jueves 13 de agosto de 2026
-- **Cierre mínimo de discusión**: **jueves 20 de agosto de 2026** (5 días hábiles)
+- **Cierre mínimo de discusión**: **jueves 20 de agosto de 2026** (5 días hábiles) — cumplido
 - **Proponente**: Tech Lead
-- **Decide**: mayoría calificada del equipo técnico y de producto
-- **Bloquea**: `C-02` (`core/rbac.py`, T-014), `R-2` (matriz RBAC), migración inicial de `users`
-- **ADR asociado**: [`ADR-017`](ADR-017-catalogo-de-roles-y-super-admin.md), aceptado *condicionado a esta ratificación*
+- **Decidió**: **decisión unipersonal del Tech Lead**. El Artículo 8 prevé *"mayoría calificada del equipo técnico y de producto"*; ese cuerpo no existe — el proyecto lo lleva una sola persona. Se registra lo que ocurrió, no la forma prevista para un equipo que no hay (obstáculo 1, resuelto el 17-ago)
+- **Desbloquea**: `C-02` (`core/rbac.py`, T-014, bloque 6), `R-2` (matriz RBAC), migración inicial de `users`
+- **Registrada en**: [`deRuedas-constitucion.md`](../sdd/deRuedas-constitucion.md) §Historial de enmiendas — apéndice *append-only*, opción A del obstáculo 2
+- **ADR asociado**: [`ADR-017`](ADR-017-catalogo-de-roles-y-super-admin.md), que con esto pasa a **aceptado pleno**
 
 ---
 
@@ -17,12 +18,12 @@
 | Paso | Estado |
 |---|---|
 | (a) Propuesta escrita identificando el artículo a modificar y la justificación | ✅ **Este documento** |
-| (b) Discusión abierta del equipo, mínimo 5 días hábiles | 🟡 Abierta hasta el 20-ago-2026 |
-| (c) Aprobación por mayoría calificada del equipo técnico y de producto | ⬜ Pendiente |
-| (d) Registro de la enmienda con fecha, motivo y versión | ⬜ Pendiente |
-| (e) Comunicación al equipo y a los stakeholders externos relevantes | ⬜ Pendiente |
+| (b) Discusión abierta del equipo, mínimo 5 días hábiles | ✅ Del 13 al 20-ago-2026, cumplida sin acortar |
+| (c) Aprobación por mayoría calificada del equipo técnico y de producto | ✅ **20-ago-2026** — registrada como **decisión unipersonal del Tech Lead**, no como mayoría calificada |
+| (d) Registro de la enmienda con fecha, motivo y versión | ✅ **20-ago-2026** — apéndice al final de [`deRuedas-constitucion.md`](../sdd/deRuedas-constitucion.md) |
+| (e) Comunicación al equipo y a los stakeholders externos relevantes | ⬜ **Pendiente — el envío es del usuario.** Texto listo más abajo |
 
-> **¿Requiere consulta a Dirección?** El Artículo 8 la exige *"si la enmienda afecta principios fundamentales"*. Esta enmienda **no toca ningún principio**: agrega una definición a la Parte IV (Glosario) sin modificar ninguna existente. **Se propone que no requiere consulta a Dirección.** Este punto se somete a la discusión junto con el resto.
+> **¿Requiere consulta a Dirección?** El Artículo 8 la exige *"si la enmienda afecta principios fundamentales"*. Esta enmienda **no toca ningún principio**: agrega una definición a la Parte IV (Glosario) sin modificar ninguna existente. **Resuelto el 20-ago-2026: no requiere consulta a Dirección**, conforme a lo propuesto y sin objeciones durante el período de discusión.
 
 ## Qué se propone modificar
 
@@ -106,14 +107,15 @@ Se someten a discusión junto con la propuesta:
 |---|---|---|---|
 | 2026-08-13 | Tech Lead | Propone | Apertura de la discusión |
 | 2026-08-17 | Tech Lead | Aclara | **No hay equipo**: el proyecto lo lleva una sola persona. El paso (c) se registrará como decisión unipersonal, no como mayoría calificada. El plazo de cinco días hábiles **no se acorta** — es período de enfriamiento, y acortarlo exigiría enmendar el Artículo 8. |
+| 2026-08-20 | Tech Lead | **Aprueba** | Cumplido el período de discusión del 13 al 20-ago sin objeciones ni intervenciones en contra, se **aprueba la enmienda tal como fue propuesta**, sin modificaciones al texto de las dos adiciones. Se aprueba también el punto sometido a discusión sobre la consulta a Dirección: **no se requiere**, porque la enmienda agrega al glosario sin tocar ningún principio. La aprobación se asienta como **decisión unipersonal**, con esas palabras y no como mayoría calificada — el cuerpo que el Artículo 8 prevé no existe, y una mayoría ficticia sería peor que una decisión unipersonal declarada (Principio 5). |
 
 ---
 
 # Preparación del cierre — 20-ago-2026
 
-> ⚠️ **NADA DE ESTA SECCIÓN ESTÁ EJECUTADO.** Son artefactos redactados por anticipado para que el cierre del 20-ago sea un trámite y no una redacción a las apuradas. Los pasos (c), (d) y (e) **no pueden ejecutarse antes del 20-ago** sin violar el plazo de cinco días hábiles del Artículo 8.
+> ✅ **EJECUTADO el 20-ago-2026.** Los pasos (c) y (d) están hechos; el (e) queda pendiente porque el envío es del usuario. Los artefactos de abajo se conservan **como fueron redactados el 17-ago**, sin retocar: son el registro de qué se aprobó, y reescribirlos ahora borraría el rastro de que el texto no cambió entre la propuesta y la ratificación.
 >
-> Preparado el 17-ago-2026.
+> Preparado el 17-ago-2026 · ejecutado el 20-ago-2026.
 
 ## Dos obstáculos que hay que resolver ANTES del 20, no ese día
 
@@ -291,9 +293,9 @@ Texto completo de la enmienda: docs/adr/E-001-enmienda-glosario-super-admin.md
 - [x] ~~Resolver el **obstáculo 2**~~ — ✅ 17-ago-2026: **opción A**, apéndice al final de la constitución
 - [x] ~~Registrar en `CLAUDE.md`/`AGENTS.md` la **única excepción** a la inmutabilidad de `docs/sdd/`~~ — ✅ **19-ago-2026**, bajo la tabla de precedencia de los dos archivos, que son idénticos byte a byte. No esperaba al cierre: no es un paso del Artículo 8, es dejar de tener dos reglas que leídas sueltas se contradicen —una manda escribir al final de la constitución y la otra prohíbe tocarla—
 - [x] ~~Anotar como pendiente la **enmienda al Artículo 8** para contemplar el decisor único~~ — ✅ **17-ago-2026**: no quedó anotada como pendiente, quedó **abierta** como [`E-002`](E-002-enmienda-articulo-8-decisor-unico.md), con cierre mínimo el 24-ago. No bloquea a `E-001` ni la condiciona
-- [ ] Paso (c) — aprobación, asentada en la tabla de discusión
-- [ ] Paso (d) — pegar el texto de la enmienda con la fecha y el decisor reales
-- [ ] Paso (e) — enviar la comunicación
-- [ ] Cambiar el **Estado** de este documento de 🟡 EN DISCUSIÓN a ✅ RATIFICADA
-- [ ] Quitar el *"aceptado condicionado a esta ratificación"* de [`ADR-017`](ADR-017-catalogo-de-roles-y-super-admin.md)
-- [ ] Desbloquear el **bloque 6 de C-02** (11 tareas) y cerrar los 21 escenarios de `platform/authorization`
+- [x] ~~Paso (c) — aprobación, asentada en la tabla de discusión~~ — ✅ **20-ago-2026**, decisión unipersonal del Tech Lead
+- [x] ~~Paso (d) — pegar el texto de la enmienda con la fecha y el decisor reales~~ — ✅ **20-ago-2026**, apéndice al final de `deRuedas-constitucion.md`. Verificado que las 231 líneas originales quedaron **byte a byte idénticas**: el apéndice solo agrega
+- [ ] Paso (e) — enviar la comunicación. ⚠️ **El envío es del usuario**, no del agente. El texto está listo en §*Artefacto para el paso (e)*; solo hay que reemplazar `[FECHA]` por el 20 de agosto de 2026
+- [x] ~~Cambiar el **Estado** de este documento de 🟡 EN DISCUSIÓN a ✅ RATIFICADA~~ — ✅ **20-ago-2026**
+- [x] ~~Quitar el *"aceptado condicionado a esta ratificación"* de [`ADR-017`](ADR-017-catalogo-de-roles-y-super-admin.md)~~ — ✅ **20-ago-2026**, aceptado pleno
+- [x] ~~Desbloquear el **bloque 6 de C-02** (11 tareas)~~ — ✅ **20-ago-2026**: la tarea 6.1 de C-02 (*"verificar que `E-001` está ratificada; si no, detenerse acá"*) queda satisfecha y el portón se abre. Los **21 escenarios de `platform/authorization` siguen sin cerrar** — eso es la implementación, y es trabajo de C-02, no de esta enmienda

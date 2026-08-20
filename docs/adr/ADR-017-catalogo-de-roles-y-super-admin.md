@@ -1,7 +1,7 @@
 # ADR-017 — Catálogo de roles y representación del Super Admin
 
-- **Estado**: Aceptado, **condicionado a la ratificación de la enmienda [`E-001`](E-001-enmienda-glosario-super-admin.md)**
-- **Fecha**: 2026-08-13
+- **Estado**: ✅ **Aceptado pleno** — la enmienda [`E-001`](E-001-enmienda-glosario-super-admin.md) quedó **ratificada el 20-ago-2026** y con eso cae la condición. La constitución pasa a **v1.1**
+- **Fecha**: 2026-08-13 · condición levantada el 2026-08-20
 - **Decisores**: Tech Lead
 - **Resuelve**: `IN-01`, `IN-02` · `PA-02` · habilita `R-2` (matriz RBAC)
 - **Afecta**: `C-02` (T-014, `core/rbac.py`), `C-05`, migración inicial de `users`
@@ -83,7 +83,7 @@ Una adición que no contradice nada es un trámite de Artículo 8 mucho menos co
 
 - **Dos caminos de autenticación que mantener**: uno para usuarios de tenant, otro para Super Admins. Es la contrapartida directa de no tocar el invariante.
 - **`audit_logs` necesita un actor polimórfico** en lugar de una `FK` simple a `users`. Se define en C-03.
-- **La decisión queda condicionada** a que `E-001` se ratifique. Si el equipo la rechaza, este ADR se revisa.
+- ~~**La decisión queda condicionada** a que `E-001` se ratifique. Si el equipo la rechaza, este ADR se revisa.~~ — ✅ **Resuelto el 20-ago-2026**: `E-001` fue ratificada sin modificaciones al texto propuesto, así que este ADR queda firme tal como está. No hubo nada que revisar.
 
 ## Alternativas consideradas
 

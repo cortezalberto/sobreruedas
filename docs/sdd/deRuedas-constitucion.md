@@ -229,3 +229,62 @@ Mecanismo técnico que permite habilitar o deshabilitar una funcionalidad en pro
 **ADR**
 
 Architecture Decision Record. Documento corto y estructurado que registra una decisión arquitectónica con su contexto, las opciones evaluadas, la decisión tomada y sus consecuencias previsibles.
+
+---
+
+# Historial de enmiendas
+
+## Enmienda 1 — Constitución v1.1
+
+- **Fecha de registro**: 20 de agosto de 2026
+- **Propuesta**: E-001, abierta el 13-ago-2026
+- **Discusión**: del 13 al 20-ago-2026 (cinco días hábiles, Artículo 8 paso b)
+- **Aprobación**: decisión unipersonal del Tech Lead. El Artículo 8 prevé
+  "mayoría calificada del equipo técnico y de producto"; ese cuerpo no existe
+  hoy — el proyecto lo lleva una sola persona. Se registra lo que efectivamente
+  ocurrió, no la forma prevista para un equipo que no hay.
+- **Consulta a Dirección**: no requerida. La enmienda no afecta principios
+  fundamentales: agrega una definición a la Parte IV sin modificar ninguna existente.
+- **Motivo**: el corpus define once endpoints de administración de plataforma para un
+  actor —el Super Admin— que el glosario nunca declaró, mientras `users.tenant_id` es
+  FK NOT NULL. Son dos afirmaciones incompatibles dentro del mismo documento vinculante
+  (IN-01, IN-02). Sin resolverlo, C-02 no puede escribir core/rbac.py, ni la migración
+  inicial de users, ni los tests de autorización que plan-testing declara bloqueantes en CI.
+- **Alcance**: Parte IV (Glosario y definiciones canónicas), **únicamente por adición**.
+  Ninguna definición existente se modifica ni se elimina.
+
+### Adición 1 — Nuevo término canónico: Super Admin
+
+> **Super Admin**
+>
+> Persona del equipo de deRuedas con atribuciones de administración de la plataforma.
+> **No es un Usuario**: no pertenece a ningún tenant y no aparece en el padrón de
+> usuarios de ninguna agencia. Opera exclusivamente sobre los endpoints de
+> administración de plataforma y sus acciones quedan registradas en la auditoría con su
+> identidad propia. La distinción es sustantiva: un Usuario existe dentro de un tenant,
+> un Super Admin existe por encima de todos.
+
+### Adición 2 — Nota de equivalencia en la definición de Usuario
+
+La definición de **Usuario** se conserva textualmente sin cambios. Se le agrega debajo,
+como nota:
+
+> *Nota de equivalencia.* Los identificadores de rol en código y en la base de datos son
+> `manager` ≡ Gerente, `salesperson` ≡ Vendedor, `admin_staff` ≡ Administrativo. La
+> interfaz de usuario emplea siempre los términos en español de este glosario.
+
+### Qué queda intacto
+
+| Definición vigente | Efecto de esta enmienda |
+|---|---|
+| *"Un usuario pertenece exactamente a un tenant"* | **Intacta.** `users.tenant_id` sigue NOT NULL. |
+| *"Un usuario tiene un rol (Gerente, Vendedor, Administrativo)"* | **Intacta.** Siguen siendo esos tres. |
+
+### Consecuencias registradas
+
+- `user_role_enum` se crea con **tres** valores: `manager`, `salesperson`, `admin_staff`.
+- Se crea la tabla `super_admins`, sin `tenant_id`, exenta de RLS.
+- `users.tenant_id` permanece FK NOT NULL, sin excepciones.
+- `audit_logs` referencia al actor de forma polimórfica: `(tipo_de_actor, id)`.
+- Se desbloquean C-02 (bloque 6, T-014) y la matriz RBAC de ADR-024.
+- ADR-017 deja de estar "aceptado condicionado" y pasa a aceptado pleno.
