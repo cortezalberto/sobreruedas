@@ -8,6 +8,30 @@
 
 ---
 
+## ⚠️ ALCANCE VIGENTE — decidido el 20-ago-2026
+
+> **Hay un recorte de alcance activo.** Antes de levantar un change, mirá si está diferido.
+>
+> Cerrado por [`ESC-003 · El MVP no entra en tres días`](docs/escalaciones/ESC-003-alcance-de-la-demo-de-tres-dias.md). Decide: Dirección.
+
+**Se entrega**: una rebanada vertical — login + gestión de stock, de punta a punta, multi-tenant real.
+
+**Diferidos** (siguen en este documento con su alcance intacto; **diferido no es cancelado**):
+
+| Change | Motivo |
+|---|---|
+| `C-22`, `C-23` — portal deRuedas | `R-1` abierto; depende de otro equipo |
+| `C-29` … `C-32` — WhatsApp | API de Meta y su proceso de aprobación |
+| `C-18` — OpenSearch | PostgreSQL alcanza para el volumen actual |
+| `C-09`, `C-10` — backoffice y onboarding | Sirven para operar, no para demostrar |
+| `foundation-setup` bloque 9 (14 tareas) | Provisioning de un VPS real; se sigue en Docker Compose |
+
+**Lo que NO se recorta**: el recorrido de rutas sin declaración de acceso y los tests de aislamiento multi-tenant. Los dos juntos tardan menos de dos minutos, y el primero encontró **catorce rutas abiertas** el día que se escribió.
+
+**La cobertura sigue siendo 194/194.** Nada se saca del grafo.
+
+---
+
 ## Cómo usar este documento
 
 1. **Identificá el change**: buscá el primer `C-NN` con estado `[ ]` cuyas dependencias estén todas en `[x]`.
@@ -549,6 +573,7 @@ Tres observaciones sobre la cadena:
 
 ### [C-09] `admin-tenants-backoffice`
 - **Estado**: `[ ]` pendiente
+- **⏸️ DIFERIDO** por [`ESC-003`](docs/escalaciones/ESC-003-alcance-de-la-demo-de-tres-dias.md) el 20-ago-2026 — Sirve para operar el producto, no para demostrarlo. **Diferido no es cancelado**: el alcance y las dependencias de abajo siguen vigentes.
 - **Rango**: `T-043`, `T-044`, `T-045`, `T-062` (4 tareas)
 - **Scope**:
   - `POST /admin/api/v1/tenants` — alta de tenant, creación del realm/grupo en Keycloak, usuario `manager` inicial, disparo del seed
@@ -569,6 +594,7 @@ Tres observaciones sobre la cadena:
 
 ### [C-10] `onboarding-wizard-y-tenant-setup`
 - **Estado**: `[ ]` pendiente
+- **⏸️ DIFERIDO** por [`ESC-003`](docs/escalaciones/ESC-003-alcance-de-la-demo-de-tres-dias.md) el 20-ago-2026 — Sirve para operar el producto, no para demostrarlo. **Diferido no es cancelado**: el alcance y las dependencias de abajo siguen vigentes.
 - **Rango**: `T-046`, `T-047`, `T-048`, `T-049`, `T-050`, `T-051`, `T-053`, `T-058`, `T-060` (9 tareas) — sin `T-052`, ver **D-2**
 - **Scope**:
   - `OnboardingService.complete` + `POST /api/v1/onboarding/complete`
@@ -747,6 +773,7 @@ Tres observaciones sobre la cadena:
 
 ### [C-18] `busqueda-opensearch`
 - **Estado**: `[ ]` pendiente
+- **⏸️ DIFERIDO** por [`ESC-003`](docs/escalaciones/ESC-003-alcance-de-la-demo-de-tres-dias.md) el 20-ago-2026 — PostgreSQL alcanza para el volumen actual. **Diferido no es cancelado**: el alcance y las dependencias de abajo siguen vigentes.
 - **Rango**: `T-098`, `T-099`, `T-100`, `T-114` (4 tareas) — ver **D-6**
 - **Scope**:
   - Índice de OpenSearch para `vehicles` + sincronización dirigida por eventos de dominio (`vehicle.created/updated/deleted`), con reindex completo como fallback
@@ -833,6 +860,7 @@ Tres observaciones sobre la cadena:
 
 ### [C-22] `publicacion-portal-deruedas`
 - **Estado**: `[ ]` pendiente
+- **⏸️ DIFERIDO** por [`ESC-003`](docs/escalaciones/ESC-003-alcance-de-la-demo-de-tres-dias.md) el 20-ago-2026 — `R-1` abierto — depende del equipo del portal. **Diferido no es cancelado**: el alcance y las dependencias de abajo siguen vigentes.
 - **Rango**: `T-115`…`T-122`, `T-128`, `T-129` (10 tareas)
 - **Scope**:
   - Migración `vehicle_publications` (estado por canal, `external_id`, timestamps de sincronización, último error)
@@ -858,6 +886,7 @@ Tres observaciones sobre la cadena:
 
 ### [C-23] `publishing-config-y-seguridad`
 - **Estado**: `[ ]` pendiente
+- **⏸️ DIFERIDO** por [`ESC-003`](docs/escalaciones/ESC-003-alcance-de-la-demo-de-tres-dias.md) el 20-ago-2026 — Arrastra a `C-22`. **Diferido no es cancelado**: el alcance y las dependencias de abajo siguen vigentes.
 - **Rango**: `T-123` … `T-127` (5 tareas)
 - **Scope**:
   - Página de configuración del conector deRuedas en settings (credenciales, modo automático/manual, mapeo de sucursales)
@@ -1001,6 +1030,7 @@ Tres observaciones sobre la cadena:
 
 ### [C-29] `whatsapp-canal-y-modelo`
 - **Estado**: `[ ]` pendiente
+- **⏸️ DIFERIDO** por [`ESC-003`](docs/escalaciones/ESC-003-alcance-de-la-demo-de-tres-dias.md) el 20-ago-2026 — API de Meta y su proceso de aprobacion. **Diferido no es cancelado**: el alcance y las dependencias de abajo siguen vigentes.
 - **Rango**: `T-170` … `T-175` (6 tareas)
 - **Scope**:
   - Migración `whatsapp_channels` (credenciales cifradas con el mecanismo de `T-126`, número, `phone_number_id`, estado de verificación)
@@ -1023,6 +1053,7 @@ Tres observaciones sobre la cadena:
 
 ### [C-30] `whatsapp-mensajeria-core`
 - **Estado**: `[ ]` pendiente
+- **⏸️ DIFERIDO** por [`ESC-003`](docs/escalaciones/ESC-003-alcance-de-la-demo-de-tres-dias.md) el 20-ago-2026 — API de Meta y su proceso de aprobacion. **Diferido no es cancelado**: el alcance y las dependencias de abajo siguen vigentes.
 - **Rango**: `T-176`…`T-180`, `T-187`, `T-189`, `T-191`, `T-192`, `T-193` (10 tareas)
 - **Scope**:
   - **Webhook** de recepción de mensajes y status updates, con verificación de firma de Meta y respuesta idempotente
@@ -1047,6 +1078,7 @@ Tres observaciones sobre la cadena:
 
 ### [C-31] `whatsapp-web-inbox-y-templates`
 - **Estado**: `[ ]` pendiente
+- **⏸️ DIFERIDO** por [`ESC-003`](docs/escalaciones/ESC-003-alcance-de-la-demo-de-tres-dias.md) el 20-ago-2026 — API de Meta y su proceso de aprobacion. **Diferido no es cancelado**: el alcance y las dependencias de abajo siguen vigentes.
 - **Rango**: `T-181` … `T-186` (6 tareas)
 - **Scope**:
   - Configuración del canal de WhatsApp en settings (alta del número, verificación, credenciales)
@@ -1068,6 +1100,7 @@ Tres observaciones sobre la cadena:
 
 ### [C-32] `whatsapp-crm-integracion-y-cierre`
 - **Estado**: `[ ]` pendiente
+- **⏸️ DIFERIDO** por [`ESC-003`](docs/escalaciones/ESC-003-alcance-de-la-demo-de-tres-dias.md) el 20-ago-2026 — API de Meta y su proceso de aprobacion. **Diferido no es cancelado**: el alcance y las dependencias de abajo siguen vigentes.
 - **Rango**: `T-167`, `T-188`, `T-190`, `T-194` (4 tareas) — `T-167` movida desde el bloque 1.4, ver **D-3**
 - **Scope**:
   - **Vincular conversación de WhatsApp a lead automáticamente** (`T-167`): al llegar un mensaje de un contacto con lead abierto, adjuntar la conversación; si no hay lead, crear uno según la regla configurada

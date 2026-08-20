@@ -485,6 +485,10 @@ Cubre la capability `platform/delivery-pipeline`.
 
 ## 9. Despliegue a staging — `T-008` · VPS con Docker Compose
 
+> ⏸️ **BLOQUE DIFERIDO** por [`ESC-003`](../../../docs/escalaciones/ESC-003-alcance-de-la-demo-de-tres-dias.md) el 20-ago-2026. Sus 14 tareas pendientes son provisioning de un VPS real —firewall, TLS, claves `age`, archivado de WAL fuera del servidor, ejercicio de restauración fechado— y se comen un día entero de los tres **sin cambiar lo que se puede mostrar**. Se sigue en Docker Compose.
+>
+> **Diferido no es cancelado**: el bloque queda tal cual y `foundation-setup` no se archiva hasta que se ejecute. Nada de lo de abajo se dio por hecho.
+
 > **Reescrito el 17-ago-2026.** `ADR-015` (Kubernetes + ArgoCD) quedó **superado** por [`ADR-023`](../../../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md): VPS único en Hostinger con Docker Compose. Las 16 tareas anteriores provisionaban un cluster gestionado y ya no aplican.
 > El requisito *"Despliegue automático a staging con reversión"* de `platform/delivery-pipeline` **no cambia**: es agnóstico de tecnología. Cambia cómo se cumple, no qué se cumple.
 > Frontera de seguridad no negociable, heredada de `ADR-015` y conservada: **GitHub Actions no recibe acceso al VPS.** Su permiso máximo es publicar una imagen. El despliegue lo inicia el servidor, no el pipeline.
