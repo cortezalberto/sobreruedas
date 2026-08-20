@@ -52,6 +52,19 @@ KEYCLOAK = os.getenv("KEYCLOAK_ADMIN_URL", "http://localhost:8080")
 REALM = "deruedas-dev"
 CLIENTE = "backend"
 
+# Los mappers van en LOS DOS clientes, y no es redundancia.
+#
+# El navegador pide su token por `frontend-web`, no por `backend`. Un mapper
+# colgado solo del cliente `backend` no participa de ese flujo: el token del
+# login sale sin `role`, sin `tenant_id` y sin `aud: backend`, y el API lo
+# rechaza con 401 — otra vez el sintoma que parece de firma y no lo es.
+CLIENTES_CON_MAPPERS = ("backend", "frontend-web")
+
+# El puerto del frontend de ESTA maquina. El realm versionado declara el 3000,
+# que es el default; si `.env` lo corre a otro lado, el redirect de Keycloak
+# apunta al lugar equivocado y el login termina en una pagina en blanco.
+PUERTO_DEL_FRONTEND = os.getenv("FRONTEND_PORT", "3000")
+
 # Fijos y reconocibles a proposito: un UUID de `1`s se distingue de un dato real
 # de un vistazo, y hace que los ejemplos de la documentacion no envejezcan.
 TENANT = "11111111-1111-1111-1111-111111111111"
@@ -110,6 +123,37 @@ MAPPERS: list[dict[str, object]] = [
         },
     },
 ]
+
+
+def _abrir_el_puerto_del_frontend(
+    cliente: httpx.Client, base: str, cabecera: dict[str, str]
+) -> None:
+    """Agrega el origen local a los redirect URIs de `frontend-web`.
+
+    El realm versionado declara `http://localhost:3000/*`, que es el default.
+    Cuando `.env` corre el frontend a otro puerto —en esta maquina, 3010— el
+    login termina con `invalid_redirect_uri` y una pagina en blanco.
+
+    Se AGREGA, no se reemplaza: el 3000 sigue valiendo para quien no tenga
+    override.
+    """
+    origen = f"http://localhost:{PUERTO_DEL_FRONTEND}"
+    interno = cliente.get(
+        f"{base}/clients", headers=cabecera, params={"clientId": "frontend-web"}
+    ).json()[0]
+
+    redirects = set(interno.get("redirectUris") or [])
+    origenes = set(interno.get("webOrigins") or [])
+    if f"{origen}/*" in redirects and origen in origenes:
+        print(f"frontend-web: {origen} ya estaba permitido")
+        return
+
+    interno["redirectUris"] = sorted(redirects | {f"{origen}/*"})
+    interno["webOrigins"] = sorted(origenes | {origen})
+    cliente.put(
+        f"{base}/clients/{interno['id']}", headers=cabecera, content=json.dumps(interno)
+    ).raise_for_status()
+    print(f"frontend-web: {origen} permitido")
 
 
 def _declarar_atributos(cliente: httpx.Client, base: str, cabecera: dict[str, str]) -> None:
@@ -172,28 +216,30 @@ def main() -> int:
 
         _declarar_atributos(cliente, base, cabecera)
 
-        identificador = cliente.get(
-            f"{base}/clients", headers=cabecera, params={"clientId": CLIENTE}
-        ).json()[0]["id"]
+        for nombre_de_cliente in CLIENTES_CON_MAPPERS:
+            identificador = cliente.get(
+                f"{base}/clients", headers=cabecera, params={"clientId": nombre_de_cliente}
+            ).json()[0]["id"]
 
-        puestos = {
-            m["name"]
-            for m in cliente.get(
-                f"{base}/clients/{identificador}/protocol-mappers/models",
-                headers=cabecera,
-            ).json()
-        }
-        for mapper in MAPPERS:
-            nombre = str(mapper["name"])
-            if nombre in puestos:
-                print(f"mapper {nombre}: ya estaba")
-                continue
-            cliente.post(
-                f"{base}/clients/{identificador}/protocol-mappers/models",
-                headers=cabecera,
-                content=json.dumps(mapper),
-            ).raise_for_status()
-            print(f"mapper {nombre}: creado")
+            puestos = {
+                m["name"]
+                for m in cliente.get(
+                    f"{base}/clients/{identificador}/protocol-mappers/models",
+                    headers=cabecera,
+                ).json()
+            }
+            for mapper in MAPPERS:
+                nombre = str(mapper["name"])
+                if nombre in puestos:
+                    continue
+                cliente.post(
+                    f"{base}/clients/{identificador}/protocol-mappers/models",
+                    headers=cabecera,
+                    content=json.dumps(mapper),
+                ).raise_for_status()
+            print(f"mappers de {nombre_de_cliente}: al dia")
+
+        _abrir_el_puerto_del_frontend(cliente, base, cabecera)
 
         creados: list[tuple[str, str, str]] = []
 

@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 
 import { AtajosDeTeclado } from '@/components/AtajosDeTeclado';
 import { Encabezado } from '@/components/Encabezado';
+import { Sesion } from '@/components/Sesion';
 import { NavegacionPrincipal } from '@/components/NavegacionPrincipal';
 
 import './globals.css';
@@ -82,7 +83,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
 
             Las paginas ponen adentro su propio contenedor de ancho: el inicio y
             el 404 se leen mejor angostos que un listado. */}
-        <Encabezado />
+        <Encabezado identidad={<Sesion />} />
         <div className="flex">
           <aside className="w-56 shrink-0 border-r border-neutro-borde">
             <NavegacionPrincipal />

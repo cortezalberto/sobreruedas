@@ -16,8 +16,17 @@
 COMPOSE := docker compose
 BACKEND := $(COMPOSE) run --rm --no-deps backend
 
+# `.env` es el archivo de overrides de ESTA maquina, y `docker compose` lo lee
+# solo, pero para sustituir dentro del compose — no lo pone en el entorno de
+# make. `make seed` necesita `FRONTEND_PORT` para decirle a Keycloak a que
+# origen redirigir despues del login, asi que se lee aca tambien.
+#
+# `-include`: si no existe, no pasa nada. Los defaults viven abajo.
+-include .env
+FRONTEND_PORT ?= 3000
+
 .DEFAULT_GOAL := help
-.PHONY: help up down logs rebuild migrate migrate-down-one migration test test-integration coverage test-tools lint format check
+.PHONY: help up seed down logs rebuild migrate migrate-down-one migration test test-integration coverage test-tools lint format check
 
 help:  ## Muestra esta ayuda
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sed 's/:.*## /  ->  /'
@@ -32,7 +41,7 @@ seed:  ## Siembra la agencia demo y los tres usuarios de Keycloak
 # contenedor como `C:/Program Files/Git/seed/...`. En Linux la variable no
 # existe y no molesta.
 	@$(COMPOSE) exec -T postgres psql -U $${POSTGRES_USER:-deruedas} -d $${POSTGRES_DB:-deruedas} -f - < infra/local/agencia-demo.sql
-	@MSYS_NO_PATHCONV=1 $(COMPOSE) run --rm --no-deps -T -e KEYCLOAK_ADMIN_URL=http://keycloak:8080 -v "$(CURDIR)/infra/local:/seed:ro" backend python /seed/sembrar_dev.py
+	@MSYS_NO_PATHCONV=1 $(COMPOSE) run --rm --no-deps -T -e KEYCLOAK_ADMIN_URL=http://keycloak:8080 -e FRONTEND_PORT=$(FRONTEND_PORT) -v "$(CURDIR)/infra/local:/seed:ro" backend python /seed/sembrar_dev.py
 
 down:  ## Apaga el entorno CONSERVANDO los datos
 	$(COMPOSE) down

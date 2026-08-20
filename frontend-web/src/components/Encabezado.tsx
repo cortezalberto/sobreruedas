@@ -18,8 +18,20 @@
  * layout: se llena, no se reacomoda.
  */
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 
-export function Encabezado() {
+/**
+ * El encabezado NO importa el stack de autenticacion, y eso es deliberado.
+ *
+ * `identidad` es un slot que llena el layout. Importar `@/auth` aca arrastraria
+ * NextAuth —y con el `next/server`— dentro de un componente de presentacion, y
+ * el test del shell dejaria de poder montarlo en jsdom. Paso: el commit que
+ * cablea la sesion rompio `shell.test.tsx` sin tocarlo.
+ *
+ * Ademas de testeable, es correcto: un encabezado no deberia saber COMO se
+ * resuelve la identidad, solo donde va.
+ */
+export function Encabezado({ identidad }: { identidad?: ReactNode }) {
   return (
     <header className="border-b border-neutro-borde">
       <div className="flex h-14 items-center justify-between px-4">
@@ -29,8 +41,8 @@ export function Encabezado() {
           deRuedas
         </Link>
 
-        {/* Slot de identidad — ver el encabezado del archivo. */}
-        <div />
+        {/* Slot de identidad — lo llena el layout. Ver el encabezado. */}
+        {identidad ?? <div />}
       </div>
     </header>
   );

@@ -48,6 +48,30 @@ export interface Plan {
 
 export const SIN_TECHO = 0;
 
+/**
+ * Una peticion AUTENTICADA al backend.
+ *
+ * El token va tal cual como lo emitio Keycloak: el backend lo valida contra su
+ * JWKS, asi que cualquier transformacion nuestra lo invalidaria.
+ *
+ * Sin cache: lo que devuelve depende de QUIEN pregunta. `RN-ST-12` hace que el
+ * mismo vehiculo tenga 23 campos para un vendedor y 24 para un gerente —
+ * cachear eso serviria la respuesta de uno al otro, que es una fuga de datos
+ * disfrazada de optimizacion.
+ */
+export async function pedirConToken(ruta: string, token: string): Promise<unknown> {
+  const respuesta = await fetch(`${API_BASE_URL}${ruta}`, {
+    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+
+  if (!respuesta.ok) {
+    throw new ErrorDeApi(respuesta.status, ruta);
+  }
+
+  return respuesta.json();
+}
+
 async function pedir(ruta: string): Promise<unknown> {
   const respuesta = await fetch(`${API_BASE_URL}${ruta}`, {
     headers: { Accept: 'application/json' },
