@@ -82,6 +82,87 @@ class AuthenticationError(Exception):
         self.code = code or "not_authenticated"
 
 
+class AuthorizationError(Exception):
+    """Se sabe quien hace la peticion, y no le alcanza.
+
+    403, el otro lado de la distincion que `AuthenticationError` explica arriba.
+    No se arregla reintentando ni renovando el token: hace falta que otro
+    conceda el permiso, o no hace falta nada porque la respuesta es no.
+
+    El detalle es DELIBERADAMENTE generico y no dice que rol hacia falta.
+    Enumerar los roles admitidos en la respuesta le regala a quien no puede el
+    mapa de quien si — util para depurar, y por eso va al log, no al cuerpo.
+    """
+
+    status_code = 403
+
+    def __init__(self, detail: str | None = None, *, code: str | None = None) -> None:
+        detalle = detail or "no tenes permisos para esta operacion"
+        super().__init__(detalle)
+        self.detail = detalle
+        self.code = code or "forbidden"
+
+
+class RolInsuficiente(AuthorizationError):
+    """El rol del sujeto no esta entre los admitidos por la operacion.
+
+    Codigo propio y no el generico: el frontend reacciona distinto ante "tu rol
+    no llega" (ocultar la accion) que ante un 403 por alcance o por campos, que
+    llegan mas adelante en el bloque 6.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(code="insufficient_role")
+
+
+class PermisoInsuficiente(AuthorizationError):
+    """El rol del sujeto no tiene celda para el permiso que la operacion exige.
+
+    Codigo propio, distinto de `insufficient_role`. Los dos son 403 y para el
+    usuario final significan lo mismo, pero para el frontend no: "tu rol no esta
+    entre los admitidos" describe la operacion entera, y "no tenes este permiso"
+    describe una celda. La segunda convive con que el mismo rol si tenga otras
+    operaciones del mismo recurso, y la interfaz decide distinto en cada caso.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(code="insufficient_permission")
+
+
+class AlcanceInsuficiente(AuthorizationError):
+    """El sujeto tiene el permiso, pero no sobre ESE registro.
+
+    Tercer codigo 403 del bloque, y el mas util de los tres para el frontend:
+    "no tenes el permiso" se responde escondiendo la accion, y "no sobre este"
+    se responde mostrandola y explicando de quien es. Colapsarlos obligaria a la
+    interfaz a adivinar cual de los dos paso.
+
+    ⚠️ El mensaje no dice a quien esta asignado el recurso. Decirlo convertiria
+    un 403 en una consulta del padron de usuarios para quien no lo tiene.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("no tenes acceso a este registro", code="out_of_scope")
+
+
+class TransicionNoPermitida(AuthorizationError):
+    """El cambio de estado es legal, y este rol no lo hace — `ADR-034`.
+
+    **403 y no 422**, y la diferencia no es de matiz. `TransicionInvalida` (422,
+    en el servicio de stock) dice que `RN-ST-05` no admite ese cambio PARA
+    NADIE: `in_preparation` -> `sold` no lo hace ni el gerente. Esto dice que el
+    cambio existe y que quien pregunta no es quien lo hace.
+
+    Un 422 aca mandaria al vendedor a creer que el sistema no permite vender.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "tu rol no puede hacer ese cambio de estado",
+            code="transition_not_allowed",
+        )
+
+
 class PlanQuotaExceeded(Exception):
     """El plan del tenant no da para una creacion mas.
 
@@ -165,6 +246,15 @@ def register_exception_handlers(app: FastAPI) -> None:
         return _problema(
             status=exc.status_code,
             title="No autenticado",
+            detail=exc.detail,
+            code=exc.code,
+        )
+
+    @app.exception_handler(AuthorizationError)
+    async def _autorizacion(_: Request, exc: AuthorizationError) -> JSONResponse:
+        return _problema(
+            status=exc.status_code,
+            title="Sin permisos",
             detail=exc.detail,
             code=exc.code,
         )

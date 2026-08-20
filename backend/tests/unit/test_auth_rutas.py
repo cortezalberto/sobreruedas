@@ -13,7 +13,6 @@ from typing import Any, cast
 
 import pytest
 from fastapi import APIRouter, FastAPI
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from app.core import auth
@@ -21,12 +20,12 @@ from app.core.auth import (
     RUTAS_EXENTAS,
     NoAutenticado,
     SujetoActual,
-    get_current_user,
     token_de_la_cabecera,
 )
 from app.main import create_app
 
 from ..emisor_de_tokens import EmisorDePrueba
+from ..rutas import exige_identidad, todas_las_rutas
 
 
 @pytest.fixture
@@ -138,51 +137,13 @@ def rutas_desprotegidas(app: FastAPI) -> set[str]:
     """
     desprotegidas: set[str] = set()
 
-    for ruta in _todas_las_rutas(app):
+    for ruta in todas_las_rutas(app):
         if ruta.path in RUTAS_EXENTAS:
             continue
-        if not _exige_identidad(ruta):
+        if not exige_identidad(ruta):
             desprotegidas.add(ruta.path)
 
     return desprotegidas
-
-
-def _todas_las_rutas(contenedor: object) -> Iterator[APIRoute]:
-    """Las `APIRoute` del contenedor, ENTRANDO en los routers incluidos.
-
-    ⚠️ ESTE RECORRIDO ES EL CONTROL. Hasta el 18-ago-2026 esta funcion iteraba
-    `app.routes` y se quedaba con lo que fuera `APIRoute` — y eso dejaba ciego al
-    gate entero.
-
-    FastAPI **no aplana** un `include_router()` dentro de `app.routes`: guarda un
-    objeto envoltorio (`_IncludedRouter`) que no es `APIRoute`, con las rutas
-    reales colgando de su `original_router`. Como el bucle viejo descartaba todo
-    lo que no fuera `APIRoute`, **ninguna ruta montada por `include_router`
-    llegaba a mirarse**.
-
-    Y ese es el unico camino por el que van a entrar los routers de dominio. El
-    test decia "ninguna ruta de datos se atiende sin token" y habria seguido en
-    verde con la API entera abierta: se descubrio cuando el primer router de
-    dominio —el catalogo— aparecio sin token y sin estar declarado exento, y el
-    gate no dijo nada.
-    """
-    for ruta in getattr(contenedor, "routes", []):
-        if isinstance(ruta, APIRoute):
-            yield ruta
-            continue
-        incluido = getattr(ruta, "original_router", None)
-        if incluido is not None:
-            yield from _todas_las_rutas(incluido)
-
-
-def _exige_identidad(ruta: APIRoute) -> bool:
-    pendientes = list(ruta.dependant.dependencies)
-    while pendientes:
-        dependencia = pendientes.pop()
-        if dependencia.call is get_current_user:
-            return True
-        pendientes.extend(dependencia.dependencies)
-    return False
 
 
 def test_ninguna_ruta_de_datos_se_atiende_sin_token(cliente: TestClient) -> None:
