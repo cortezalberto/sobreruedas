@@ -18,15 +18,19 @@
 
 ## 1. Migraciones
 
-- [ ] 1.1 `009` — `super_admins`, sin `tenant_id` y sin RLS (`D-3`). Deja de mentir `EXENTAS_DE_RLS`, que hoy declara exenta una tabla inexistente
-- [ ] 1.2 Test: el detector introspectivo no reporta `super_admins`, y **sí** reportaría `users` y `user_branches` si les faltara la política
-- [ ] 1.3 `010` — `user_role_enum` con **exactamente 3 valores** (`ADR-017`) + `users` + RLS + `FORCE`. **Sin `password_hash`, sin `mfa_secret`, sin `mfa_enabled`** (`ADR-026`, `D-2`)
-- [ ] 1.4 Test: `users.tenant_id` es `NOT NULL` — es la consecuencia práctica de que `super_admin` viva aparte (`D-3`)
-- [ ] 1.5 Índice `UNIQUE (tenant_id, lower(email))`: unicidad **por agencia**, insensible a mayúsculas
-- [ ] 1.6 Test: el mismo email en dos agencias distintas se acepta; repetido en la misma, se rechaza
-- [ ] 1.7 `011` — `user_branches` con **`tenant_id` propio** además de las dos FK (`D-8`), RLS y `FORCE`
-- [ ] 1.8 Test: una tabla de unión sin política es el agujero clásico — verificar que la tiene
-- [ ] 1.9 Verificar que las tres pasan el lint de DDL destructivo sin necesitar el marcador `# migracion-contract:`
+- [x] 1.1 **`013`** y no `009` — ese número lo tomó el catálogo de vehículos (C-14) después de que se escribieran estas tareas. `EXENTAS_DE_RLS` deja de declarar exenta una tabla inexistente
+- [x] 1.2 [`test_identidad_migraciones.py`](../../../backend/tests/integration/test_identidad_migraciones.py) — `super_admins` sin `tenant_id` ni RLS; `users` y `user_branches` con política **y `FORCE`**. `FORCE` y no solo `ENABLE`: sin él las políticas no se aplican al dueño de la tabla, `pg_policies` la lista igual y cualquier auditoría la da por buena
+- [x] 1.3 **`014`**. Enum de 3 valores verificado contra `pg_enum`. Sin las tres columnas de credencial.
+      ⚠️ **`users.id` ES el `sub` de Keycloak**, sin `server_default`. Lo hace posible `D-5` —la invitación crea primero en Keycloak—, y lo hace **necesario** `ADR-024` §4: `verificar_alcance` compara `assigned_user_id` contra el `sub` del token. Con un id propio además del `sub` esa comparación no cerraría nunca, o habría que resolver el espejo en cada petición y `get_current_user` dejaría de salir puro del token.
+      ⚠️ **Se crean `avatar_url` y `notification_preferences`**, que la spec no tiene: `ADR-024` §6 define `[perfil]` incluyéndolos, y declarar editable un campo inexistente deja la matriz apuntando a la nada.
+- [x] 1.4 Verificado, más el test de que el enum tiene exactamente los tres valores de `ADR-017`
+- [x] 1.5 Parcial por `deleted_at`, además: si no lo fuera, el email de quien se fue quedaría tomado para siempre y la reincorporación sería imposible
+- [x] 1.6 Los dos casos, más el de mayúsculas (`Ana@` vs `ana@` — sin `lower()` dos filas comparten identidad ante Keycloak, que sí normaliza) y el de que dar de baja libera el email
+- [x] 1.7 **`015`**. La redundancia de `tenant_id` se paga con **FKs compuestas** contra `(id, tenant_id)` de las dos puntas: así la fila no puede vincular un usuario de una agencia con una sucursal de otra ni por error de código. Sin eso la columna podría decir cualquier cosa y la política RLS aislaría por un dato inventado
+- [x] 1.8 Tiene política y `FORCE`, más el test de que la FK compuesta rechaza el cruce entre agencias y el de una sola sucursal principal por persona
+- [x] 1.9 **Las tres pasan, y el lint encontró algo real**: `015` agrega `UNIQUE (id, tenant_id)` sobre `users` y `branches`, que ya tienen datos. En el caso general el gate tiene razón; acá no puede violarse porque `id` es la PK.
+      No se usó `migracion-contract` —silencia el **archivo entero**, y `015` crea tablas: un `drop_column` agregado el mes que viene pasaría sin que nadie lo vea—. Se agregó **`# migracion-segura:` por línea**.
+      ⚠️ **Y el test del marcador nuevo encontró un agujero en el marcador nuevo**: la primera ventana miraba 3 líneas hacia arriba, así que exentaba también la operación de dos líneas más abajo. Declarar una constraint segura habilitaba de rebote un `drop_column`. Ajustado a la línea propia y la anterior, con un test que lo fija.
 
 ## 2. El espejo local — `modules/users/`
 

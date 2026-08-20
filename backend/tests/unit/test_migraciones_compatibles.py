@@ -73,6 +73,25 @@ VERSIONES = RAIZ_BACKEND / "alembic" / "versions"
 
 MARCADOR_CONTRACT = re.compile(r"#\s*migracion-contract:", re.IGNORECASE)
 
+# Exencion POR LINEA, para lo que es seguro por construccion y no por fase.
+#
+# `migracion-contract` silencia el ARCHIVO entero, y eso es lo correcto para un
+# expand/contract —la migracion entera es la fase contract— pero demasiado grueso
+# para una sola operacion. Una tabla nueva que ademas necesita un `UNIQUE (id,
+# tenant_id)` sobre una tabla vieja no puede silenciar de paso un `drop_column`
+# que alguien agregue el mes que viene.
+#
+#     op.create_unique_constraint(...)  # migracion-segura: `id` ya es la PK
+#
+# El caso que lo motivo: las FK compuestas contra `(id, tenant_id)` que exigen
+# las tablas de union con `tenant_id` propio. PostgreSQL pide un indice unico
+# que cubra esas dos columnas, y como `id` ya es unico, la constraint no puede
+# ser violada por ningun dato existente. Va a repetirse en cada tabla de union
+# que venga —CRM, actividades, documentos—, asi que se resuelve una vez.
+MARCADOR_LINEA = re.compile(r"#\s*migracion-segura:", re.IGNORECASE)
+
+_NUMERO_DE_LINEA = re.compile(r"^linea (\d+):")
+
 # Operaciones de Alembic que rompen hacia atras por si solas.
 OPERACIONES_DESTRUCTIVAS = {
     "drop_column": "borra una columna que la version anterior puede seguir escribiendo",
@@ -192,6 +211,8 @@ def infracciones(fuente: str) -> list[str]:
         # Fase contract declarada. La decision ya quedo visible en el diff.
         return []
 
+    lineas = fuente.splitlines()
+
     arbol = ast.parse(fuente)
 
     # `upgrade()` Y TODA FUNCION AUXILIAR DEL MODULO.
@@ -302,7 +323,33 @@ def infracciones(fuente: str) -> list[str]:
                 if patron.search(sql):
                     problemas.append(f"linea {nodo.lineno}: execute() con {etiqueta}")
 
-    return problemas
+    return [p for p in problemas if not _exento(p, lineas)]
+
+
+def _exento(problema: str, lineas: list[str]) -> bool:
+    """Si la linea que produjo el hallazgo lleva el marcador `migracion-segura`.
+
+    Se busca en la linea Y en la inmediatamente anterior, y ni una mas.
+
+    ⚠️ La primera version miraba TRES lineas hacia arriba, y era una puerta: en
+
+        # migracion-segura: ...
+        op.create_unique_constraint(...)
+        op.drop_column(...)
+
+    el marcador alcanzaba tambien al `drop_column`. O sea que declarar una
+    constraint segura habilitaba de rebote un borrado que nadie pidio. Lo
+    encontro `test_el_marcador_por_linea_NO_silencia_el_resto_del_archivo`.
+
+    Dos lineas alcanzan: `lineno` del AST apunta a la primera linea de la
+    llamada, asi que el comentario de arriba queda en `lineno - 1`.
+    """
+    coincidencia = _NUMERO_DE_LINEA.match(problema)
+    if coincidencia is None:
+        return False
+    numero = int(coincidencia.group(1))
+    ventana = lineas[max(0, numero - 2) : numero]
+    return any(MARCADOR_LINEA.search(linea) for linea in ventana)
 
 
 def _migraciones() -> list[Path]:
@@ -542,3 +589,42 @@ def test_el_downgrade_sigue_sin_contar_aunque_tenga_auxiliares() -> None:
     )
 
     assert infracciones(fuente) == []
+
+
+# ── El marcador por linea, y que no sea una puerta abierta ───────────────────
+
+_CON_MARCADOR = """
+def upgrade() -> None:
+    # migracion-segura: `id` ya es la PK
+    op.create_unique_constraint("uq", "users", ["id", "tenant_id"])
+"""
+
+_MARCADOR_Y_ADEMAS_UN_DROP = """
+def upgrade() -> None:
+    # migracion-segura: `id` ya es la PK
+    op.create_unique_constraint("uq", "users", ["id", "tenant_id"])
+    op.drop_column("users", "telefono")
+"""
+
+
+def test_el_marcador_por_linea_exenta_esa_operacion() -> None:
+    assert infracciones(_CON_MARCADOR) == []
+
+
+def test_el_marcador_por_linea_NO_silencia_el_resto_del_archivo() -> None:
+    """La diferencia con `migracion-contract`, y el motivo de que exista.
+
+    El marcador de archivo devuelve `[]` para todo. Este exenta una operacion y
+    deja el gate encendido para las demas — si no, declarar una constraint segura
+    abriria la puerta a un `drop_column` que nadie pidio.
+    """
+    problemas = infracciones(_MARCADOR_Y_ADEMAS_UN_DROP)
+    assert len(problemas) == 1
+    assert "drop_column" in problemas[0]
+
+
+def test_sin_marcador_la_misma_constraint_se_reporta() -> None:
+    """Contrapeso: si el detector no marcara nunca esta operacion, los dos tests
+    de arriba pasarian sin probar que la exencion hace algo."""
+    sin_marcador = _CON_MARCADOR.replace("    # migracion-segura: `id` ya es la PK\n", "")
+    assert len(infracciones(sin_marcador)) == 1
