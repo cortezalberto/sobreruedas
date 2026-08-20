@@ -17,9 +17,10 @@
  * y CORS no interviene.
  */
 import { auth } from '@/auth';
+import { CambiarEstado } from '@/components/CambiarEstado';
 import { Alerta, Etiqueta, EstadoVacio, Tabla } from '@/components/ui';
 import { obtenerMarcasPorId, obtenerVehiculos, type Vehiculo } from '@/lib/api';
-import { columnasPara, elBackendMandaElCosto } from '@/lib/stock';
+import { columnasPara, elBackendMandaElCosto, nombreDeEstado } from '@/lib/stock';
 
 /** Los tonos que `Etiqueta` admite. Se declara acá para que agregar un estado
  *  con un tono inexistente lo marque `tsc` y no el navegador. */
@@ -41,23 +42,17 @@ const PESOS = new Intl.NumberFormat('es-AR', {
 const KILOMETROS = new Intl.NumberFormat('es-AR');
 
 /**
- * Los SEIS estados de `ADR-031`, en castellano y con su tono.
- *
- * `Pausado` no está, y no es un olvido: es el estado de la PUBLICACIÓN, no del
- * vehículo. Un aviso se pausa, un auto no.
- *
- * El mapa cubre los seis a propósito en vez de traducir con una función: un
- * estado nuevo que nadie agregue acá cae al `?? vehiculo.status` de abajo y se
- * ve en inglés — feo, pero visible. Traducir por regla lo escondería.
+ * El tono de cada estado. El NOMBRE sale de `lib/stock.ts`, que es la fuente
+ * unica — acá solo vive el color, que es decisión de esta pantalla.
  */
-const ESTADOS: Record<string, { texto: string; tono: TonoDeEstado }> = {
-  in_preparation: { texto: 'En preparación', tono: 'neutro' },
-  available: { texto: 'Disponible', tono: 'exito' },
-  reserved: { texto: 'Reservado', tono: 'advertencia' },
-  sold: { texto: 'Vendido', tono: 'meta' },
-  in_workshop: { texto: 'En taller', tono: 'advertencia' },
-  archived: { texto: 'Archivado', tono: 'neutro' },
-};
+const TONO_DE_ESTADO: ReadonlyMap<string, TonoDeEstado> = new Map([
+  ['in_preparation', 'neutro'],
+  ['available', 'exito'],
+  ['reserved', 'advertencia'],
+  ['sold', 'meta'],
+  ['in_workshop', 'advertencia'],
+  ['archived', 'neutro'],
+]);
 
 function Fila({
   vehiculo,
@@ -68,10 +63,7 @@ function Fila({
   marca: string;
   muestraElCosto: boolean;
 }) {
-  const estado = ESTADOS[vehiculo.status] ?? {
-    texto: vehiculo.status,
-    tono: 'neutro' as const,
-  };
+  const tono = TONO_DE_ESTADO.get(vehiculo.status) ?? 'neutro';
 
   return (
     <tr className="border-b border-neutro-borde">
@@ -96,8 +88,11 @@ function Fila({
             : '—'}
         </td>
       )}
+      <td className="py-2 pr-4">
+        <Etiqueta tono={tono}>{nombreDeEstado(vehiculo.status)}</Etiqueta>
+      </td>
       <td className="py-2">
-        <Etiqueta tono={estado.tono}>{estado.texto}</Etiqueta>
+        <CambiarEstado vehiculoId={vehiculo.id} estado={vehiculo.status} />
       </td>
     </tr>
   );

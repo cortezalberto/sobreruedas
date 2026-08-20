@@ -15,7 +15,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { columnasPara, elBackendMandaElCosto } from '@/lib/stock';
+import { columnasPara, elBackendMandaElCosto, TRANSICIONES, transicionesDesde } from '@/lib/stock';
 import type { Vehiculo } from '@/lib/api';
 
 /** Un vehículo mínimo. Los campos que no importan acá se rellenan igual porque
@@ -83,5 +83,60 @@ describe('la columna de costo', () => {
     // Lo único que cambia es la de costo. Si mañana alguien recorta otra
     // columna por rol desde el cliente, esto lo delata.
     expect(conCosto.filter((c) => c !== 'Costo')).toEqual(sinCosto);
+  });
+});
+
+describe('las transiciones que la UI ofrece', () => {
+  it('reflejan `RN-ST-05` y no la matriz de permisos', () => {
+    // Desde `available` la máquina admite tres. Que un `salesperson` solo pueda
+    // una de ellas NO se decide acá — lo decide el backend, y por eso los tres
+    // botones se ofrecen igual. Ver el comentario de `TRANSICIONES`.
+    expect([...transicionesDesde('available')].sort()).toEqual([
+      'archived',
+      'in_workshop',
+      'reserved',
+    ]);
+  });
+
+  it('no ofrecen el salto que ningún rol puede hacer', () => {
+    // `in_preparation` -> `sold` no existe para nadie, ni para el gerente. Es
+    // dominio, no permisos, y por eso sí corresponde esconderlo.
+    expect(transicionesDesde('in_preparation')).not.toContain('sold');
+    expect(transicionesDesde('in_preparation')).toEqual(['available']);
+  });
+
+  it('desde `reserved` se puede vender o soltar la reserva', () => {
+    expect([...transicionesDesde('reserved')].sort()).toEqual(['available', 'sold']);
+  });
+
+  it('un estado desconocido no ofrece nada, en vez de romper', () => {
+    // El backend podría agregar un estado antes que esta copia. Devolver una
+    // lista vacía deja la fila sin botones —visible— en lugar de reventar el
+    // render de la tabla entera.
+    expect(transicionesDesde('paused')).toEqual([]);
+  });
+
+  it('los seis estados de `ADR-031` están cubiertos', () => {
+    // `Pausado` NO está, y no es un olvido: es estado de la publicación, no del
+    // vehículo. Si alguien lo agrega acá, este test lo delata.
+    expect([...TRANSICIONES.keys()].sort()).toEqual([
+      'archived',
+      'available',
+      'in_preparation',
+      'in_workshop',
+      'reserved',
+      'sold',
+    ]);
+  });
+
+  it('todo destino ofrecido es a su vez un estado conocido', () => {
+    // Un destino que no sea estado válido produciría un botón que el backend
+    // rechaza siempre con 422 — un callejón sin salida en la interfaz.
+    const estados = new Set(TRANSICIONES.keys());
+    for (const [, destinos] of TRANSICIONES) {
+      for (const destino of destinos) {
+        expect(estados.has(destino)).toBe(true);
+      }
+    }
   });
 });
