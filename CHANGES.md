@@ -39,6 +39,16 @@
 3. **Leé la KB**: abrí los archivos de **"Leer antes"** y las tareas `T-XXX` del rango en `docs/sdd/deRuedas-plan-implementacion.md`. Las fichas de tarea traen criterios de aceptación, archivos a tocar y tests esperados.
 4. **Proponé e implementá**: `/opsx:propose C-NN-<slug>` → `/opsx:apply` → `/opsx:archive`.
 5. **Marcá el checkbox** de este archivo al archivar el change.
+6. **Corré `make check` DESPUÉS de archivar**, no solo antes.
+
+> ⚠️ **Archivar rompe enlaces relativos, y ya pasó dos veces.** Mover un change a
+> `openspec/changes/archive/AAAA-MM-DD-<nombre>/` agrega un nivel de
+> profundidad: todo `](../../../` de adentro queda corto y hay que pasarlo a
+> `](../../../../`. La primera vez fue al archivar **C-04** (18-ago-2026, 2
+> enlaces); la segunda al archivar **C-02** (20-ago-2026, 18 enlaces).
+>
+> Lo detecta `tools/check-md-links.py`, que corre en `make test-tools` y por lo
+> tanto en `make check`. **El gate funciona; lo que falla es no correrlo.**
 
 > **Granularidad**: un change agrupa entre 2 y 10 tareas `T-XXX`. Según §3.4 del plan, **cada `T-XXX` es una sesión de IA** que termina en un pull request. Un change es entonces una capacidad coherente de varias sesiones, no una sola sesión.
 

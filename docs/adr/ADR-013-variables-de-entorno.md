@@ -60,6 +60,7 @@ Son **36 variables**, de las cuales **16 son sensibles**.
 | `KEYCLOAK_CLIENT_ID` | Client del backend (confidential) | `backend` | |
 | `KEYCLOAK_CLIENT_SECRET` | Secreto del client | — | 🔒 |
 | `KEYCLOAK_JWKS_URL` | Endpoint de claves públicas para verificar RS256 | `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs` | |
+| `KEYCLOAK_ISSUER` | El `iss` que traen los tokens — el hostname **público**, que no siempre es `KEYCLOAK_URL` | `https://auth.deruedas.com/realms/deruedas` | |
 
 ### `S3Settings`
 
@@ -135,6 +136,19 @@ La tabla de la KB nombra la variable `ENVIRONMENT`. `T-004` dice, textualmente, 
 Aplicando [`ADR-000`](ADR-000-precedencia-documental.md): el plan de implementación es **N2, fuente normativa**; la `knowledge-base/` es **material derivado, sin nivel**. No hay empate — gana N2. La tabla de `08_arquitectura_propuesta.md` se corrige en este mismo change.
 
 Valores permitidos: `local | ci | staging | production`. **Cualquier otro se rechaza al arrancar**, con muerte temprana del proceso.
+
+### 2.b `KEYCLOAK_ISSUER` separado de `KEYCLOAK_URL` — agregado el 20-ago-2026
+
+Keycloak emite el `iss` con el hostname por el que se **pidió** el token, y el
+backend lo alcanza por el nombre interno de la red. En desarrollo son
+`localhost:8080` y `keycloak:8080`; en producción, el dominio público y el del
+contenedor. Deducir el emisor de `KEYCLOAK_URL` funciona solo mientras
+coincidan, y deja de funcionar exactamente cuando entra el primer login por
+navegador.
+
+**El síntoma engaña**: 401 en todo, y parece un problema de firma cuando es una
+cadena que no coincide. Mismo criterio que `KEYCLOAK_JWKS_URL`: explícito si
+está, deducido si no.
 
 ### 2. `KEYCLOAK_JWKS_URL`, no `JWT_PUBLIC_KEY`
 

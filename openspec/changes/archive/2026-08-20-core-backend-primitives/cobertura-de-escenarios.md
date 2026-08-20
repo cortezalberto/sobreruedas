@@ -2,9 +2,9 @@
 
 > **Qué es esto.** Las cinco capabilities de C-02 declaran **77 escenarios**. Este documento dice cuáles tienen test ejecutable y **cuáles no, con el motivo**. Sin él, "los tests pasan" no dice nada sobre lo que quedó afuera.
 >
-> Medido el **16-ago-2026** sobre 232 tests en verde. **Actualizado el 17-ago-2026**: `platform/authorization` pasó de 16 a **21 escenarios** por [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md).
+> Medido el **16-ago-2026** sobre 232 tests en verde. **Actualizado el 17-ago-2026**: `platform/authorization` pasó de 16 a **21 escenarios** por [`ADR-024`](../../../../docs/adr/ADR-024-matriz-rbac-canonica.md).
 >
-> **Actualizado el 20-ago-2026** — bloque 6 implementado, sobre **739 tests en verde**. `platform/authorization` pasó de 21 a **25 escenarios** ([`ADR-033`](../../../docs/adr/ADR-033-alcance-self-distinto-de-own.md) agregó el alcance propio; [`ADR-034`](../../../docs/adr/ADR-034-transiciones-como-tercer-eje-del-permiso.md) agregó el requisito de transiciones, con 3 escenarios) y de **0 a 22 con test**.
+> **Actualizado el 20-ago-2026** — bloque 6 implementado, sobre **739 tests en verde**. `platform/authorization` pasó de 21 a **25 escenarios** ([`ADR-033`](../../../../docs/adr/ADR-033-alcance-self-distinto-de-own.md) agregó el alcance propio; [`ADR-034`](../../../../docs/adr/ADR-034-transiciones-como-tercer-eje-del-permiso.md) agregó el requisito de transiciones, con 3 escenarios) y de **0 a 22 con test**.
 
 ## Resumen
 
@@ -37,8 +37,8 @@ El bloqueo de `E-001` **desapareció**: la enmienda se ratificó el 20-ago-2026 
 
 | ADR | Qué agregó | Escenarios |
 |---|---|---:|
-| [`ADR-033`](../../../docs/adr/ADR-033-alcance-self-distinto-de-own.md) | `ADR-024` usaba `own` con dos sentidos: `assigned_user_id` (§4, *"y nada más"*) y "sobre sí mismo" en Auth y Usuarios, que no tienen esa columna. Tercer valor de alcance, `self`. | +1 |
-| [`ADR-034`](../../../docs/adr/ADR-034-transiciones-como-tercer-eje-del-permiso.md) | La celda *"`own`, solo `available`→`reserved`"* no cabía en dos ejes. Cerró una concesión **que estaba corriendo**: el vendedor vendía en dos saltos legales. | +3 |
+| [`ADR-033`](../../../../docs/adr/ADR-033-alcance-self-distinto-de-own.md) | `ADR-024` usaba `own` con dos sentidos: `assigned_user_id` (§4, *"y nada más"*) y "sobre sí mismo" en Auth y Usuarios, que no tienen esa columna. Tercer valor de alcance, `self`. | +1 |
+| [`ADR-034`](../../../../docs/adr/ADR-034-transiciones-como-tercer-eje-del-permiso.md) | La celda *"`own`, solo `available`→`reserved`"* no cabía en dos ejes. Cerró una concesión **que estaba corriendo**: el vendedor vendía en dos saltos legales. | +3 |
 
 ### Los 3 sin test, con el motivo
 

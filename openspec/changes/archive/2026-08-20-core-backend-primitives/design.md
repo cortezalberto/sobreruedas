@@ -18,7 +18,7 @@ Motivación en [`proposal.md`](proposal.md). Requisitos en [`specs/`](specs/).
 
 **Non-Goals:**
 
-- No se **decide** la matriz de permisos por recurso: la decide [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md). Acá se construye el mecanismo que la aplica y se la transcribe **literalmente**; ninguna celda se inventa ni se ajusta en el código.
+- No se **decide** la matriz de permisos por recurso: la decide [`ADR-024`](../../../../docs/adr/ADR-024-matriz-rbac-canonica.md). Acá se construye el mecanismo que la aplica y se la transcribe **literalmente**; ninguna celda se inventa ni se ajusta en el código.
 - No se crea ninguna tabla de negocio ni la tabla `users` (es C-05).
 - No se implementa `@audit_action` ni `audit_logs` (es C-03).
 - No se resuelve el rate limiting (`IN-19`, sin decidir).
@@ -126,7 +126,7 @@ Regla dura 8: sin mocks de base de datos. El aislamiento multi-tenant **no es si
 
 | Riesgo | Mitigación |
 |---|---|
-| ~~**`R-2` — no existe matriz RBAC canónica.**~~ ✅ Cerrado por [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md). | La definición de permisos deja de ser vacía: se transcriben literalmente las celdas de los 7 módulos que el ADR declara. Los otros 9 **quedan denegados por denegar-por-defecto**, que es la decisión del ADR y no una omisión. |
+| ~~**`R-2` — no existe matriz RBAC canónica.**~~ ✅ Cerrado por [`ADR-024`](../../../../docs/adr/ADR-024-matriz-rbac-canonica.md). | La definición de permisos deja de ser vacía: se transcriben literalmente las celdas de los 7 módulos que el ADR declara. Los otros 9 **quedan denegados por denegar-por-defecto**, que es la decisión del ADR y no una omisión. |
 | **La transcripción del ADR al código se desincroniza** con el tiempo, y nadie lo nota hasta que un endpoint autoriza de más. | La definición ejecutable es la traducción **literal** de las tablas, sin reinterpretación. La verificación automática de 6.9 detecta toda operación que se abra de más, y el ADR es el esperado contra el cual se compara. |
 | **Sin herencia (`S3`), agregar un permiso a un rol no se lo da a los demás** — y es intuitivo suponer que `manager` los tiene todos. | La verificación recorre los tres roles de tenant **por separado**, sin asumir contención. `manager` no es superconjunto de `salesperson`: `salesperson` cierra ventas y `admin_staff` no, así que la jerarquía sería falsa. |
 | ~~**`E-001` no ratifica, o ratifica distinto.** El catálogo de roles cambiaría.~~ ✅ **No se materializó**: ratificada el 20-ago-2026 **sin modificaciones al texto propuesto**, así que el catálogo quedó en los tres valores previstos. | La mitigación se conserva igual, porque nunca fue solo para este riesgo: `platform/authorization` se especifica en términos de comportamiento, no de nombres de rol, y el catálogo vive en un único lugar (spec: *"fuente única"*). Un cambio de valores toca un archivo y sus tests, no cada endpoint. |
@@ -158,4 +158,4 @@ Los tramos 1 a 3 son 8 de las 9 tareas. **El tramo 4 ya no espera**: `E-001` que
 - **Techo de reintentos y base del backoff de eventos.** `ADR-009` fija el patrón, no los números. Se eligen valores iniciales razonables y quedan configurables.
 - **Nombre definitivo del stream de irrecuperables.** Cosmético; no afecta el comportamiento especificado.
 
-> **Lo que NO es una pregunta abierta**: la matriz de permisos —decidida por [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md), se aplica y no se re-decide— ni el catálogo de roles (`E-001`, todavía bloqueante). Los dos cambiarían las tareas, así que están tratados arriba como bloqueante y riesgo, no diferidos acá.
+> **Lo que NO es una pregunta abierta**: la matriz de permisos —decidida por [`ADR-024`](../../../../docs/adr/ADR-024-matriz-rbac-canonica.md), se aplica y no se re-decide— ni el catálogo de roles (`E-001`, todavía bloqueante). Los dos cambiarían las tareas, así que están tratados arriba como bloqueante y riesgo, no diferidos acá.

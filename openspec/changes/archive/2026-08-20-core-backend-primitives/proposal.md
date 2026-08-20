@@ -61,7 +61,7 @@ Ninguna. Las tres capabilities de C-01 (`platform/service-health`, `platform/con
 
 ### Riesgo cerrado
 
-~~**`R-2` — no existe matriz RBAC canónica.**~~ ✅ **Cerrado el 17-ago-2026 por [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md).**
+~~**`R-2` — no existe matriz RBAC canónica.**~~ ✅ **Cerrado el 17-ago-2026 por [`ADR-024`](../../../../docs/adr/ADR-024-matriz-rbac-canonica.md).**
 
 `require_permission()` ya tiene contra qué construirse: el ADR fija la forma del permiso (`recurso:acción` + alcance `all`/`own` + conjunto de campos), el criterio de **denegar por defecto**, la **ausencia de herencia** entre roles (`S3`) y las celdas de siete módulos. La **definición ejecutable de este change debe ser la traducción literal de esas tablas.**
 
