@@ -1,0 +1,361 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# deRuedas Gestion — OVERRIDE de produccion (C-01 bloque 9, T-008)
+#
+# ADR-023: VPS unico con Docker Compose. ADR-025: topologia de produccion.
+#
+# Esto es un OVERRIDE de docker-compose.yml, no un archivo paralelo. Todo lo que
+# no se redefine aca se hereda del base, y por eso el base y produccion no se
+# pueden desincronizar (ADR-023 §Notas de implementacion).
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# EL STACK ESTA PARTIDO EN DOS — ADR-025 Decision 1
+#
+# De los diez servicios, CINCO tienen estado y NO se pueden duplicar. Levantar
+# un segundo PostgreSQL sobre el mismo volumen no es azul-verde: es corrupcion
+# de datos.
+#
+#   deruedas-datos    postgres, redis, minio, opensearch, keycloak
+#                     UNO SOLO, permanente. Un despliegue no lo toca.
+#
+#   deruedas-azul     backend, worker, frontend-web
+#   deruedas-verde    idem. DOS, alternandose. Es lo unico que el proxy conmuta.
+#
+# No se levantan con `up` a secas: cada stack nombra SUS servicios. Ver
+# infra/vps/deploy/ y infra/vps/README.md.
+#
+#   docker compose -p deruedas-datos -f docker-compose.yml -f docker-compose.prod.yml \
+#     --env-file /etc/deruedas/produccion.env up -d postgres redis minio opensearch keycloak
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# LA RED ES EXTERNA
+#
+# Los tres proyectos de Compose comparten `deruedas_prod_default`, que se crea
+# UNA VEZ fuera de Compose (runbook 03). Si fuera una red por proyecto, los
+# stacks de aplicacion no alcanzarian a la base.
+#
+# ⚠️ EL PREFIJO `prod_` NO ES COSMETICO. Hasta el 17-ago-2026 esta red se
+# llamaba `deruedas_default` — el MISMO nombre que docker-compose.yml CREA en
+# desarrollo. Como aca es `external: true`, un stack de produccion levantado en
+# una maquina con el entorno de desarrollo arriba no fallaba: se enganchaba en
+# silencio a la red de desarrollo y hablaba con la base equivocada.
+#
+# En el VPS nunca se habria visto, porque alla no hay entorno de desarrollo.
+# Se habria visto justo donde probamos. Con el prefijo, si el runbook 03 no
+# corrio, Compose corta con "network not found", que es lo que uno quiere.
+#
+# ⚠️ Compose agrega el nombre del servicio como alias de red. Con azul y verde
+# levantados a la vez, `backend` resuelve a LOS DOS por round-robin. Por eso
+# cada stack agrega su propio alias con color (`backend-azul`, `web-verde`) y
+# Caddy apunta SIEMPRE al alias con color. Nada en produccion debe usar el
+# nombre pelado.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # STACK DE DATOS — uno solo, permanente
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  postgres:
+    restart: unless-stopped
+    environment:
+      # Sin defaults de desarrollo: en produccion faltar una variable tiene que
+      # ROMPER, no arrancar con `deruedas/deruedas` (Constitucion Art. 3).
+      POSTGRES_USER: ${POSTGRES_USER:?falta POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?falta POSTGRES_DB}
+      APP_DB_USER: ${APP_DB_USER:?falta APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?falta APP_DB_PASSWORD}
+      # Keycloak vive en la MISMA instancia con base y rol propios (ADR-025
+      # Decision 4): asi queda cubierto por el archivado de WAL de la tarea 9.21
+      # sin trabajo extra. Perder la identidad es tan grave como perder el
+      # negocio.
+      KEYCLOAK_DB_USER: ${KEYCLOAK_DB_USER:?falta KEYCLOAK_DB_USER}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?falta KEYCLOAK_DB_PASSWORD}
+    # ── Archivado de WAL — APAGADO POR DEFECTO, y no es pereza ────────────────
+    #
+    # La version anterior fijaba `archive_mode=on` con
+    # `archive_command=pgbackrest ...`. Al levantarlo en local el 17-ago-2026:
+    #
+    #     sh: pgbackrest: not found
+    #     FATAL: archive command failed with exit code 127
+    #
+    # pgBackRest NO esta en la imagen postgis/postgis. Y un archive_command que
+    # falla es PEOR que no tener archivado: PostgreSQL conserva cada segmento de
+    # WAL esperando poder archivarlo, para siempre, hasta LLENAR EL DISCO. Una
+    # base que se queda sin disco deja de aceptar escrituras.
+    #
+    # O sea que la configuracion "segura" habria tumbado la base sola, sin ayuda
+    # de nadie, en cuanto acumulara suficiente WAL.
+    #
+    # Se prende con la tarea 9.21, y esa tarea tiene que hacerse cargo de que
+    # pgBackRest EXISTA en el contenedor —imagen propia derivada de esta— antes
+    # de poner PG_ARCHIVE_MODE=on. Hasta entonces queda apagado y visible.
+    #
+    # ⚠️ Mientras esto este en `off` NO HAY BACKUP CONTINUO, y el RPO de 5 min
+    #    que quedo comprometido en ESC-001 no tiene con que sostenerse.
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=replica"
+      - "-c"
+      - "archive_mode=${PG_ARCHIVE_MODE:-off}"
+      - "-c"
+      - "archive_command=${PG_ARCHIVE_COMMAND:-/bin/true}"
+      - "-c"
+      - "max_wal_senders=3"
+    logging: &logging_produccion
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  redis:
+    restart: unless-stopped
+    logging: *logging_produccion
+
+  opensearch:
+    restart: unless-stopped
+    environment:
+      # ⚠️ El base desactiva el plugin de seguridad, que es correcto SOLO en
+      # local. Aca se revierte: sin esto OpenSearch queda abierto a cualquiera
+      # que alcance la red de Docker.
+      DISABLE_SECURITY_PLUGIN: "false"
+      #
+      # ⚠️ Y la configuracion de demo queda ACTIVA, que parece contradictorio.
+      #
+      # Activar la seguridad NO es levantar una bandera: el plugin necesita
+      # certificados TLS y un archivo de usuarios internos. Con la demo
+      # desactivada no hay ninguna de las dos cosas y OpenSearch NI ARRANCA:
+      #
+      #     SslSettingsManager.loadConfigurations ... no configuration found
+      #
+      # Detectado el 17-ago-2026 levantando la topologia en local.
+      #
+      # QUE DA LA CONFIGURACION DE DEMO: TLS con certificados autofirmados y el
+      # usuario `admin` con la clave de OPENSEARCH_INITIAL_ADMIN_PASSWORD. Es
+      # MUCHO mejor que seguridad apagada, y es defendible mientras OpenSearch
+      # no publique puertos ni pase por Caddy — solo se alcanza desde la red de
+      # Docker.
+      #
+      # QUE NO DA, y queda como trabajo pendiente del bloque 9: certificados
+      # propios en vez de autofirmados, y purgar los usuarios de demo
+      # (`kibanaserver`, `logstash`, etc.) que vienen con claves conocidas.
+      # Mientras eso no se haga, esto es un piso, no el destino.
+      DISABLE_INSTALL_DEMO_CONFIG: "false"
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_PASSWORD:?falta OPENSEARCH_PASSWORD}
+      OPENSEARCH_JAVA_OPTS: ${OPENSEARCH_JAVA_OPTS:--Xms1g -Xmx1g}
+      # El par de credenciales viaja ARMADO en una sola variable, no en dos.
+      #
+      # Lo necesita el HEALTHCHECK, que corre DENTRO del contenedor: si no se
+      # declara acá, la variable se expande a vacío ahí adentro, la sonda falla
+      # siempre, el servicio nunca llega a `healthy` y `up --wait` se cuelga
+      # hasta el timeout.
+      #
+      # Y va armado —no `usuario` y `clave` por separado— porque el escáner de
+      # secretos busca el patrón `-u algo:algo` en una línea de curl, y lo busca
+      # con razón: es donde se filtran credenciales. El patrón no puede
+      # distinguir una variable de un valor, así que la solución no es explicarle
+      # que es una variable, es que no haya dos puntos en el literal.
+      OPENSEARCH_AUTH: ${OPENSEARCH_USER:?falta OPENSEARCH_USER}:${OPENSEARCH_PASSWORD:?falta OPENSEARCH_PASSWORD}
+    healthcheck:
+      # Con seguridad activa el health responde por HTTPS y pide credenciales.
+      test:
+        - "CMD-SHELL"
+        - 'curl -fsS -k -u "$${OPENSEARCH_AUTH}" https://localhost:9200/_cluster/health || exit 1'
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    logging: *logging_produccion
+
+  keycloak:
+    restart: unless-stopped
+    # ⚠️ CAMBIO CRITICO — ADR-025 Decision 4.
+    # El base usa `start-dev`, que guarda TODO en una H2 embebida dentro del
+    # contenedor. En local esta bien. En produccion significa que usuarios,
+    # realms y credenciales SE PIERDEN en el primer reinicio del contenedor.
+    # No es un riesgo teorico: pasa la primera vez que se reinicia.
+    #
+    # `start` a secas, SIN `--optimized`. Ese flag exige un `kc.sh build` previo
+    # y en un contenedor recien creado no existe: Keycloak muere en bucle con
+    #
+    #     ERROR: The '--optimized' flag was used for first ever server start.
+    #
+    # Detectado el 17-ago-2026 levantando la topologia en local. Sin `--optimized`
+    # el arranque hace el build solo: tarda mas la primera vez y funciona.
+    command: ["start"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?falta KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?falta KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB_NAME:-keycloak}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER:?falta KEYCLOAK_DB_USER}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?falta KEYCLOAK_DB_PASSWORD}
+      # TLS termina en Caddy. Sin estas dos, Keycloak arma las URLs de los
+      # tokens con el host interno y el flujo OIDC se rompe en el navegador.
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:?falta KEYCLOAK_HOSTNAME}
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      # El realm de produccion se importa UNA VEZ (runbook 03), no en cada
+      # arranque: `start` sin --import-realm.
+      - ./infra/vps/keycloak:/opt/keycloak/data/import:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+      # Sin esto Keycloak puede arrancar antes de que su base exista y morir
+      # con un error de conexion que no dice nada sobre la causa real.
+      keycloak-db-init: { condition: service_completed_successfully }
+    logging: *logging_produccion
+
+  minio:
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?falta S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?falta S3_SECRET_KEY}
+      # Las URLs prefirmadas tienen que ser alcanzables desde el navegador, asi
+      # que se emiten contra el dominio publico que sirve Caddy.
+      MINIO_BROWSER_REDIRECT_URL: ${CDN_BASE_URL:?falta CDN_BASE_URL}
+    logging: *logging_produccion
+
+  minio-init:
+    restart: "no"
+
+  # ── Base de Keycloak — servicio efimero, mismo patron que minio-init ────────
+  #
+  # NO es un script de initdb, y la distincion importa. Los scripts de
+  # /docker-entrypoint-initdb.d corren una sola vez y SOLO con el directorio de
+  # datos vacio: sobre una instalacion que ya tiene datos —que es el caso en
+  # cuanto el VPS lleve un dia andando— no correrian nunca, y Keycloak arrancaria
+  # contra una base inexistente.
+  #
+  # Ademas el montaje era imposible: el archivo base ya monta
+  # /docker-entrypoint-initdb.d de solo lectura, y Docker no puede crear un punto
+  # de montaje adentro de un montaje read-only. Las dos cosas se detectaron el
+  # 17-ago-2026 reproduciendo la topologia en la maquina local, antes de tocar
+  # ningun servidor.
+  #
+  # Corre en cada arranque del stack de datos y es idempotente: la primera vez
+  # crea el rol y la base, las siguientes solo re-aplica la clave —asi una
+  # rotacion en el archivo de secretos se sincroniza sola— y sale.
+  keycloak-db-init:
+    image: postgis/postgis:16-3.4-alpine
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:?falta POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:?falta POSTGRES_DB}
+      KEYCLOAK_DB_USER: ${KEYCLOAK_DB_USER:?falta KEYCLOAK_DB_USER}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?falta KEYCLOAK_DB_PASSWORD}
+      KEYCLOAK_DB_NAME: ${KEYCLOAK_DB_NAME:-keycloak}
+    volumes:
+      - ./infra/vps/postgres/init:/init:ro
+    entrypoint: ["psql", "-v", "ON_ERROR_STOP=1", "-f", "/init/10-keycloak.sql"]
+    restart: "no"
+    networks: [default]
+
+  # ── mailhog NO EXISTE en produccion ────────────────────────────────────────
+  # Es un capturador de correo de prueba: se traga todo y no envia nada. Si
+  # llegara a levantar, produccion no mandaria un solo mail — ni recuperacion de
+  # cuenta ni notificaciones — y fallaria EN SILENCIO, que es la peor forma.
+  #
+  # El profile lo deja inerte: los scripts de despliegue nombran sus servicios y
+  # nunca activan este profile. Se declara solo en el override, asi el `docker
+  # compose up -d` de local sigue levantando mailhog como siempre.
+  mailhog:
+    profiles: ["nunca-en-produccion"]
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # STACK DE APLICACION — dos, alternandose (azul / verde)
+  # ═══════════════════════════════════════════════════════════════════════════
+  #
+  # STACK_COLOR lo fija el agente de despliegue. Sin el, el alias de red queda
+  # sin color y Caddy no puede distinguir los stacks: por eso rompe a proposito.
+
+  backend:
+    # Imagen publicada por el pipeline, etiquetada con el SHA del commit
+    # (ADR-023: el SHA ES el tag). `build` desaparece: el VPS no compila.
+    image: ${REGISTRY:?falta REGISTRY}/backend:${IMAGE_TAG:?falta IMAGE_TAG}
+    build: !reset null
+    restart: unless-stopped
+    volumes: !reset []          # sin hot-reload: el codigo viene en la imagen
+    environment:
+      APP_ENV: ${APP_ENV:?falta APP_ENV}
+      API_BASE_URL: ${API_BASE_URL:?falta API_BASE_URL}
+      CORS_ORIGINS: ${CORS_ORIGINS:?falta CORS_ORIGINS}
+      OPENSEARCH_URL: https://opensearch:9200
+      OPENSEARCH_USER: ${OPENSEARCH_USER:?falta OPENSEARCH_USER}
+      OPENSEARCH_PASSWORD: ${OPENSEARCH_PASSWORD:?falta OPENSEARCH_PASSWORD}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:?falta KEYCLOAK_URL}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:?falta KEYCLOAK_REALM}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?falta KEYCLOAK_CLIENT_SECRET}
+      KEYCLOAK_JWKS_URL: ${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
+      TENANT_SECRETS_MASTER_KEY: ${TENANT_SECRETS_MASTER_KEY:?falta TENANT_SECRETS_MASTER_KEY}
+      # mailhog no existe aca: SMTP real (ADR-025, proveedor Resend).
+      SMTP_HOST: ${SMTP_HOST:?falta SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:?falta SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?falta SMTP_PASSWORD}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    healthcheck:
+      # /ready, no /health. /health dice "el proceso vive"; /ready dice "puede
+      # atender trafico", que es lo que decide si este stack merece el upstream.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *logging_produccion
+
+  worker:
+    image: ${REGISTRY:?falta REGISTRY}/backend:${IMAGE_TAG:?falta IMAGE_TAG}
+    build: !reset null
+    restart: unless-stopped
+    volumes: !reset []
+    # ⚠️ CERO REPLICAS POR DEFECTO — ADR-025 Decision 2.
+    #
+    # Durante los 5 minutos de humo el stack nuevo esta levantado pero el proxy
+    # todavia no conmuto. Si su worker se conectara al broker COMPARTIDO,
+    # empezaria a consumir trabajo real de produccion ANTES de ser promovido: un
+    # despliegue malo afectaria los trabajos en segundo plano aunque el upstream
+    # nunca se mueva, y el humo —que solo mira HTTP— no lo veria.
+    #
+    # El agente lo escala a 1 al promover, y baja el del stack saliente.
+    deploy:
+      replicas: ${WORKER_REPLICAS:-0}
+    environment:
+      APP_ENV: ${APP_ENV:?falta APP_ENV}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?falta KEYCLOAK_CLIENT_SECRET}
+      TENANT_SECRETS_MASTER_KEY: ${TENANT_SECRETS_MASTER_KEY:?falta TENANT_SECRETS_MASTER_KEY}
+      SMTP_HOST: ${SMTP_HOST:?falta SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:?falta SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?falta SMTP_PASSWORD}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    logging: *logging_produccion
+
+  frontend-web:
+    image: ${REGISTRY:?falta REGISTRY}/frontend-web:${IMAGE_TAG:?falta IMAGE_TAG}
+    build: !reset null
+    restart: unless-stopped
+    volumes: !reset []
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?falta NEXT_PUBLIC_API_BASE_URL}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:?falta NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?falta NEXTAUTH_SECRET}
+    logging: *logging_produccion
+
+# ─────────────────────────────────────────────────────────────────────────────
+networks:
+  # Externa: la crea el runbook 03, no Compose. Es lo que permite que los tres
+  # proyectos se vean entre si.
+  default:
+    name: deruedas_prod_default
+    external: true
+  observability:
+    name: deruedas_prod_observability
+    external: true

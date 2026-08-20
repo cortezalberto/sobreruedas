@@ -4,7 +4,7 @@
 
 Ver [`proposal.md`](proposal.md) §Why para la motivación. Lo que condiciona el diseño:
 
-- **El §4.1 del plan de implementación es vinculante** (N2 según [`ADR-000`](../../../decisions/ADR-000-precedencia-documental.md)). Define el árbol del monorepo hasta el nivel de archivo. Apartarse exige un ADR.
+- **El §4.1 del plan de implementación es vinculante** (N2 según [`ADR-000`](../../../docs/adr/ADR-000-precedencia-documental.md)). Define el árbol del monorepo hasta el nivel de archivo. Apartarse exige un ADR.
 - **El repositorio ya no está vacío**: tiene `docs/` con los 11 documentos fuente convertidos, `knowledge-base/`, `CHANGES.md`, `decisions/` y `openspec/`. El §4.1 fue escrito asumiendo un repositorio limpio.
 - **No hay tabla canónica de variables de entorno** en ningún documento del corpus (`R-3`). La de `08_arquitectura_propuesta.md` está derivada del stack, no transcripta.
 - **`IN-22` e `IN-29` ya están resueltos** por `ADR-000`. Este change los ejecuta; no los vuelve a discutir.
@@ -127,35 +127,56 @@ Seis jobs paralelos donde se puede, con dependencias mínimas:
 | `test-backend-unit` | `pytest -m 'not integration'` con cobertura — **gate 80 % / 60 %** | Sí |
 | `test-backend-integration` | `docker compose -f docker-compose.test.yml up` + `pytest -m integration` | Sí |
 | `test-frontend` | `vitest run` con cobertura | Sí |
-| `security` | `pip-audit` · `npm audit` · `gitleaks` | Sí (alta/crítica; **cualquier** secreto) |
+| `security` | `pip-audit` · `npm audit` · `gitleaks` | Sí — ver abajo |
 
 Disparadores: propuesta de cambio contra `main` y push a `main`. Caché de dependencias de `pip` y `npm` para sostener el presupuesto de 15 minutos.
 
-`gitleaks` corre además en pre-commit (regla dura 4), pero se repite en CI: un hook local es una cortesía, no un control.
+`gitleaks` corre además en pre-commit, pero **el control es CI**: un hook local es una cortesía — se saltea con `--no-verify`.
 
-### D-7 — Despliegue a staging: Kubernetes con GitOps
+> **Corregido el 17-ago-2026.** Esta línea afirmaba el hook de pre-commit cuando **`.pre-commit-config.yaml` no existía**, igual que la regla dura 4 y `knowledge-base/12`. No era un agujero de seguridad —CI tenía el control de verdad— sino un documento que describía mal el sistema. Lo creó [`ADR-027`](../../../docs/adr/ADR-027-escaneres-de-seguridad-declarados-vs-reales.md), que además descartó `trufflehog` con motivo registrado y agregó `trivy` entre el build y la firma de imágenes.
 
-Fijado por [`ADR-015`](../../../decisions/ADR-015-orquestacion-kubernetes-y-gitops.md), que cierra `IN-16`. **Kubernetes** como plataforma de orquestación, **ArgoCD** como mecanismo de despliegue.
+**Umbral de bloqueo del job `security` — enmendado el 17-ago-2026.** La versión anterior de este cuadro decía *"alta/crítica"* a secas, y de ahí salió un escenario de `platform/delivery-pipeline` que afirmaba que las bajas y medias *"se reportan sin bloquear"*. **Eso último no lo pedía nadie**: la [`constitucion`](../../../docs/sdd/deRuedas-constitucion.md) (N0) dice *"las vulnerabilidades de severidad alta o crítica bloquean el merge"* y no pone techo. El escenario había convertido un **piso en un techo**.
+
+| Auditor | Expone severidad | Política | Relación con el piso de N0 |
+|---|---|---|---|
+| `npm audit --audit-level=high` | Sí | Bloquea alta y crítica, informa el resto | Lo cumple exacto |
+| `pip-audit` | **No** | Bloquea ante **cualquier** hallazgo | Más estricto, a propósito |
+| `gitleaks` | N/A | Bloquea ante cualquier detección | Otro requisito, sin umbral |
+
+Ser más estricto que el piso está permitido; bajar de él, no. La alternativa para `pip-audit` —filtrar por una severidad que la herramienta no reporta— obliga a mantener a mano una lista de excepciones, y cada build rojo se vuelve una invitación a agregarle una entrada sin saber qué tapa.
+
+**Dónde vive la decisión.** Hasta esta enmienda vivía **solo en un comentario de `ci.yml`**, y por el **Principio 5** una decisión implícita no es vinculante. Ahora la fija el requisito *"Seguridad de dependencias y secretos"* de la delta spec y la sostiene [`test_auditoria_de_dependencias.py`](../../../backend/tests/unit/test_auditoria_de_dependencias.py), que rechaza `--ignore-vuln`, `|| true` y `continue-on-error` sobre el `ci.yml` real.
+
+> ⚠️ **Hallazgo al margen, sin resolver.** El [`plan-seguridad`](../../../docs/sdd/deRuedas-plan-seguridad.md) §1415 (N3) dice *"pip-audit: bloqueante para vulnerabilidades críticas; **warning para altas**"*, que **contradice a N0**. Por [`ADR-000`](../../../docs/adr/ADR-000-precedencia-documental.md) N3 prevalece sobre N1 en seguridad pero **nunca sobre N0**, así que el plan está equivocado en ese renglón. Hoy no rompe nada —bloquear todo satisface a los dos—, pero cualquier movimiento hacia una herramienta que exponga severidad lo despierta. No se corrige acá: `docs/sdd/` es corpus fuente inmutable.
+
+### D-7 — Despliegue a staging: VPS único con Docker Compose
+
+> **Reemplazado el 17-ago-2026.** Esta decisión estaba fijada por [`ADR-015`](../../../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) — Kubernetes con ArgoCD sobre nube gestionada — que quedó **superado** por [`ADR-023`](../../../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md).
+
+**Un VPS único en Hostinger con Docker Compose.** Sin Kubernetes, sin ArgoCD, sin Terraform.
 
 Reparto de responsabilidades:
 
-| Herramienta | De qué se hace cargo |
+| Pieza | De qué se hace cargo |
 |---|---|
-| **Terraform** | El cluster, la red, la base gestionada, buckets, registry, DNS y certificados. Lo que tiene ciclo de vida propio. |
-| **ArgoCD** | Las cargas de trabajo: `Deployment`, `Service`, `Ingress`, `ConfigMap`. Lo que cambia con cada release. |
-| **GitHub Actions** | Construir, firmar y publicar imágenes, y actualizar el tag en el repositorio de manifests. **Nada más.** |
+| **Docker Compose** | Todas las cargas de trabajo, con el mismo archivo del entorno local más un override de producción. |
+| **Reverse proxy** (Caddy o Traefik) | TLS automático y la conmutación azul-verde entre los dos stacks. |
+| **GitHub Actions** | Construir, firmar y publicar imágenes etiquetadas con el SHA. **Nada más.** |
+| **Agente en el VPS** | Detectar el tag nuevo y aplicar el despliegue. El VPS tira; el pipeline no empuja. |
 
-La frontera es deliberada: **GitHub Actions nunca recibe credenciales del cluster.** Su permiso máximo es escribir un tag en un repositorio git. Comprometer el pipeline de CI no da acceso al cluster.
+La frontera de seguridad **se conserva del diseño anterior**: **GitHub Actions nunca recibe acceso al servidor de producción.** Su permiso máximo es publicar una imagen. Comprometer el pipeline de CI no da acceso al VPS. Era el argumento más fuerte de `ADR-015` y sobrevive intacto al cambio de infraestructura — por eso el despliegue lo inicia un agente que tira, y no un `ssh` desde el workflow, que hubiera sido más simple y habría regalado justamente ese control.
 
-**Azul-verde en Kubernetes**: dos `ReplicaSet` conviviendo y un `Service` cuyo selector decide cuál recibe tráfico. Las pruebas de humo corren contra el pool nuevo **antes** de conmutar el selector. Si fallan, el selector no se mueve — el pool viejo nunca dejó de servir.
+**Azul-verde sobre Compose**: dos stacks conviviendo y un reverse proxy cuyo *upstream* decide cuál recibe tráfico. Las pruebas de humo corren contra el stack nuevo **antes** de conmutar. Si fallan, el upstream no se mueve — el stack viejo nunca dejó de servir.
 
-Esto simplifica el requisito de reversión de `platform/delivery-pipeline`: no hay que revertir nada, alcanza con **no conmutar**.
+Esto simplifica el requisito de reversión de `platform/delivery-pipeline` igual que antes: no hay que revertir nada, alcanza con **no conmutar**. El requisito **no cambió**; es agnóstico de tecnología.
 
-**El entorno local no cambia.** Docker Compose sigue siendo el entorno de desarrollo; Kubernetes empieza en staging. Levantar un cluster local para desarrollar sería complejidad sin contrapartida.
+**El entorno local tampoco cambia**, y ahora por una razón más fuerte: producción corre el mismo Docker Compose con un override. Dejan de ser dos tecnologías distintas separadas por la frontera local/staging.
+
+**Lo que se pierde, asumido**: sin GitOps no hay detección de deriva. Un cambio hecho a mano sobre el VPS no lo denuncia nadie. Y sobre un nodo único quedan dos compromisos del plan de SRE sin poder cumplirse — escalado a Dirección + SRE por `ADR-023`.
 
 ### D-8 — Trazas distribuidas: Tempo, no Jaeger
 
-Fijado por [`ADR-016`](../../../decisions/ADR-016-trazas-distribuidas-tempo.md), que cierra `IN-15`. **No afecta a C-01** — se registra acá porque apareció al reunir la evidencia de `IN-16` y porque obliga a corregir `T-030`, que cae en C-03.
+Fijado por [`ADR-016`](../../../docs/adr/ADR-016-trazas-distribuidas-tempo.md), que cierra `IN-15`. **No afecta a C-01** — se registra acá porque apareció al reunir la evidencia de `IN-16` y porque obliga a corregir `T-030`, que cae en C-03.
 
 Tres documentos dicen Jaeger (`spec-tecnica` N1, `plan-implementacion` N2, `mejoras-y-saas` N4) y uno dice Tempo (`plan-sre` N3). Gana **Tempo** por competencia de dominio: las trazas son dominio propio de SRE, y `ADR-000` reparte autoridad en vez de contar documentos.
 
@@ -187,10 +208,18 @@ No hay datos ni usuarios: no hay migración de estado. La única mudanza es de a
 
 ## Open Questions
 
-**Ninguna.** `IN-16` era la única, y quedó cerrada por [`ADR-015`](../../../decisions/ADR-015-orquestacion-kubernetes-y-gitops.md) el 13-ago-2026: Kubernetes con ArgoCD. Ver D-7.
+`IN-16` quedó cerrado, primero por [`ADR-015`](../../../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) el 13-ago-2026 y **de nuevo** por [`ADR-023`](../../../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) el 17-ago-2026, que lo supersede. Ver D-7.
 
-Se deja registrado, porque forma parte del razonamiento: la recomendación inicial de este documento era la contraria —Terraform sobre contenedores gestionados, sin Kubernetes— por cautela operativa en la Ola 0. El Tech Lead priorizó portabilidad entre proveedores y despliegue declarativo desde el inicio, evitando una migración futura a cambio de complejidad temprana. Es un trade-off legítimo y las contras quedan asumidas explícitamente en `ADR-015` §Consecuencias.
+Vale la pena registrar el recorrido, porque cierra un círculo: **la recomendación inicial de este documento era no usar Kubernetes** —contenedores gestionados, por cautela operativa en la Ola 0—. El Tech Lead la descartó priorizando portabilidad y despliegue declarativo. `ADR-023` vuelve a la opción simple por una razón distinta de la original: no cautela operativa, sino **costo base** sobre un producto que compite contra Excel. Las contras de esa vuelta están asumidas en `ADR-023` §Consecuencias, y no son las mismas que se habían discutido en su momento — ahora se pierde portabilidad y detección de deriva.
 
-`IN-16` no se resolvió aplicando `ADR-000` sino llenando un vacío: N1 guarda silencio sobre orquestación, N2 la deja condicional (*"si aplica"*) y el único documento que nombra Kubernetes es N4, no normativo. Es la regla 4 de `ADR-000` funcionando — un vacío documental es un riesgo abierto, no una licencia para inferir.
+`IN-16` nunca se resolvió aplicando `ADR-000` sino llenando un vacío: N1 guarda silencio sobre orquestación, N2 la deja condicional (*"si aplica"*) y el único documento que nombra Kubernetes es N4, no normativo. Es la regla 4 de `ADR-000` funcionando — un vacío documental es un riesgo abierto, no una licencia para inferir. Que el vacío se haya llenado dos veces con respuestas opuestas confirma que era un vacío, no una regla mal leída.
+
+**Abiertas desde `ADR-023`** — ninguna bloquea a C-01, las tres exceden su alcance:
+
+| Pregunta | Quién decide |
+|---|---|
+| El nodo único no sostiene el *"DR en región alternativa"* (RTO 4 h) ni el 99.9 % de Enterprise, que tiene crédito del 25 % escrito contra él | **Dirección + SRE** (`ADR-023` §Conflicto declarado con N3) |
+| Cifrado en reposo: un VPS no tiene KMS gestionado. ¿Cifrado de volumen del proveedor, o `pgcrypto` por campo? | Seguridad |
+| Rotación **trimestral automatizada** de secretos: la ofrecía el gestor del proveedor. SOPS cifra pero no rota, así que el compromiso quedó sin mecanismo | Seguridad |
 
 **Con esto, T-008 queda desbloqueado y el change es implementable de punta a punta.**

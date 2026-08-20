@@ -1,0 +1,226 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Este archivo esta en el arbol del §4.1 pero NINGUNA tarea T-XXX lo declara en
+# su lista de archivos: ni T-004 ni T-005 lo nombran. Se atribuye a T-001, que
+# es la tarea duena de la estructura del monorepo.
+#
+# Sin el no hay forma de correr un test, y el bloque 4 es TDD estricto.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[project]
+name = "deruedas-backend"
+version = "0.1.0"
+description = "API de deRuedas Gestion — SaaS multi-tenant para agencias de vehiculos"
+requires-python = "==3.12.*"   # ADR-003, version exacta
+
+dependencies = [
+    # Configuracion — lo unico que T-004 necesita de verdad.
+    "pydantic>=2.7,<3",
+    "pydantic-settings>=2.2,<3",
+
+    # API. Entra en uso en el bloque 5 (T-005), pero el CMD del Dockerfile y el
+    # servicio `backend` del compose ya lo invocan.
+    "fastapi>=0.111,<1",
+    # Lo exige `UploadFile` — sin esto, FastAPI levanta un `RuntimeError` al
+    # ARMAR la ruta, o sea al importar la aplicacion. No es una dependencia
+    # opcional del endpoint de importacion: sin ella no arranca nada.
+    "python-multipart>=0.0.9,<1",
+    "uvicorn[standard]>=0.30,<1",
+
+    # Persistencia. Bloque 6 (T-007) y en adelante.
+    "sqlalchemy[asyncio]>=2.0,<3",   # API moderna, no legacy
+    "alembic>=1.13,<2",
+    "asyncpg>=0.29,<1",
+
+    # Cache, Streams y cola. ADR-009.
+    "redis>=5.0,<6",
+    "celery>=5.4,<6",
+
+    # Verificacion de los tokens que emite Keycloak (ADR-007, T-013).
+    #
+    # El extra `[crypto]` NO es opcional: arrastra `cryptography`, y sin ella
+    # PyJWT no puede verificar RS256 — que es el algoritmo que el realm firma.
+    # Sin el extra, la libreria importa igual y falla recien al validar el
+    # primer token, o sea en produccion.
+    #
+    # Se declara DIRECTA aunque ya venia arrastrada por otra dependencia: algo
+    # de lo que depende la validacion de identidad no puede estar en el arbol
+    # por casualidad, a merced de que un paquete intermedio la suelte.
+    "pyjwt[crypto]>=2.8,<3",
+
+    # Cliente HTTP del backend. Hoy lo usa una sola cosa —bajar el JWKS del
+    # realm— y por eso mismo va declarada: ya venia instalada como dependencia
+    # de desarrollo (cliente de tests de FastAPI), y apoyarse en eso dejaria la
+    # validacion de identidad rota en produccion, donde los extras de `dev` no
+    # se instalan.
+    "httpx>=0.27,<1",
+
+    # Observabilidad. C-03, bloque 1.
+    #
+    # ⚠️ VAN JUNTAS Y SE AUDITAN JUNTAS. `pip-audit` bloquea ante cualquier
+    # vulnerabilidad porque no expone severidad (ADR-027), asi que agregar
+    # siete paquetes de una es siete veces la chance de dejar el pipeline en
+    # rojo. Por eso el bloque 1 del change las instala y las audita ANTES de
+    # escribir codigo de aplicacion: si una tiene que salir, mejor enterarse
+    # el primer dia y no con cuatro modulos colgando de ella.
+    #
+    # El SDK de OpenTelemetry NO es opcional aunque el exportador si lo sea:
+    # los tres pilares se correlacionan por `trace_id` (knowledge-base/13), y
+    # sin el SDK no hay identificador de traza del que colgar los logs. Sin
+    # `OTEL_EXPORTER_OTLP_ENDPOINT` la app arranca igual y no exporta.
+    "python-json-logger>=2.0,<4",
+    "prometheus-client>=0.20,<1",
+    "sentry-sdk>=2.0,<3",
+    "opentelemetry-sdk>=1.25,<2",
+    "opentelemetry-exporter-otlp>=1.25,<2",
+    # Los paquetes `-instrumentation-` llevan su propio versionado `0.x`,
+    # acoplado al `1.x` del SDK pero independiente de el. Por eso el piso se
+    # escribe distinto y no lleva techo de serie mayor.
+    "opentelemetry-instrumentation-fastapi>=0.46b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.46b0",
+]
+
+[project.optional-dependencies]
+# Los pisos de `pytest` y `black` los fija el job de seguridad del CI, no el
+# gusto: PYSEC-2026-1845 (pytest, corregida en 9.0.3) y PYSEC-2026-2120 /
+# PYSEC-2026-2121 (black, corregidas en 26.3.0 y 26.3.1). `pip-audit` bloquea
+# ante cualquier vulnerabilidad porque no expone severidad, asi que bajar
+# cualquiera de los dos pisos deja el pipeline en rojo.
+#
+# `pytest-asyncio` sube a la serie 1.x a proposito. Manteniendo el techo `<1`,
+# pip retrocedia hasta 0.23.3 para poder instalar pytest 9: esa version no
+# declara incompatibilidad, pero tampoco soporta pytest 9 -- es compatibilidad
+# accidental. La serie 1.x lo soporta de verdad.
+dev = [
+    "pytest>=9.0.3,<10",
+    "pytest-asyncio>=1.0,<2",
+    "pytest-cov>=6.0,<8",
+    "httpx>=0.27,<1",        # cliente de tests de FastAPI
+    "ruff>=0.4,<1",
+    "mypy>=1.10,<2",
+    "black>=26.3.1,<27",
+    # Fabricas de datos de prueba (T-033). Declarada desde C-02, sin fabricas
+    # concretas todavia: la primera entidad de negocio es `users` y nace en
+    # C-05. Ver el bloque 5 de openspec/changes/core-backend-primitives/tasks.md.
+    "factory_boy>=3.3,<4",
+    # Para los gates que leen los workflows de CI y las migraciones (C-01 bloque
+    # 9, tareas 9.14 y regla dura 13). Hace falta PARSEAR, no matchear texto: los
+    # propios workflows mencionan `ssh` en comentarios para explicar por que esta
+    # prohibido, y un `grep` se rompería contra el archivo que debe aprobar.
+    "pyyaml>=6.0,<7",
+    "types-PyYAML>=6.0,<7",   # mypy --strict no acepta yaml sin stubs
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+# Explicito a proposito, no por gusto: si se deja sin fijar, pytest-asyncio
+# emite un warning en tiempo de configuracion, y `--strict-config` (mas abajo)
+# convierte ese warning en error. El pipeline se caeria por un default no
+# declarado, que es el peor motivo posible para un rojo.
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "integration: usa servicios reales (PostgreSQL, Redis, MinIO). Se excluye de la corrida unitaria.",
+]
+addopts = "--strict-markers --strict-config"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Umbrales fijados por docs/adr/ADR-014-umbrales-de-cobertura.md:
+# 80 % de lineas y 60 % de ramas, ambos globales sobre el backend, bloqueantes.
+[tool.coverage.run]
+source = ["app"]
+branch = true          # sin esto no hay cobertura de ramas que medir
+
+# ⚠️ SIN ESTO, COVERAGE MIENTE. SQLAlchemy async ejecuta el codigo sincronico
+# dentro de un GREENLET (`greenlet_spawn`), y el trazador de coverage no lo
+# sigue: lineas que corren de verdad —probadas, con su assert verde— figuran
+# como no cubiertas. Se detecto con el `except IntegrityError` de
+# `importacion_servicio.py`, que un test ejercitaba y el reporte daba por
+# muerto.
+#
+# El sintoma es traicionero: no dice "falta probar", dice "esto no se ejecuta".
+# Y esconde lo que SI falta entre las lineas que solo la herramienta no ve.
+concurrency = ["greenlet", "thread"]
+omit = [
+    # Exclusiones UNA POR UNA, con motivo. ADR-014 prohibe expresamente los
+    # comodines amplios: una exclusion que nadie puede auditar es un agujero
+    # con permiso.
+    "app/__init__.py",   # marcador de paquete, sin logica
+]
+
+[tool.coverage.report]
+fail_under = 80          # lineas — Constitucion Art. 2
+precision = 2
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",       # solo se evalua al chequear tipos
+    "raise NotImplementedError",
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "B",        # bugbear
+    "UP",       # pyupgrade
+    "S",        # bandit — seguridad
+]
+ignore = [
+    "E501",     # largo de linea: lo maneja black
+]
+
+[tool.ruff.lint.per-file-ignores]
+# S101: assert. Es el mecanismo de pytest; prohibirlo en tests no tiene sentido.
+"tests/**" = ["S101"]
+
+[tool.ruff.lint.isort]
+# Existe un directorio backend/alembic/, asi que isort infiere que `alembic` es
+# modulo propio del proyecto y lo quiere agrupar con `app`. Es la libreria de
+# terceros: el directorio solo aloja las migraciones.
+known-third-party = ["alembic"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.12"
+strict = true            # regla dura 6 del proyecto
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+
+# asyncpg no publica stubs ni marcador py.typed. El override es POR MODULO, no
+# global: silenciar los imports sin tipar en todo el proyecto taparia errores
+# reales del codigo propio.
+[[tool.mypy.overrides]]
+module = ["asyncpg.*"]
+ignore_missing_imports = true
+
+# Celery tampoco publica `py.typed`. Mismo criterio que asyncpg: el override es
+# POR MODULO. `disallow_untyped_decorators` se relaja solo para `app.core.tasks`
+# —el unico archivo que usa `@app.task`— y no globalmente: un decorador sin
+# tipar borra la firma de lo que decora, y eso solo se acepta donde el
+# decorador es de terceros y no hay alternativa.
+[[tool.mypy.overrides]]
+module = ["celery.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["app.core.tasks"]
+disallow_untyped_decorators = false

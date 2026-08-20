@@ -1,0 +1,31 @@
+# Configuracion de ruff para lo que vive FUERA de `backend/`.
+#
+# Por que existe este archivo: hasta el 18-ago-2026 nadie linteaba `tools/`. El
+# job `lint-backend` corre con `working-directory: backend` sobre `app tests
+# alembic`, asi que los cuatro verificadores del repositorio —los mismos que
+# hacen de gate en CI— quedaban fuera de ruff, de black y de mypy.
+#
+# NO se duplican las reglas: `extend` hereda la seleccion completa de
+# `backend/pyproject.toml` (E, W, F, I, B, UP, S y el ignore de E501). Si esa
+# lista cambia, esto la sigue sola. Lo unico que se agrega aca son las
+# excepciones que `tools/` necesita y `backend/` no.
+extend = "backend/pyproject.toml"
+
+[lint.per-file-ignores]
+# S101 (assert): es el mecanismo de pytest. `backend/pyproject.toml` ya lo
+# ignora para `tests/**`, pero ese patron se resuelve contra la raiz de SU
+# configuracion —`backend/`— y no alcanza a `tools/tests/`.
+"tools/tests/**" = ["S101"]
+
+# S603 y S607: llamadas a subprocess con lista de argumentos fija, sin shell y
+# sin entrada del usuario. Son deliberadas y son el punto de estos archivos:
+#
+#   - los tests invocan los verificadores COMO PROCESO, porque lo que hace de
+#     gate es el codigo de salida y no el valor de retorno de una funcion;
+#   - `extract-docx-text.py` le pregunta a `git ls-files` que documentos estan
+#     versionados, en vez de mirar el disco.
+#
+# S607 marca el uso de `git` por PATH en vez de ruta absoluta. Fijarla haria el
+# script no portable entre el runner de Linux y las maquinas de desarrollo, que
+# es exactamente lo que no queremos de una herramienta del repositorio.
+"tools/**" = ["S603", "S607"]

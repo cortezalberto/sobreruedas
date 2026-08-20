@@ -1,0 +1,8 @@
+.next
+node_modules
+package-lock.json
+
+# Generados: formatearlos es ruido y ademas los reescribe la herramienta que
+# los produce en la corrida siguiente.
+coverage
+next-env.d.ts

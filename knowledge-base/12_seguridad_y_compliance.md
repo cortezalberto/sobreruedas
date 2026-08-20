@@ -45,15 +45,17 @@ Threat model resumido de la spec técnica (§8.1), consistente: filtración cros
 
 **Bloqueo por fuerza bruta** (escalonado): 5 intentos → 5 min · 10 intentos → 30 min · 20 intentos → **24 h + notificación al usuario**.
 
-⚠️ **Tensión no resuelta**: la tabla `users` tiene `password_hash NOT NULL`, pero el plan de seguridad dice que la aplicación nunca maneja contraseñas. Ver `IN-06` (bloqueante).
+✅ **Tensión resuelta el 17-ago-2026 por [`ADR-026`](../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md)**: `users` **no lleva** `password_hash`. El plan de seguridad tenía razón — el hash argon2id vive en Keycloak y *"deRuedas no tiene acceso al hash"* (§160). Consecuencia para esta sección: **no hay superficie propia de credenciales que auditar** — ni hash que filtrar, ni endpoint de login que sufra *credential stuffing*, ni lógica de reseteo propia.
 
 ## Autorización
 
-Roles canónicos: **`super_admin`, `manager`, `salesperson`, `admin_staff`** ⚠️ (`IN-01`, `IN-02`).
+Roles canónicos: **`super_admin`, `manager`, `salesperson`, `admin_staff`** — decididos por [`ADR-017`](../docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md), **sin condición desde el 20-ago-2026**, cuando se ratificó `E-001`. Cuatro en el sistema, **tres en `user_role_enum`**: `super_admin` vive en `super_admins`, fuera de `users`.
 
-**No existe en el corpus una matriz RBAC tabular completa rol × permiso.** El plan de seguridad lo reconoce explícitamente: solo lista los 4 roles y da ejemplos puntuales de permisos finos. La matriz reconstruida está en [03_actores_y_roles.md](03_actores_y_roles.md).
+✅ **La matriz RBAC canónica es [`ADR-024`](../docs/adr/ADR-024-matriz-rbac-canonica.md)**, que cierra el riesgo `R-2`. El corpus no la tenía: el plan de seguridad solo listaba los 4 roles y daba ejemplos puntuales, y las dos vistas parciales que la KB había reconstruido en [03_actores_y_roles.md](03_actores_y_roles.md) no coincidían entre sí. `ADR-024` las reconcilió aplicando la precedencia de `ADR-000` e incorporó las reglas `RN-*` y el principio `S3`, que ninguna de las dos había cruzado.
 
-Ejemplo de permiso fino documentado: `salesperson` tiene lectura de todos los vehículos del tenant, pero **solo puede editar `internal_notes` y `assigned_user_id`**.
+`S3` **prohíbe la herencia entre roles**: cada celda se enumera, `manager` no hereda de `salesperson`, y agregar un permiso a uno no se lo da al otro.
+
+Ejemplos de permiso fino, que en `ADR-024` dejan de ser ejemplos y pasan a ser celdas: `salesperson` lee todos los vehículos del tenant pero **solo edita `internal_notes` y `assigned_user_id`**, y **no ve `acquisition_cost_ars`** (`RN-ST-12`) — este último obliga a restringir campos **también en lectura**, no solo en escritura.
 
 Endpoint especial: `/admin/api/v1/tenants/{tenant_id}` requiere `super_admin` y es el **único que admite `tenant_id` por path**.
 
@@ -83,7 +85,7 @@ Controles:
 
 **Enmascaramiento en logs**: obligatorio para toda PII. Los DNI aparecen como `***12345`.
 
-**Sin secretos en código, config ni logs**: `gitleaks` + `trufflehog` en pre-commit y en CI.
+**Sin secretos en código, config ni logs**: **`gitleaks` en CI** —historia completa + texto de los `.docx`— y en `pre-commit` como conveniencia. **`trufflehog` descartado** por [`ADR-027`](../docs/adr/ADR-027-escaneres-de-seguridad-declarados-vs-reales.md) §3.
 
 ## Protección de datos personales
 
@@ -152,14 +154,16 @@ Campos: `trace_id`, `user_id`, `tenant_id`, `ip`, `user_agent`, `action`, `entit
 | `pip-audit` | SCA Python | **Bloqueante** en crítico; warning en alto |
 | `npm audit` | SCA JS | **Bloqueante** en crítico |
 | `Trivy` | Imágenes Docker | **Bloqueante** en crítico |
-| `gitleaks` / `trufflehog` | Secretos | **Bloqueante** ante cualquier detección |
+| `gitleaks` | Secretos | **Bloqueante** ante cualquier detección. `trufflehog` descartado — `ADR-027` §3 |
 | `sbom-generator` | SPDX, por release | — |
 | `cosign` (Sigstore) | Firma de imágenes | — |
 | **OWASP ZAP** | DAST, passive scan sobre staging con el tráfico de los tests E2E | *high* bloquea |
 
 Regla constitucional: **las vulnerabilidades de severidad alta o crítica bloquean el merge**.
 
-**Gestión de secretos**: KMS / secret manager del cloud provider (AWS Secrets Manager o Google Secret Manager). Rotación **trimestral automatizada** para las credenciales que lo soportan; ejercicio anual obligatorio de rotación de secretos de tenant.
+**Gestión de secretos**: ⛔ ~~KMS / secret manager del cloud provider (AWS Secrets Manager o Google Secret Manager)~~ → **SOPS + age** desde [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md). Rotación **trimestral automatizada** para las credenciales que lo soportan; ejercicio anual obligatorio de rotación de secretos de tenant.
+
+⚠️ **La rotación automatizada queda sin mecanismo.** La ofrecía el gestor del proveedor; SOPS cifra pero no rota. El compromiso trimestral sigue siendo exigible y hoy no tiene con qué cumplirse — o se implementa el procedimiento, o se declara la excepción. `ADR-023` no lo cubre.
 
 **Pentesting**: **anual** con vendor externo, más bajo demanda tras cambios mayores. La primera auditoría externa de seguridad técnica es un hito de Ola 1 (horizonte 0-6 meses).
 

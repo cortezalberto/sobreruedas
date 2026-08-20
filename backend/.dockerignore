@@ -1,0 +1,20 @@
+# Cache de Python: son .pyc compilados para OTRA version del interprete que la
+# de la imagen. Copiarlos no rompe el build pero puede confundir al runtime.
+__pycache__
+*.py[cod]
+.venv
+venv
+
+# Resultados de herramientas: no aportan a la imagen y le invalidan la cache
+# de capas en cada corrida local.
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+.coverage
+coverage.xml
+
+.env
+.env.local
+Dockerfile
+.dockerignore

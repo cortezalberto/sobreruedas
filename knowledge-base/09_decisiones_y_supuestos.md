@@ -92,7 +92,7 @@ Cuando dos principios entran en tensión, **gana el que aparece primero**, salvo
 **Decisión**: Keycloak como servicio de identidad, autohospedado. JWT RS256.
 **Alternativas**: *Auth a medida* — descartado por regla constitucional (Artículo 3). *Auth0 / Cognito* — descartado por costo a escala y dependencia de proveedor.
 **Trade-offs**: operar Keycloak agrega carga operacional. Mitigación: documentación operativa específica.
-⚠️ **Tensión interna no resuelta**: la tabla `users` de la spec tiene `password_hash NOT NULL`, mientras que §8.3 dice que "la aplicación nunca maneja contraseñas". Ver `IN-06`.
+✅ **Tensión resuelta el 17-ago-2026 por [`ADR-026`](../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md)**: la columna `password_hash` **no se crea**. `users` es el espejo local del usuario de Keycloak, y el login es Authorization Code + PKCE con el frontend como cliente OIDC. La spec se contradecía a sí misma (§221 daba la columna, §1546 decía que la aplicación nunca maneja contraseñas); ganó §1546, respaldada por N0, N3 y T-040.
 
 ### DD-08 — ADR-008: Object storage S3-compatible *[Aceptado]*
 
@@ -219,4 +219,4 @@ Ninguno de estos está escrito como supuesto en las fuentes. Son las condiciones
 
 **Consecuencia (contraintuitiva)**: al estar confirmado el supuesto, **la recencia queda descartada como criterio de desempate**. Los timestamps ordenan por *generación*, no por *deliberación* — y los últimos por fecha (`plan-gtm` 01:18, `manual-usuario` 02:12) son los menos autoritativos por contenido. El escenario de riesgo descrito arriba **no se cumple**: las contradicciones son deriva de generación, no revisiones sin propagar. No hay respuesta oculta que recuperar por arqueología; cada una exige una decisión.
 
-Formalizado en [`ADR-000`](../decisions/ADR-000-precedencia-documental.md), que también cierra `PA-01`.
+Formalizado en [`ADR-000`](../docs/adr/ADR-000-precedencia-documental.md), que también cierra `PA-01`.

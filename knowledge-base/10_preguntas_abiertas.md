@@ -3,17 +3,31 @@
 > Este archivo es el **resultado del chequeo de consistencia cruzada** sobre los 11 documentos fuente (~19.900 líneas, leídos íntegramente).
 > Se documentaron **54 inconsistencias reales**: **14 bloqueantes** (Parte 1) + **40 no bloqueantes** (Parte 2). Bloqueante significa que no se puede escribir la migración, el enum, el quality gate o el contrato de API correspondiente sin una decisión humana previa.
 >
-> **Bloqueantes (14):** `IN-01`, `IN-02`, `IN-03`, `IN-04`, `IN-05`, `IN-06`, `IN-07`, `IN-10`, `IN-12`, `IN-13`, `IN-22`, `IN-23`, `IN-29`, `IN-31`.
+> **Bloqueantes (14):** ~~`IN-01`~~ ✅, ~~`IN-02`~~ ✅, ~~`IN-03`~~ ✅, ~~`IN-04`~~ ✅, `IN-05`, ~~`IN-06`~~ ✅, `IN-07`, `IN-10`, `IN-12` ⚠️ *(a) cerrado, 4 filas abiertas*, `IN-13`, ~~`IN-22`~~ ✅, `IN-23`, ~~`IN-29`~~ ✅, ~~`IN-31`~~ ✅. **Quedan 5 abiertos** (`IN-05`, `IN-07`, `IN-10`, `IN-13`, `IN-23`) más las 4 filas restantes de `IN-12`.
+>
+> ✅ **Cerrados al 13-ago-2026, con el ADR que los cierra:**
+>
+> | Entrada | ADR |
+> |---|---|
+> | `IN-01` · `IN-02` · `PA-02` | [`ADR-017`](../docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md) + [`E-001`](../docs/adr/E-001-enmienda-glosario-super-admin.md) |
+> | `IN-15` · `PA-20` (trazas) | [`ADR-016`](../docs/adr/ADR-016-trazas-distribuidas-tempo.md) |
+> | `IN-16` · `PA-20` (orquestación) | [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) — supersede a [`ADR-015`](../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) desde el 17-ago-2026 |
+> | **`IN-22`** · `PA-08` | [`ADR-014`](../docs/adr/ADR-014-umbrales-de-cobertura.md) |
+> | **`PA-06`** · **`R-3`** | [`ADR-013`](../docs/adr/ADR-013-variables-de-entorno.md) |
+> | **`IN-29`** · `PA-14` | [`ADR-018`](../docs/adr/ADR-018-anclas-de-adr-del-plan-de-implementacion.md) |
+> | `PA-01` · `IN-31` · `SU-12` | [`ADR-000`](../docs/adr/ADR-000-precedencia-documental.md) |
+>
+> ⚠️ Las secciones de `IN-01`, `IN-02` e `IN-31` más abajo **todavía no llevan su marca de resuelto** — están cerradas por ADR, pero el texto de la Parte 1 conserva la redacción original. Leer siempre esta tabla primero.
 >
 > ⚠️ **Defectos de este mismo archivo** (registrados para no repetir el patrón que `IN-37` le denuncia al plan de implementación):
-> - `IN-15` (Jaeger vs Tempo) e `IN-16` (Kubernetes con o sin ArgoCD) **se referencian en las Partes 3 y 4 pero nunca se documentan como entradas** en la Parte 2. Eran referencias colgadas. ✅ **Ambas resueltas el 13-ago-2026** — `IN-15` por [`ADR-016`](../decisions/ADR-016-trazas-distribuidas-tempo.md) (gana **Tempo**, competencia de dominio de SRE sobre N1) e `IN-16` por [`ADR-015`](../decisions/ADR-015-orquestacion-kubernetes-y-gitops.md) (**Kubernetes + ArgoCD**, decisión que llena un vacío: N1 no menciona orquestación).
+> - `IN-15` (Jaeger vs Tempo) e `IN-16` (Kubernetes con o sin ArgoCD) **se referencian en las Partes 3 y 4 pero nunca se documentan como entradas** en la Parte 2. Eran referencias colgadas. ✅ **Ambas resueltas el 13-ago-2026** — `IN-15` por [`ADR-016`](../docs/adr/ADR-016-trazas-distribuidas-tempo.md) (gana **Tempo**, competencia de dominio de SRE sobre N1) e `IN-16` por [`ADR-015`](../docs/adr/ADR-015-orquestacion-kubernetes-y-gitops.md) (**Kubernetes + ArgoCD**, decisión que llena un vacío: N1 no menciona orquestación). ⛔ **`IN-16` se reabrió y volvió a cerrarse el 17-ago-2026** por [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md): el despliegue va a un **VPS único con Docker Compose**, sin Kubernetes ni ArgoCD. `ADR-015` queda superado.
 > - Los identificadores `IN-55` e `IN-56` no existen: la serie salta de `IN-54` a `IN-57`. Es un hueco de numeración, no información faltante.
 >
 > Criterio de clasificación:
 > - 🔴 **BLOQUEANTE** — hay que decidir *antes* de escribir código. Dos documentos vinculantes dicen cosas incompatibles sobre el mismo artefacto.
 > - 🟡 **No bloqueante** — se puede avanzar eligiendo una opción y documentándola; el costo de equivocarse es reversible.
 >
-> ✅ **Precedencia — RESUELTA.** `PA-01` quedó cerrada por [`ADR-000`](../decisions/ADR-000-precedencia-documental.md) (2026-08-13): **jerarquía por autoridad con competencia por dominio**.
+> ✅ **Precedencia — RESUELTA.** `PA-01` quedó cerrada por [`ADR-000`](../docs/adr/ADR-000-precedencia-documental.md) (2026-08-13): **jerarquía por autoridad con competencia por dominio**.
 >
 > | Nivel | Documentos | Autoridad |
 > |---|---|---|
@@ -108,7 +122,7 @@ Además, `users.tenant_id` es `FK NOT NULL` — un `super_admin` de deRuedas **n
 
 ---
 
-## 🔴 IN-06 — `users.password_hash NOT NULL` contradice la delegación total a Keycloak
+## ✅ ~~IN-06~~ — RESUELTO por [`ADR-026`](../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) (17-ago-2026)
 
 **`spec-tecnica.md`** §3.3, tabla `users`: `password_hash varchar(255) NOT NULL` — *"Hash argon2id. Nunca se loguea ni serializa."*
 **`spec-tecnica.md`** §8.3: *"La autenticación se delega **íntegramente** a Keycloak. **La aplicación nunca maneja contraseñas** en texto plano."*
@@ -118,7 +132,13 @@ Sin embargo, **`spec-tecnica.md`** §4.2.1 y **`plan-implementacion.md`** define
 
 **Impacto**: define si la tabla `users` lleva la columna `password_hash` o no, y si el flujo de login es *redirect a Keycloak* (Authorization Code + PKCE) o *proxy de credenciales* (Resource Owner Password Credentials, un grant desaconsejado y en vías de deprecación en OAuth 2.1).
 
-**Resolución propuesta**: eliminar `password_hash` de `users`, tratar la tabla como espejo local del usuario de Keycloak, y definir `/auth/login` como el callback del flujo OIDC —no como un endpoint que reciba contraseñas.
+**Resolución adoptada** — [`ADR-026`](../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md), gobernanza CRÍTICA, decidido por el Tech Lead:
+
+1. **`users` NO lleva `password_hash`.** La tabla es el espejo local del usuario de Keycloak; el vínculo es el `sub` del token (`ADR-021`).
+2. **El login es Authorization Code + PKCE**, con el frontend como cliente OIDC (NextAuth en web, `expo-auth-session` en móvil). El backend solo valida el JWT. **ROPC descartado** explícitamente.
+3. **De los 8 endpoints de `/auth` de §4.2.1 sobreviven 2**: `GET /auth/me` (el espejo local, que Keycloak no conoce) y `POST /auth/logout` (dispara el *end-session*). Los otros seis los presta Keycloak — escribirlos sería *"construir autenticación a medida"*, que N0 prohíbe.
+
+> **El planteo original de este bloqueante era desbalanceado.** Presentaba dos lados como si pesaran igual. Del lado de "la app nunca ve la contraseña" están **N0, N1 §1546, N3 §160 y §503, y N2 T-040** (*"NextAuth con Keycloak provider; PKCE habilitado"*); del otro lado, **una columna y una línea de endpoint**. Y la `spec-tecnica` **se contradice a sí misma**: §1546 dice que la aplicación nunca maneja contraseñas y §221 le da una columna para el hash. No hizo falta desempatar entre documentos — alcanzó con leer el documento completo.
 
 ---
 
@@ -157,11 +177,17 @@ Sin embargo, **`spec-tecnica.md`** §4.2.1 y **`plan-implementacion.md`** define
 | Fusionar contactos | `POST /contacts/merge` | `POST /contacts/{primary_id}/merge` |
 | Eliminar etapa de pipeline | `DELETE /pipeline/stages/{id}` | `POST /pipeline/stages/{id}/archive` |
 | Completar actividad | `PATCH /activities/{id}/complete` | `PATCH /activities/{id}` |
-| Aceptar invitación | `POST /api/v1/users/accept-invitation` (T-024) | `POST /auth/accept-invitation` (T-054) — **contradicción dentro del mismo documento**, distinto prefijo y distinto namespace |
+| ~~Aceptar invitación~~ ✅ | ~~`POST /api/v1/users/accept-invitation` (T-024)~~ | ✅ **RESUELTO** → `POST /api/v1/auth/accept-invitation` por [`ADR-026`](../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) §4 |
 
 **Impacto**: el frontend genera sus tipos desde el `openapi.yaml`. Estos son contratos incompatibles, no variaciones de estilo. El caso de `accept-invitation` es especialmente grave porque es una **contradicción interna del plan de implementación**: dos tareas del mismo documento declaran paths distintos para la misma acción.
 
-**Resolución propuesta**: la spec técnica es la fuente vinculante de contratos de API (§1.1 lo declara). Pero `won`/`lost` como endpoints separados es mejor diseño (evita un payload polimórfico) y es lo que se va a implementar. Decidir uno y actualizar el `openapi.yaml` como fuente única.
+**Resolución propuesta** (para las cuatro filas que siguen abiertas): la spec técnica es la fuente vinculante de contratos de API (§1.1 lo declara). Pero `won`/`lost` como endpoints separados es mejor diseño (evita un payload polimórfico) y es lo que se va a implementar. Decidir uno y actualizar el `openapi.yaml` como fuente única.
+
+> ✅ **`IN-12(a)` cerrado el 17-ago-2026.** `accept-invitation` va a **`POST /api/v1/auth/accept-invitation`** ([`ADR-026`](../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) §4): es un endpoint **público** —se llama con un token de invitación, sin sesión— y todo lo pre-autenticación vive bajo `/auth`; además deja `/api/v1/users/*` uniformemente autenticado, así el middleware lleva una regla en vez de una excepción. Se corrige de paso que T-054 lo escribía **sin el prefijo `/api/v1`**.
+>
+> **Y su alcance se achica**: aceptar una invitación normalmente incluye fijar la contraseña, y eso pasa a ser trabajo de Keycloak. El endpoint activa el espejo local y lo vincula al sujeto. **No recibe ni fija contraseña.**
+>
+> Las otras cuatro filas de `IN-12` siguen abiertas y caen en C-11, C-24, C-25 y C-26.
 
 ---
 
@@ -179,7 +205,10 @@ Sin embargo, **`spec-tecnica.md`** §4.2.1 y **`plan-implementacion.md`** define
 
 ---
 
-## 🔴 IN-22 — Umbral de cobertura de tests: cuatro valores distintos
+## ✅ ~~🔴 IN-22~~ — Umbral de cobertura de tests: cuatro valores distintos — **RESUELTA**
+
+> ✅ **Cerrada el 13-ago-2026** por [`ADR-014`](../docs/adr/ADR-014-umbrales-de-cobertura.md): **80 % de líneas y 60 % de ramas**, ambos globales sobre el backend, bloqueantes en CI, más la verificación de que la cobertura no decrece respecto de `main`.
+> Líneas: gana N0 (y N2 coincide). Ramas: N0 guarda silencio, así que gobierna `plan-testing` (N3) por competencia de dominio. Se enmienda el **plan de testing**, no la constitución. Lo que sigue es el registro del conflicto original.
 
 **`constitucion.md`** Artículo 2: *"La cobertura mínima del código backend es **ochenta por ciento** medida sobre líneas."* — vinculante.
 **`spec-tecnica.md`** §7.2: *"mínimo **80 %** para módulos core (auth, stock, crm, communication, finance), **70 %** para los demás."*
@@ -209,7 +238,9 @@ Notablemente, el plan de implementación fija objetivos *aún más estrictos* qu
 
 ---
 
-## 🔴 IN-29 — La numeración de ADRs no coincide entre la spec y el plan de implementación
+## ✅ ~~🔴 IN-29~~ — La numeración de ADRs no coincide entre la spec y el plan de implementación — **RESUELTA**
+
+> ✅ **Cerrada el 13-ago-2026** por [`ADR-018`](../docs/adr/ADR-018-anclas-de-adr-del-plan-de-implementacion.md): manda la numeración de `spec-tecnica` (N1 > N2). Dos anclas mal apuntadas — `ADR-002` está etiquetado "Migrations" cuando es **PostgreSQL**, y `ADR-005` está usado como "OpenSearch" cuando es **React Native con Expo** (OpenSearch es `ADR-011`). El plan **no se edita**: lleva una anotación delimitada que remite al ADR. Lo que sigue es el registro del conflicto original.
 
 | ADR | `spec-tecnica.md` §5 | `plan-implementacion.md` (anclas de tareas) |
 |---|---|---|
@@ -454,12 +485,12 @@ El manual **no cubre permutas** (épica E6, 7 HU) ni **financiación** (épica E
 
 | Prioridad | Pregunta | Bloquea | Decisor |
 |---|---|---|---|
-| ✅ ~~Crítica~~ | ~~`PA-01` — ¿Cuál es el orden de precedencia entre documentos cuando se contradicen?~~ **RESUELTA** por [`ADR-000`](../decisions/ADR-000-precedencia-documental.md) (2026-08-13): jerarquía N0→N4 con competencia por dominio; recencia descartada por evidencia de los metadatos `.docx`. `SU-12` validado. Resuelve mecánicamente `IN-22`, `IN-29` e `IN-31`. | ~~Todo~~ | Tech Lead + Product Manager |
-| 🟡 ~~Crítica~~ | ~~`PA-02` — ¿4 roles o 3? ¿`super_admin` va en `user_role_enum`, en tabla aparte, o solo en Keycloak?~~ **DECIDIDA** por [`ADR-017`](../decisions/ADR-017-catalogo-de-roles-y-super-admin.md): **4 roles en el sistema, 3 en `user_role_enum`**; `super_admin` en **tabla aparte** exenta de RLS, con `users.tenant_id` intacto en `NOT NULL`. ⏳ **Condicionada a la ratificación de la enmienda [`E-001`](../decisions/E-001-enmienda-glosario-super-admin.md)** — discusión abierta hasta el 20-ago-2026. (`IN-01`, `IN-02`) | Migración inicial, RBAC, tests de autorización | Tech Lead |
+| ✅ ~~Crítica~~ | ~~`PA-01` — ¿Cuál es el orden de precedencia entre documentos cuando se contradicen?~~ **RESUELTA** por [`ADR-000`](../docs/adr/ADR-000-precedencia-documental.md) (2026-08-13): jerarquía N0→N4 con competencia por dominio; recencia descartada por evidencia de los metadatos `.docx`. `SU-12` validado. Resuelve mecánicamente `IN-22`, `IN-29` e `IN-31`. | ~~Todo~~ | Tech Lead + Product Manager |
+| ✅ ~~Crítica~~ | ~~`PA-02` — ¿4 roles o 3? ¿`super_admin` va en `user_role_enum`, en tabla aparte, o solo en Keycloak?~~ **DECIDIDA Y RATIFICADA** por [`ADR-017`](../docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md): **4 roles en el sistema, 3 en `user_role_enum`**; `super_admin` en **tabla aparte** exenta de RLS, con `users.tenant_id` intacto en `NOT NULL`. ✅ **La enmienda [`E-001`](../docs/adr/E-001-enmienda-glosario-super-admin.md) se ratificó el 20-ago-2026** — constitución **v1.1**, `ADR-017` sin condición. (`IN-01`, `IN-02`) | Migración inicial, RBAC, tests de autorización | Tech Lead |
 | **Crítica** | `PA-03` — ¿La facturación es en ARS o en USD? (`IN-04`) | Esquema de `plans`/`subscriptions`, integración con Mercado Pago, todo el GTM | Dirección |
 | **Crítica** | `PA-04` — ¿Cuáles son los límites definitivos por plan, y se agrega la cuota de mensajes de WhatsApp al modelo? (`IN-03`, `IN-50`) | `PlanLimitsService`, seed de `plans` | Product Manager + Dirección |
 | **Crítica** | `PA-05` — ¿`audit_logs` se retiene 24 meses o 5 años? ¿Qué obligación legal aplica realmente? (`IN-13`, `IN-35`, `IN-49`) | Particionado, costo de storage, compliance | Legal + Tech Lead |
-| **Alta** | `PA-06` — ¿Existe una tabla canónica de variables de entorno? Ningún documento la tiene; la de [08_arquitectura_propuesta.md](08_arquitectura_propuesta.md) está **derivada del stack**, no transcripta. | Setup de entornos, Terraform | Tech Lead |
+| ✅ ~~Alta~~ | ~~`PA-06` — ¿Existe una tabla canónica de variables de entorno?~~ **RESUELTA** por [`ADR-013`](../docs/adr/ADR-013-variables-de-entorno.md) (2026-08-13): **35 variables en 12 grupos**, 15 sensibles. Dos correcciones sobre la KB (`APP_ENV` en vez de `ENVIRONMENT`, JWKS URL en vez de clave embebida) y un grupo nuevo (`PaymentSettings`). Cierra también `R-3`. | Setup de entornos (⛔ ya no Terraform — `ADR-023`) | Tech Lead |
 | **Alta** | `PA-07` — ¿Cuántas etapas trae el pipeline por defecto y cómo se llaman? (`IN-10`) | Seed de onboarding de cada tenant | Product Manager |
 | ✅ ~~Alta~~ | ~~`PA-08` — ¿Cuál es el umbral de cobertura del quality gate?~~ **RESUELTA** por `ADR-000`: **80 %** — N3 (`plan-testing`) no gana sobre N0 ni en su dominio propio. Se enmienda el **plan de testing**, no la constitución. (`IN-22`) | CI (bloquea merges) | Tech Lead |
 | ✅ ~~Alta~~ | ~~`PA-09` — ¿El SLA es 99.0/99.5/99.9 o 99.9/99.9/99.95?~~ **RESUELTA** por `ADR-000`: **99.0 / 99.5 / 99.9** — competencia de dominio, disponibilidad es dominio propio de `plan-sre` (N3 > N1). Compatible con el SLO interno de 99.7 %. (`IN-31`) | Contratos, créditos, alertas | Dirección + SRE |
@@ -467,13 +498,13 @@ El manual **no cubre permutas** (épica E6, 7 HU) ni **financiación** (épica E
 | **Alta** | `PA-11` — ¿Fases o Olas? Falta la tabla de equivalencia y las fechas de calendario del plan de implementación. (`IN-05`, `IN-38`) | Roadmap, compromisos comerciales | Product Manager |
 | **Alta** | `PA-12` — ¿Existe signup público self-service en el MVP? El GTM lo vende; los planes técnicos lo postergan. (`IN-14`) | Funnel comercial, alcance del MVP | Product Manager |
 | **Alta** | `PA-13` — ¿`domain_plate` es obligatorio? ¿Qué pasa con un 0 km o un usado recién recibido en permuta? (`IN-07`) | Migración de `vehicles` | Product Manager + Tech Lead |
-| ✅ ~~Alta~~ | ~~`PA-14` — ¿Se corrige la numeración de ADRs del plan de implementación?~~ **RESUELTA** por `ADR-000`: **sí** — manda la numeración de `spec-tecnica` (N1 > N2). El plan solo referencia; la spec contiene. Ejecuta **C-01**. (`IN-29`) | Trazabilidad de las 194 tareas | Tech Lead |
+| ✅ ~~Alta~~ | ~~`PA-14` — ¿Se corrige la numeración de ADRs del plan de implementación?~~ **RESUELTA** por `ADR-000` y **ejecutada** por [`ADR-018`](../docs/adr/ADR-018-anclas-de-adr-del-plan-de-implementacion.md) (2026-08-13): manda la numeración de `spec-tecnica` (N1 > N2). El plan solo referencia; la spec contiene. Las dos anclas divergentes quedan inventariadas con archivo y línea. (`IN-29`) | Trazabilidad de las 194 tareas | Tech Lead |
 | **Media** | `PA-15` — ¿Cuál es el ICP real: 1-4 vendedores o 3-15? (`IN-36`) | Diseño de UI, pricing, mensaje comercial | Product Manager + Marketing |
 | **Media** | `PA-16` — ¿Cuál es el límite duro de fotos por vehículo, separado de la recomendación de buena práctica? (`IN-09`) | Validación en `stock`, costo de storage | Product Manager |
 | **Media** | `PA-17` — ¿Se distinguen "lead nuevo sin primer contacto" y "lead sin actividad en su etapa" como dos alertas distintas? (`IN-20`) | Crons de CRM | Product Manager |
 | **Media** | `PA-18` — ¿El trial dura 14 o 30 días? (`IN-21`) | `trial_ends_at`, cadencia comercial | Dirección |
 | **Media** | `PA-19` — ¿Canal en tiempo real: SSE o WebSocket? (`IN-08`) | Módulo `communication`, frontend | Tech Lead |
-| ✅ ~~Media~~ | ~~`PA-20` — ¿Jaeger o Tempo? ¿Kubernetes con o sin ArgoCD?~~ **RESUELTA**: **Tempo** ([`ADR-016`](../decisions/ADR-016-trazas-distribuidas-tempo.md)) y **Kubernetes + ArgoCD** ([`ADR-015`](../decisions/ADR-015-orquestacion-kubernetes-y-gitops.md)). Obliga a corregir `T-030`, que hoy pide levantar Jaeger en `docker-compose`. (`IN-15`, `IN-16`) | Terraform, stack de observabilidad | SRE |
+| ✅ ~~Media~~ | ~~`PA-20` — ¿Jaeger o Tempo? ¿Kubernetes con o sin ArgoCD?~~ **RESUELTA en dos tiempos**: **Tempo** ([`ADR-016`](../docs/adr/ADR-016-trazas-distribuidas-tempo.md)), vigente. La mitad de orquestación se resolvió primero como Kubernetes + ArgoCD (`ADR-015`) y ⛔ **quedó superada el 17-ago-2026** por [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md): **VPS único con Docker Compose, sin Kubernetes, sin ArgoCD y sin Terraform**. Obliga a corregir `T-030`, que hoy pide levantar Jaeger en `docker-compose`. (`IN-15`, `IN-16`) | Stack de observabilidad — su despliegue estaba pensado sobre Kubernetes | SRE |
 | **Media** | `PA-21` — El pipeline configurable en el MVP contradice el Principio 2 de la constitución. ¿Se acepta la excepción o se posterga a F2? (`IN-24`) | Alcance del MVP | Product Manager (requiere justificación documentada) |
 | **Media** | `PA-22` — ¿Se unifican los contratos de API divergentes en un único `openapi.yaml` antes de empezar? (`IN-12`) | Generación de tipos del frontend | Tech Lead |
 | **Media** | `PA-23` — ¿Quién es el proveedor concreto de OCR y de firma electrónica? Los documentos los nombran como categorías, nunca como productos. | Fase 4 (épica E8) | Tech Lead |
@@ -483,6 +514,7 @@ El manual **no cubre permutas** (épica E6, 7 HU) ni **financiación** (épica E
 | **Baja** | `PA-27` — ¿`#974706` es realmente el "Rojo crítico"? Es visualmente indistinguible del "Amarillo atención" `#9C5700`. (`IN-45`) | Design system | Diseño |
 | **Baja** | `PA-28` — ¿El manual de usuario debe cubrir permutas, financiación y cuenta corriente, o se declara explícitamente que documenta solo el MVP? (`IN-48`) | Documentación de cliente | Customer Success |
 | **Baja** | `PA-29` — ¿Se corrigen los conteos internos del plan de implementación (194 tareas, bloque 1.2 = 52, cadena de event bus, T-235)? (`IN-37`, `IN-39`, `IN-40`) | Ejecución por agentes de IA | Tech Lead |
+| ✅ ~~Alta~~ | ~~`PA-30` — La infraestructura elegida **no sostiene los SLA ya decididos**: sobre un nodo único no hay redundancia, ni región alternativa, ni réplica. ¿Se ajusta lo publicado, se dota de redundancia, o se negocia Enterprise caso por caso? **No reabre `PA-09`** — los números (99.0/99.5/99.9) están decididos; lo que falta es si la infra los alcanza. origen en [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) §Conflicto declarado con N3.~~ **RESUELTA** el 17-ago-2026 por [`ESC-001`](../docs/escalaciones/ESC-001-sla-sobre-nodo-unico.md): **se ajusta lo publicado**. Enterprise baja de 99.9 % a **99.5 %** —igualando a Pro, así que la disponibilidad deja de ser su diferencial— y se **retiran** el DR en región alternativa y la réplica de PostgreSQL, que no existían. Los créditos no cambian. Se revisa cuando haya segundo nodo. | Contratos Enterprise, créditos por incumplimiento, compromiso de DR | **Dirección + SRE** |
 | **Baja** | `PA-30` — ¿Qué son los "13 componentes UI primitivos" que menciona el plan de implementación? No están enumerados en ningún documento, y el brand book remite al "design system técnico" que tampoco existe en el corpus. | Frontend | Diseño + Frontend |
 
 ---

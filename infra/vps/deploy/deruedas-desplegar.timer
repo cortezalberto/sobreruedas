@@ -1,0 +1,35 @@
+[Unit]
+# Sondeo del registry — C-01 tarea 9.16
+Description=deRuedas — sondear el registry cada 2 minutos
+Documentation=file:///opt/deruedas/infra/vps/README.md
+
+[Timer]
+# ─────────────────────────────────────────────────────────────────────────────
+# POR QUE DOS MINUTOS
+#
+# El escenario "Integracion exitosa a la rama principal" da un presupuesto de
+# 15 MINUTOS entre el merge y staging reflejando el cambio. El sondeo consume
+# parte de ese presupuesto, asi que no puede ser cualquier numero:
+#
+#   CI                      ~1m20s   (medido, corrida 32063265298)
+#   construir + publicar    ~3m      (dos imagenes, con cache de capas)
+#   espera del sondeo       ~2m      (peor caso: recien paso el timer)
+#   humo                     5m      (fijo, tarea 9.17)
+#   conmutar + promover     ~30s
+#   ──────────────────────────────
+#   total peor caso        ~11m50s   → quedan ~3m de margen
+#
+# Con sondeo cada 5 minutos el peor caso se va a ~15m y el presupuesto queda
+# sin margen. Con sondeo cada minuto se gana poco y se duplican las consultas
+# al registry.
+# ─────────────────────────────────────────────────────────────────────────────
+OnBootSec=3min
+OnUnitActiveSec=2min
+
+# Sin Persistent=true: si el VPS estuvo apagado, no interesa recuperar los
+# sondeos perdidos. Interesa el estado ACTUAL del registry, y la proxima vuelta
+# lo trae igual.
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

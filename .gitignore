@@ -1,6 +1,10 @@
 # Python
 __pycache__/
 *.py[cod]
+# Metadata que setuptools regenera en cada `pip install -e`. No es fuente, y sin
+# esta linea cualquier `git add -A` la arrastra al commit: paso al preparar las
+# sondas de 8.9.
+*.egg-info/
 .venv/
 venv/
 .pytest_cache/
@@ -9,6 +13,13 @@ venv/
 htmlcov/
 .coverage
 coverage.xml
+# Los emite el gate del pipeline (tools/check-coverage.py). Son mediciones de
+# una corrida, no fuente: versionarlas genera conflictos en cada PR.
+coverage.json
+coverage-base.json
+
+celerybeat-schedule
+.tox/
 
 # Node
 node_modules/
@@ -16,6 +27,30 @@ node_modules/
 out/
 dist/
 *.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+.eslintcache
+# Cobertura y reportes del frontend
+coverage/
+playwright-report/
+test-results/
+# Autogenerado por Next en cada build y atado a su version. El propio template
+# de create-next-app lo ignora: versionarlo produce diffs de ruido cada vez que
+# alguien sube Next.
+next-env.d.ts
+
+# Expo (frontend-mobile)
+.expo/
+
+# Infraestructura — estado de Terraform: contiene valores sensibles en claro
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+# Kubeconfig: el pipeline no debe tener credenciales del cluster (ADR-015)
+kubeconfig
+*.kubeconfig
 
 # Entornos y secretos (Constitucion Art. 3 — los secretos NO viven en el repo)
 .env
@@ -36,3 +71,9 @@ Thumbs.db
 
 # Registro de skills — derivado de las skills locales de cada dev
 .atl/
+
+# Configuracion de arranque local del navegador integrado. Fija el PUERTO de la
+# maquina donde se escribio, y los puertos de este proyecto son por maquina
+# (viven en `.env`, que tampoco se versiona). `.claude/commands/` si se versiona:
+# eso es del proyecto, esto es del escritorio de cada uno.
+.claude/launch.json

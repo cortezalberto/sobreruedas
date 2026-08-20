@@ -1,0 +1,49 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Hallazgos de gitleaks revisados uno por uno y descartados con fundamento.
+#
+# ⚠️ ESTO NO ES UNA LISTA PARA SILENCIAR RUIDO.
+#
+# Cada linea es un FINGERPRINT exacto: commit + archivo + regla + numero de
+# linea. No desactiva la regla ni el archivo. Una ocurrencia nueva del mismo
+# patron, en otra linea o en otro commit, se sigue detectando y sigue rompiendo
+# el pipeline. Es la diferencia entre "este caso puntual esta revisado" y "no
+# me molestes mas con esto", y la regla dura 4 solo tolera lo primero.
+#
+# Antes de agregar una linea aca hay que poder responder por que el hallazgo NO
+# es un secreto. Si la respuesta es "porque molesta", la respuesta es no.
+#
+# ⚠️ NO REPRODUZCAS EL PATRON DETECTADO EN ESTOS COMENTARIOS.
+#    gitleaks escanea ESTE archivo tambien. Un comentario que cita la linea
+#    encontrada para explicarla se convierte el mismo en un hallazgo, y hay que
+#    agregar un fingerprint para el archivo de fingerprints. Paso el 17-ago-2026.
+#    Describi el hallazgo con palabras; no lo copies.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── 17-ago-2026 · healthcheck de OpenSearch, tres entradas del mismo enredo ──
+#
+# QUE DETECTO: la regla `curl-auth-user`, que busca credenciales pasadas por la
+# opcion de autenticacion de curl, separadas por dos puntos.
+#
+# POR QUE NO ERA UN SECRETO: lo unico literal era el nombre de usuario. La clave
+# siempre fue una referencia a variable de entorno, que Compose resuelve en el
+# VPS desde el archivo que descifra SOPS. En el repositorio nunca hubo un valor.
+#
+# LA REGLA TENIA RAZON EN DISPARARSE, igual: ese patron es donde se filtran
+# credenciales de verdad, y no puede distinguir a simple vista una variable de
+# un valor.
+#
+# COMO SE ARREGLO DE RAIZ: el par de credenciales pasa a viajar armado en UNA
+# sola variable, asi no queda ningun dos-puntos en el literal y el patron
+# desaparece. El arbol de trabajo actual ya no lo tiene.
+#
+# BONUS: detras del falso positivo habia un bug real. Las variables no estaban
+# declaradas en el entorno del contenedor de OpenSearch, asi que esa sonda habria
+# fallado SIEMPRE y el servicio nunca habria llegado a `healthy`.
+#
+# POR QUE HAY TRES LINEAS Y NO UNA: gitleaks escanea la HISTORIA a proposito
+# (ver el comentario del job `security` en ci.yml), y estos tres commits ya
+# estaban pusheados cuando se detecto. Rehacer la historia habria exigido un
+# force-push sobre una rama ya publicada.
+0af06ad5420373ff0a0454d69446bd06c5af35cd:docker-compose.prod.yml:curl-auth-user:106
+617b791f78949638186cf54a277dcb0efd6a88bb:docker-compose.prod.yml:curl-auth-user:118
+617b791f78949638186cf54a277dcb0efd6a88bb:.gitleaksignore:curl-auth-user:18

@@ -30,22 +30,25 @@ Compite contra Excel, cuadernos y WhatsApp — no contra CRMs enterprise. Eso co
 | Mensajería | WhatsApp Business Cloud API (Meta, directo, sin BSP) | — | ADR-010 |
 | Pagos | Mercado Pago | — | — |
 | Observabilidad | Prometheus + Grafana + Loki + OpenTelemetry + Sentry | — | — |
-| IaC / CI | Terraform + GitHub Actions + Docker Compose | — | — |
+| Despliegue | **VPS único (Hostinger) + Docker Compose** · reverse proxy con TLS automático | — | ADR-023 |
+| CI | GitHub Actions | — | — |
 | Feature flags | Implementación propia (tabla `feature_flags` + servicio cacheado) | — | ADR-012 |
 
-Dos puntos del stack **no están cerrados**: Jaeger vs Tempo (`IN-15`) y el alcance de Kubernetes/ArgoCD (`IN-16`). No los des por decididos.
+Los dos puntos que estaban abiertos ya **están cerrados**: `IN-15` por [`ADR-016`](docs/adr/ADR-016-trazas-distribuidas-tempo.md) (**Tempo**, no Jaeger) e `IN-16` por [`ADR-023`](docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) (**VPS con Docker Compose**, que supersede a `ADR-015`).
+
+⛔ **No hay Kubernetes, ni ArgoCD, ni Terraform.** `ADR-015` los había fijado y quedó superado el 17-ago-2026. Si encontrás una referencia a `infra/k8s/` o `infra/terraform/` en documentación derivada, es residuo — la decisión vigente es `ADR-023`.
 
 ---
 
 ## Base de Conocimiento
 
-Todo en [`knowledge-base/`](knowledge-base/) está **derivado** de los 11 documentos vinculantes en `docs/`. Nada fue inventado; lo que no se pudo derivar quedó como pregunta abierta.
+Todo en [`knowledge-base/`](knowledge-base/) está **derivado** de los 11 documentos vinculantes en `docs/sdd/`. Nada fue inventado; lo que no se pudo derivar quedó como pregunta abierta.
 
 | Archivo | Cuándo leerlo |
 |---|---|
 | [01_vision_y_objetivos.md](knowledge-base/01_vision_y_objetivos.md) | Qué se construye y para quién |
 | [02_descripcion_general.md](knowledge-base/02_descripcion_general.md) | Stack, 16 módulos, catálogo de endpoints |
-| [03_actores_y_roles.md](knowledge-base/03_actores_y_roles.md) | Roles y matriz RBAC ⚠️ (en disputa, `IN-01`) |
+| [03_actores_y_roles.md](knowledge-base/03_actores_y_roles.md) | Roles (`ADR-017`) y forma de la matriz RBAC — **las celdas canónicas están en [`ADR-024`](docs/adr/ADR-024-matriz-rbac-canonica.md)** |
 | [04_modelo_de_datos.md](knowledge-base/04_modelo_de_datos.md) | ~35 entidades, ERD, máquinas de estado, validadores argentinos |
 | [05_reglas_de_negocio.md](knowledge-base/05_reglas_de_negocio.md) | ~130 reglas `RN-{DOMINIO}-{NN}` |
 | [06_funcionalidades.md](knowledge-base/06_funcionalidades.md) | 12 épicas, 92 HU, Definition of Done |
@@ -61,7 +64,7 @@ Todo en [`knowledge-base/`](knowledge-base/) está **derivado** de los 11 docume
 
 ### Precedencia entre fuentes — vinculante
 
-Fijada por [`ADR-000`](decisions/ADR-000-precedencia-documental.md) (resuelve `PA-01`). **Jerarquía por autoridad, con competencia por dominio:**
+Fijada por [`ADR-000`](docs/adr/ADR-000-precedencia-documental.md) (resuelve `PA-01`). **Jerarquía por autoridad, con competencia por dominio:**
 
 | Nivel | Documentos | Autoridad |
 |---|---|---|
@@ -78,7 +81,13 @@ Cuatro reglas que van con eso:
 3. **Todo desvío de N1 por competencia de dominio se registra como ADR.** Sin ADR es decisión implícita y, por el Principio 5, **no es vinculante**.
 4. **Empate de nivel ⇒ la regla es muda** → escala al decisor humano de `PA-XX`. No se elige por antigüedad ni por especificidad.
 
-Los ADRs nuevos del proyecto viven en [`decisions/`](decisions/) — `docs/` es corpus fuente inmutable y `knowledge-base/` es material derivado.
+Los ADRs nuevos del proyecto viven en [`docs/adr/`](docs/adr/) — `docs/sdd/` es corpus fuente inmutable y `knowledge-base/` es material derivado.
+
+> ⚠️ **La inmutabilidad de `docs/sdd/` admite UNA excepción, y una sola**: el historial de enmiendas al final de [`deRuedas-constitucion.md`](docs/sdd/deRuedas-constitucion.md), en modo **append-only** y tramitado por el Artículo 8.
+>
+> No es un desvío: el Artículo 8 cierra diciendo que *"las enmiendas se acumulan al final del documento como historial"*, y por [`ADR-000`](docs/adr/ADR-000-precedencia-documental.md) N0 gana sobre una convención de manejo. El propósito de la inmutabilidad —que nada se reescriba en silencio— lo cumple igual un apéndice que solo agrega. **De la constitución no se reescribe ni una palabra**, y ningún otro documento de `docs/sdd/` se toca por ningún motivo.
+>
+> Decidido el 17-ago-2026 (opción A) en [`E-001`](docs/adr/E-001-enmienda-glosario-super-admin.md) §Obstáculo 2. Queda escrito acá porque las dos reglas, leídas sueltas, se contradicen: una manda escribir al final del documento y la otra prohíbe tocarlo.
 
 `reference/` contiene material del **método** SDD, no del producto. No es fuente de verdad.
 
@@ -133,11 +142,12 @@ Cada change de `CHANGES.md` declara: scope, nivel de gobernanza, dependencias, r
 1. **NUNCA una query sin contexto de tenant** → `SET LOCAL app.current_tenant` + política RLS + `tenant_id` en la query. Las tres capas, siempre. `tenant_id` va **excluido de todo schema Pydantic de entrada** — se deriva del token, nunca del body.
    *Principio 4 · ADR-006 · override `O-3`*
 2. **NUNCA hashear ni verificar contraseñas en la aplicación** → la autenticación se delega **enteramente** a Keycloak. Si ves `password_hash`, `get_password_hash` o `verify_password`, está mal.
-   *Art. 3 · ADR-007 · override `O-1` · bloqueante `IN-06`*
+   *Art. 3 · ADR-007 · [`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) · override `O-1`* — `IN-06` **resuelto** el 17-ago-2026: `users` no lleva `password_hash` y el login es Authorization Code + PKCE.
 3. **NUNCA borrado físico** → soft delete universal. `db.delete(obj)` está prohibido.
    *Principio 3 · override `O-2`*
-4. **NUNCA secretos en el repositorio** → solo `.env.example` sin valores reales. Los secretos viven en AWS Secrets Manager / Google Secret Manager. `gitleaks` + `trufflehog` corren en pre-commit y en CI.
-   *Art. 3*
+4. **NUNCA secretos en claro en el repositorio** → solo `.env.example` sin valores reales. Los secretos de despliegue se versionan **cifrados con SOPS + age**; la clave privada vive únicamente en el VPS y no se versiona nunca. **`gitleaks` es el control**, y corre en CI sobre la historia completa **y** sobre el texto extraído de los `.docx`; debe seguir detectando un secreto en claro que se cuele junto a los cifrados. También corre en `pre-commit`, pero eso es **conveniencia**: un hook local se saltea con `--no-verify`. **`trufflehog` no se usa** — su aporte sobre `gitleaks` es verificar credenciales contra APIs reales, y eso implica llamadas de red con secretos encontrados desde el runner ([`ADR-027`](docs/adr/ADR-027-escaneres-de-seguridad-declarados-vs-reales.md) §3).
+   *Art. 3 · ADR-023 · [`ADR-027`](docs/adr/ADR-027-escaneres-de-seguridad-declarados-vs-reales.md)*
+   > La parte constitucional es **"nunca secretos en el repositorio"**, y sigue intacta: lo que se versiona es texto cifrado, no un secreto legible. Lo que cambió es el gestor. La versión anterior de esta regla nombraba AWS Secrets Manager / Google Secret Manager, que provenía de `spec-tecnica` §1554 (N1) y no existe en este despliegue.
 5. **Cobertura de tests: 80 % de líneas, backend, global** — y **no decrece entre commits**. Un PR que la baje no se mergea sin justificación documentada.
    *Art. 2 — esto resuelve `IN-22` a favor de la constitución, contra el 70 %/60 % del plan de testing*
 
@@ -153,6 +163,12 @@ Cada change de `CHANGES.md` declara: scope, nivel de gobernanza, dependencias, r
 10. **NUNCA commitear ni pushear sin pedido explícito** del usuario.
 11. **Conventional commits** (`tipo(scope): descripción`) + firma `Co-Authored-By` en los commits generados por agente.
 12. **NUNCA implementar sobre un bloqueante sin resolver** → si el change declara un `IN-XX`, se resuelve **al arrancar**, antes de escribir el código que depende de él. Sin esto, "bloqueantes distribuidos" se convierte en "bloqueantes olvidados".
+
+### De despliegue
+
+13. **NUNCA una migración que rompa hacia atrás** → toda migración debe dejar funcionando a la versión **inmediatamente anterior** de la aplicación. Prohibido en un solo paso: renombrar, borrar columna o tabla, `SET NOT NULL` sin default, quitar un valor de enum, o agregar una constraint que el dato existente no cumpla. Se hace en tres despliegues: **expand → migrar → contract**.
+    *`ADR-025`. No es preferencia de estilo: el despliegue azul-verde comparte una sola base entre los dos stacks, así que una migración destructiva **inutiliza el stack viejo**, que es justamente la red de seguridad de la reversión.*
+    > Lo hacen cumplir dos gates de CI: un lint de DDL destructivo —que se levanta solo con el marcador explícito `# migracion-contract:` en la migración— y la suite de integración del commit anterior corrida contra el esquema nuevo.
 
 ---
 
@@ -172,4 +188,4 @@ knowledge-base/  →  CHANGES.md  →  /opsx:propose <change>  →  /opsx:apply 
 
 ---
 
-*Generado por `agent-instruction`. Las reglas duras fueron confirmadas por el usuario; las vinculantes derivan de `docs/deRuedas-constitucion.md`.*
+*Generado por `agent-instruction`. Las reglas duras fueron confirmadas por el usuario; las vinculantes derivan de `docs/sdd/deRuedas-constitucion.md`.*

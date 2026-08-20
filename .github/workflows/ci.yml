@@ -1,0 +1,570 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# deRuedas Gestion — pipeline de integracion continua (T-003, bloque 8 de C-01)
+#
+# Los seis jobs de design.md D-6. Corren TODOS EN PARALELO, sin `needs` entre
+# ellos: encadenarlos solo sumaria espera sin agregar informacion. Quien abre
+# una propuesta de cambio quiere enterarse de los seis resultados de una vez,
+# no del primero que falle.
+#
+# Presupuesto: 15 minutos de punta a punta (D-6). Como los jobs son paralelos,
+# el total es el del job mas lento, no la suma.
+#
+# LO QUE ESTE PIPELINE **NO** HACE: no despliega, no construye imagenes de
+# produccion y no toca el servidor. La frontera que ADR-015 defendio sobrevive
+# intacta a ADR-023 y es no negociable — GitHub Actions nunca recibe
+# credenciales de produccion: antes era el kubeconfig del cluster, hoy es el
+# acceso SSH al VPS. Eso llega en el bloque 9, y su permiso maximo sera
+# publicar una imagen y escribir un tag. El VPS tira; el pipeline no empuja.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Solo lectura. Ningun job de este pipeline necesita escribir en el repositorio;
+# el default de la organizacion puede ser mas amplio y acá se acota a proposito.
+permissions:
+  contents: read
+
+# Un push nuevo sobre la misma rama cancela la corrida anterior: sostiene el
+# presupuesto de 15 min cuando alguien empuja tres veces seguidas.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12" # exacta, ADR-003
+  NODE_VERSION: "22" # Next 16 exige Node >= 20
+
+jobs:
+  # ── 1. Calidad del backend ─────────────────────────────────────────────────
+  lint-backend:
+    name: lint-backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Instalar dependencias
+        run: pip install --editable ".[dev]"
+
+      - name: ruff
+        run: ruff check app tests alembic
+
+      - name: black --check
+        run: black --check app tests alembic
+
+      # `mypy .`, no `mypy app`. La regla dura 6 dice "TODO codigo Python pasa
+      # ruff y mypy --strict", y hasta el 17-ago-2026 este gate cubria solo
+      # `app/`: sobre el proyecto entero habia 28 errores que nadie veia.
+      #
+      # Que los tests queden fuera del tipado no es un detalle de comodidad. De
+      # esos 28, dos eran defectos de verdad y ninguna revision los habia visto:
+      #
+      #   - `assert sesion_de_plataforma is not sesion_de_tenant` — dos objetos
+      #     funcion distintos NUNCA son el mismo, asi que la asercion era
+      #     verdadera siempre y no probaba nada (`comparison-overlap`).
+      #   - `consulta_del_tenant() -> object` cuando devuelve un `Select`, que
+      #     dejaba sin verificar seis llamadas a `paginar`.
+      #
+      # Un test mal tipado es un test que puede estar probando otra cosa.
+      - name: mypy --strict
+        run: mypy .
+
+      # `tools/` queda FUERA de los tres pasos de arriba, porque todos corren
+      # con `working-directory: backend`. Y `tools/` no es codigo accesorio:
+      # son los cuatro verificadores que hacen de gate en este mismo pipeline
+      # —cobertura, paridad de configuracion, enlaces markdown y extraccion de
+      # OOXML para gitleaks—. Hasta el 18-ago-2026 nadie los linteaba, asi que
+      # el codigo que controla la calidad del proyecto era el unico que no
+      # pasaba por el control.
+      #
+      # Se ejecutan desde la raiz y con la configuracion del backend, para que
+      # midan con la MISMA vara y no con los defaults de cada herramienta:
+      # ruff la toma de `ruff.toml` (que hace `extend` de `backend/pyproject`),
+      # y black y mypy por `--config`. Sin eso black formatea a 88 en vez de
+      # 100 y ruff aplica su seleccion por defecto en vez de la del proyecto.
+      - name: ruff · tools
+        working-directory: .
+        run: ruff check tools
+
+      - name: black --check · tools
+        working-directory: .
+        run: black --check --config backend/pyproject.toml tools
+
+      - name: mypy --strict · tools
+        working-directory: .
+        run: mypy --config-file backend/pyproject.toml tools
+
+  # ── 2. Calidad del frontend ────────────────────────────────────────────────
+  lint-frontend:
+    name: lint-frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend-web/package-lock.json
+
+      # `npm ci`, no `npm install`: instala exactamente lo del lockfile y falla
+      # si package.json y package-lock.json divergen. En CI eso es lo que se
+      # quiere — que la corrida sea reproducible, no que se auto-arregle.
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: eslint
+        run: npm run lint
+
+      - name: prettier --check
+        run: npm run format:check
+
+      - name: tsc --noEmit
+        run: npm run typecheck
+
+  # ── 3. Tests unitarios del backend ─────────────────────────────────────────
+  #
+  # Solo unitarios y sin gate de cobertura: este job existe para dar feedback
+  # rapido. El gate vive en test-backend-integration, que es el unico que puede
+  # medir la suite completa. Por eso aca el checkout shallow alcanza.
+  test-backend-unit:
+    name: test-backend-unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Instalar dependencias
+        working-directory: backend
+        run: pip install --editable ".[dev]"
+
+      # El verificador se verifica ANTES de usarlo. Un gate de cobertura roto
+      # que devuelve 0 siempre es peor que no tener gate: da falsa confianza.
+      - name: Tests del verificador de cobertura
+        run: python -m pytest tools/tests -q
+
+      # Solo los unitarios, y SIN gate de cobertura: este job existe para dar
+      # feedback rapido. La medicion de cobertura vive en el job de integracion
+      # — ver el comentario "POR QUE EL GATE DE COBERTURA VIVE ACA" mas abajo.
+      - name: pytest unitario
+        working-directory: backend
+        run: python -m pytest -m 'not integration' -q
+
+  # ── 4. Tests de integracion contra servicios reales ────────────────────────
+  #
+  # Sin mocks de base de datos (regla dura 8). Los servicios los levanta
+  # docker-compose.test.yml: PostgreSQL con PostGIS, Redis, OpenSearch y MinIO,
+  # todos sobre tmpfs y sin volumenes persistentes.
+  #
+  # No se usan `services:` de GitHub Actions a proposito: el compose de tests ya
+  # existe, se usa igual en local, y duplicar la definicion en el workflow es la
+  # forma clasica de que local y CI se desincronicen.
+  test-backend-integration:
+    name: test-backend-integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Historia completa: el chequeo de no decrecimiento mide la base en un
+          # worktree, y `git worktree add` sobre un checkout shallow falla con
+          # codigo 128. Vive aca porque aca vive el gate.
+          #
+          # Se aprendio en la corrida 31949666200: el paso salio 128, el
+          # `continue-on-error` se lo trago, y el gate informo "sin base con que
+          # comparar" — o sea que el control de no decrecimiento no corria y el
+          # job igual daba verde.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Instalar dependencias
+        working-directory: backend
+        run: pip install --editable ".[dev]"
+
+      # `--wait` bloquea hasta que los healthcheck den sano. Sin esto el pytest
+      # arranca contra un PostgreSQL que todavia esta inicializando y el fallo
+      # se lee como un bug del codigo.
+      #
+      # Los servicios van NOMBRADOS uno por uno a proposito. `--wait` espera que
+      # cada servicio quede running o healthy, y `minio-init` es un contenedor
+      # de un solo uso: crea el bucket y termina. Un contenedor que salio no
+      # esta ni running ni healthy, asi que `--wait` sin lista fallaba con
+      # codigo 1 aunque los cinco servicios estuvieran sanos y minio-init
+      # hubiera salido con 0. Paso en la corrida 31902572855.
+      - name: Levantar los servicios efimeros
+        run: docker compose -f docker-compose.test.yml up -d --wait postgres redis opensearch minio
+
+      # `run --rm` en vez de dejarlo colgado del `up`: corre attached y
+      # propaga el codigo de salida, asi un fallo creando el bucket rompe el
+      # job en vez de aparecer despues como un test de MinIO que falla sin
+      # motivo aparente.
+      - name: Crear el bucket de MinIO
+        run: docker compose -f docker-compose.test.yml run --rm minio-init
+
+      # ── POR QUE EL GATE DE COBERTURA VIVE ACA ──────────────────────────────
+      #
+      # Porque medir solo los unitarios miente. Lo medido el 16-ago-2026 sobre
+      # el mismo commit:
+      #
+      #   solo unitarios      app/db/session.py  63.10 %   total  90.86 %
+      #   suite completa      app/db/session.py  95.24 %   total  98.44 %
+      #
+      # `db/session.py` es el aislamiento multi-tenant, y se prueba —tiene que
+      # probarse— contra PostgreSQL de verdad (regla dura 8). Medir excluyendo
+      # los tests de integracion lo mostraba como el archivo peor cubierto del
+      # backend justo cuando era el mejor probado, y hacia aparecer un
+      # decrecimiento de cobertura que no existia.
+      #
+      # Este job es el unico que tiene los servicios arriba, asi que es el unico
+      # que puede correr la suite ENTERA. Los unitarios corren dos veces (una
+      # aca y una en test-backend-unit, que da feedback rapido): son ~6 s contra
+      # la alternativa de combinar cobertura entre dos jobs por artefactos, que
+      # obligaria a un `needs` y serializaria el pipeline — rompiendo el
+      # paralelismo total de D-6.
+      #
+      # El pytest corre en el runner, no adentro del compose, asi que los
+      # servicios se alcanzan por los puertos publicados (desplazados a 5433 y
+      # 6380 para no chocar con el compose de desarrollo).
+      - name: pytest completo con cobertura
+        working-directory: backend
+        env:
+          # DOS DSN, DOS ROLES (ADR-020). El rol de aplicacion no puede saltear
+          # RLS ni tocar el esquema, asi que las migraciones y el andamiaje que
+          # hace DDL van por el propietario. El rol lo crea el init de
+          # infra/local/postgres/init/, que docker-compose.test.yml ya monta:
+          # no hace falta un paso extra en este workflow.
+          TEST_DATABASE_URL: postgresql+asyncpg://mitutu:mitutu@localhost:5433/deruedas_test
+          TEST_DATABASE_OWNER_URL: postgresql+asyncpg://deruedas_test:deruedas_test@localhost:5433/deruedas_test
+          TEST_REDIS_URL: redis://localhost:6380/0
+        run: |
+          python -m pytest -q \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=json:coverage.json
+
+      # ── No decrecimiento (Art. 2 · tarea 8.4) ───────────────────────────────
+      # La base se mide en un worktree aparte y CON EL MISMO CRITERIO que la
+      # rama: suite completa. Compararla contra una medicion solo-unitaria seria
+      # comparar dos cosas distintas y llamarlo retroceso.
+      #
+      # Los tests de la base corren con las dependencias YA instaladas de esta
+      # rama: reinstalar el entorno de main duplicaria el tiempo del job para
+      # una diferencia que casi nunca existe. Si la base no se puede medir, el
+      # paso no rompe y el verificador lo reporta como "sin base" — ausencia de
+      # base no es retroceso.
+      - name: Medir la cobertura de la base
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          # DOS DSN, DOS ROLES (ADR-020). El rol de aplicacion no puede saltear
+          # RLS ni tocar el esquema, asi que las migraciones y el andamiaje que
+          # hace DDL van por el propietario. El rol lo crea el init de
+          # infra/local/postgres/init/, que docker-compose.test.yml ya monta:
+          # no hace falta un paso extra en este workflow.
+          TEST_DATABASE_URL: postgresql+asyncpg://mitutu:mitutu@localhost:5433/deruedas_test
+          TEST_DATABASE_OWNER_URL: postgresql+asyncpg://deruedas_test:deruedas_test@localhost:5433/deruedas_test
+          TEST_REDIS_URL: redis://localhost:6380/0
+        run: |
+          git worktree add /tmp/base ${{ github.event.pull_request.base.sha }}
+
+          # La base puede no tener backend: hoy `main` no lo tiene, porque el
+          # backend entero nace en la rama de C-01. Eso NO es un fallo del
+          # pipeline ni un retroceso de cobertura — es que no hay contra que
+          # comparar. Se distingue a proposito de "la medicion se rompio":
+          # tratar los dos casos como el mismo error deja un `cd: No such file`
+          # crudo en el log, que se lee como pipeline roto.
+          if [ ! -d /tmp/base/backend ]; then
+            echo "::notice::la base ${{ github.event.pull_request.base.sha }} no tiene backend/; no hay cobertura previa con que comparar"
+            exit 0
+          fi
+
+          cd /tmp/base/backend
+          python -m pytest -q \
+            --cov=app \
+            --cov-report=json:"$GITHUB_WORKSPACE/backend/coverage-base.json" \
+            || echo "::warning::no se pudo medir la cobertura de la base; se sigue sin comparar"
+
+      # El gate de verdad. `fail_under` de coverage.py mezcla lineas y ramas en
+      # un solo numero y ADR-014 las pide por separado — ver el encabezado de
+      # tools/check-coverage.py.
+      - name: Gate de cobertura — 80 % lineas / 60 % ramas / no decrece
+        run: |
+          python tools/check-coverage.py \
+            --coverage-json backend/coverage.json \
+            --min-lineas 80 \
+            --min-ramas 60 \
+            --base backend/coverage-base.json
+
+      - name: Logs de los servicios si algo fallo
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs --tail 100
+
+      - name: Apagar y borrar los volumenes
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+  # ── 5. Tests del frontend ──────────────────────────────────────────────────
+  #
+  # Con cobertura pero SIN gate numerico: ADR-014 fija umbrales para el backend
+  # y dice expresamente que no inventa uno para el frontend. Ninguna de las
+  # cuatro fuentes lo define. Queda como pregunta abierta para C-07.
+  test-frontend:
+    name: test-frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend-web/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: vitest con cobertura
+        run: npm run test -- --coverage
+
+      # El build es parte de la verificacion, no del despliegue: `next build`
+      # prerenderiza y ahi aparecen errores que los tests no ven — el de
+      # NODE_ENV del bloque 7 fue exactamente eso.
+      - name: next build
+        run: npm run build
+
+  # ── 6. Seguridad ───────────────────────────────────────────────────────────
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks escanea la HISTORIA, no el arbol de trabajo. Un secreto
+          # commiteado y borrado despues sigue estando en el repositorio, y es
+          # justamente el caso que hay que detectar.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend-web/package-lock.json
+
+      # pip-audit no expone la severidad de cada hallazgo, asi que bloquea ante
+      # CUALQUIER vulnerabilidad -- MAS ESTRICTO que el "alta o critica" que
+      # manda la constitucion, que fija un piso y no un techo.
+      #
+      # Esto NO es una decision de este comentario: la fija el requisito
+      # "Seguridad de dependencias y secretos" de platform/delivery-pipeline, y
+      # la sostiene tests/unit/test_auditoria_de_dependencias.py. Hasta el
+      # 17-ago-2026 vivia solo aca, y por el Principio 5 una decision implicita
+      # no es vinculante.
+      #
+      # NO agregar --ignore-vuln, ni "|| true", ni continue-on-error. El test
+      # los rechaza, y con razon: sin severidad expuesta, perdonar un hallazgo
+      # es perdonar a ciegas, y puede ser una critica.
+      - name: pip-audit
+        working-directory: backend
+        run: |
+          pip install pip-audit
+          pip install --editable ".[dev]"
+          pip-audit --desc
+
+      # `--audit-level=high` sí distingue severidad: bloquea en alta y critica,
+      # informa el resto. Es el piso de la constitucion, exacto -- y por eso
+      # bajarlo a `critical` deja el repositorio POR DEBAJO del piso. El test
+      # de auditoria tambien mira esto.
+      - name: npm audit
+        working-directory: frontend-web
+        run: npm audit --audit-level=high
+
+      # gitleaks corre tambien en pre-commit, y ESTE es el control: un hook
+      # local es una cortesia — se saltea con --no-verify y no existe en la
+      # maquina de quien clona por primera vez.
+      #
+      # Y no son el mismo alcance. El hook mira lo que se esta por commitear;
+      # aca se escanea la HISTORIA COMPLETA mas el texto extraido de los .docx.
+      #
+      # Hasta el 17-ago-2026 este comentario mentia a medias: afirmaba el hook
+      # de pre-commit cuando `.pre-commit-config.yaml` NO EXISTIA. Lo creo
+      # ADR-027, que ademas descarto `trufflehog` con motivo escrito.
+      #
+      # Version fijada, no `latest`: un escaner que cambia de reglas solo hace
+      # que el mismo commit pase hoy y falle mañana sin que nadie toque nada.
+      #
+      # `--redact` para que un hallazgo no imprima el secreto en un log que
+      # queda guardado. Sin eso, detectar la fuga la empeora.
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 \
+            detect --source /repo --redact --no-banner --verbose
+
+      # ── Punto ciego de los documentos OOXML ────────────────────────────────
+      #
+      # El paso de arriba NO lee los .docx. gitleaks recorre la historia con
+      # `git log -p`, y ahi un .docx —que es un zip— sale como "Binary files
+      # a/... and b/... differ". Son 13 documentos del repositorio, mas de un
+      # millon de caracteres, entre ellos la constitucion y los planes de
+      # seguridad y de SRE, que el gate venia declarando limpios sin abrirlos.
+      #
+      # Medido: contra un repositorio con dos credenciales plantadas adentro de
+      # un .docx, el paso de arriba escanea 16 bytes y sale 0. Con estos dos
+      # pasos, gitleaks reporta los 2 hallazgos y sale 1.
+      #
+      # ALCANCE: el arbol de trabajo, no la historia. Un secreto commiteado
+      # adentro de un documento y borrado despues NO se detecta por esta via.
+      # Fue una decision explicita de alcance, no un olvido.
+      - name: Extraer el texto de los documentos OOXML
+        run: python tools/extract-docx-text.py --destino "$RUNNER_TEMP/ooxml"
+
+      # Misma imagen y misma version fijada que el escaneo principal: dos
+      # escaneres distintos sobre el mismo repositorio serian dos criterios
+      # distintos de que es un secreto.
+      - name: gitleaks — documentos OOXML
+        run: |
+          docker run --rm -v "$RUNNER_TEMP/ooxml:/docs" zricethezav/gitleaks:v8.28.0 \
+            detect --no-git --source /docs --redact --no-banner --verbose
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # GATE 2 DE LA REGLA DURA 13 — migraciones compatibles hacia atras
+  # ═══════════════════════════════════════════════════════════════════════════
+  #
+  # El gate 1 (lint de DDL destructivo) vive en tests/unit y corre siempre. Este
+  # es el caro y el que dice EXACTAMENTE lo que la regla afirma: se aplican las
+  # migraciones NUEVAS y se corren los tests de integracion de la version
+  # ANTERIOR contra ese esquema.
+  #
+  # POR QUE HACE FALTA (ADR-025)
+  #
+  # El azul-verde comparte UNA sola base entre los dos stacks: PostgreSQL tiene
+  # estado y no se puede duplicar. Una migracion que rompa hacia atras inutiliza
+  # el stack VIEJO en el momento en que corre, y el stack viejo es justamente la
+  # red de seguridad de la reversion. Ademas el agente del VPS corre las
+  # migraciones ANTES de levantar el stack nuevo, con todo el trafico todavia en
+  # el viejo: ese orden es seguro solo si esta regla se cumple.
+  #
+  # EL TRUCO DEL WORKTREE
+  #
+  # Los tests del commit base traen su propio fixture `esquema`, que corre
+  # `alembic upgrade head`. Desde el worktree base eso aplicaria las migraciones
+  # VIEJAS y el gate no probaria nada. Por eso al worktree se le pisa el
+  # directorio `alembic/` con el de HEAD: queda codigo de aplicacion VIEJO con
+  # esquema NUEVO, que es precisamente lo que hay que probar.
+  migraciones-compatibles:
+    name: migraciones-compatibles
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # hace falta el commit base para comparar
+
+      - name: Hay migraciones nuevas?
+        id: cambios
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "sin commit base con que comparar; se salta"
+            echo "correr=no" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          if ! git diff --name-only "$BASE" HEAD -- backend/alembic/versions | grep -q .; then
+            echo "no cambio ninguna migracion; se salta"
+            echo "correr=no" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # La "version anterior" tiene que EXISTIR como aplicacion instalable.
+          # Hoy main todavia no tiene backend/ —todo C-01 vive en esta rama— asi
+          # que el worktree base no tendria pyproject.toml y el pip install
+          # reventaria. El gate fallaria por una razon que NO es la que mide.
+          #
+          # Se salta con aviso, no en silencio: cuando C-01 entre a main, este
+          # guard deja de dispararse solo y el gate empieza a morder de verdad.
+          if ! git cat-file -e "$BASE:backend/pyproject.toml" 2>/dev/null; then
+            echo "::warning::La base no tiene backend/pyproject.toml: no hay version anterior contra la cual probar. Gate 2 SALTADO — el gate 1 (lint de DDL) igual corrio en test-backend-unit."
+            echo "correr=no" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "correr=si" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        if: steps.cambios.outputs.correr == 'si'
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Preparar el arbol de la version anterior
+        if: steps.cambios.outputs.correr == 'si'
+        run: |
+          git worktree add ../anterior "${{ steps.cambios.outputs.base }}"
+          # Codigo de aplicacion VIEJO, migraciones NUEVAS.
+          rm -rf ../anterior/backend/alembic
+          cp -r backend/alembic ../anterior/backend/alembic
+
+      - name: Instalar las dependencias de la version anterior
+        if: steps.cambios.outputs.correr == 'si'
+        working-directory: ../anterior/backend
+        run: pip install --editable ".[dev]"
+
+      - name: Levantar los servicios efimeros
+        if: steps.cambios.outputs.correr == 'si'
+        run: docker compose -f docker-compose.test.yml up -d --wait postgres redis opensearch minio
+
+      - name: Crear el bucket de MinIO
+        if: steps.cambios.outputs.correr == 'si'
+        run: docker compose -f docker-compose.test.yml run --rm minio-init
+
+      - name: La suite anterior contra el esquema nuevo
+        if: steps.cambios.outputs.correr == 'si'
+        working-directory: ../anterior/backend
+        env:
+          TEST_DATABASE_URL: postgresql+asyncpg://mitutu:mitutu@localhost:5433/deruedas_test
+          TEST_DATABASE_OWNER_URL: postgresql+asyncpg://deruedas_test:deruedas_test@localhost:5433/deruedas_test
+          TEST_REDIS_URL: redis://localhost:6380/0
+        run: |
+          if ! python -m pytest tests/integration -q; then
+            echo "::error::La suite de la version ANTERIOR falla contra el esquema NUEVO."
+            echo "::error::Rompe la regla dura 13 (ADR-025): el azul-verde pierde su red de seguridad."
+            echo "::error::Usa expand/contract — agregar ahora, borrar en un despliegue posterior."
+            exit 1
+          fi
+
+      - name: Apagar y borrar los volumenes
+        if: always() && steps.cambios.outputs.correr == 'si'
+        run: docker compose -f docker-compose.test.yml down -v

@@ -124,14 +124,14 @@ Histórico de suscripciones. Una vigente por tenant.
 | `id` | uuid | PK | |
 | `tenant_id` | uuid | FK NOT NULL | |
 | `email` | varchar(254) | NOT NULL | Único dentro del tenant |
-| `password_hash` | varchar(255) | **NOT NULL** | Hash argon2id. Nunca se loguea ni serializa. ⚠️ **Contradice ADR-007/§8.3**, que delegan la autenticación íntegramente a Keycloak ("la aplicación nunca maneja contraseñas"). Ver `IN-06`. |
+| ~~`password_hash`~~ | — | **NO SE CREA** | ✅ **Eliminada por [`ADR-026`](../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md)** (17-ago-2026). `users` es el espejo local del usuario de Keycloak: identidad de negocio y **nada de credenciales**. El vínculo es el `sub` del token (`ADR-021`). La columna de la spec §3.3 contradecía a §1546 del mismo documento. |
 | `full_name` | varchar(180) | NOT NULL | |
 | `phone` | varchar(40) | NULL | |
 | `role` | `user_role_enum` | NOT NULL | `manager \| salesperson \| admin_staff` ⚠️ sin `super_admin`. Ver `IN-01`. |
 | `status` | `user_status_enum` | NOT NULL | `active \| inactive \| invited \| suspended` |
 | `last_login_at` | timestamptz | NULL | |
-| `mfa_enabled` | boolean | DEFAULT false | |
-| `mfa_secret` | varchar(255) | NULL | Cifrado simétricamente con KMS (AES-GCM, clave derivada por tenant) |
+| ~~`mfa_enabled`~~ | — | **NO SE CREA** | No es credencial, pero es un **hecho de Keycloak**: copiarlo agrega un espejo que se desincroniza en silencio —alguien activa TOTP y la columna dice `false` para siempre—. Sale del claim o de una consulta puntual. Ver C-05 `design.md` `D-2` |
+| ~~`mfa_secret`~~ | — | **NO SE CREA** | ⚠️ **El segundo `password_hash`, detectado el 17-ago-2026.** Es una credencial: `plan-seguridad` §112 pone la MFA del lado de Keycloak (*"provee auth e MFA opcional"*, *"custodia sus credenciales"*) y [`ADR-026`](../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) retiró los endpoints `/auth/mfa/*`. **`IN-06` documentó la contradicción de la contraseña y pasó de largo por la de al lado** |
 | `created_at`/`updated_at`/`deleted_at` | timestamptz | | |
 
 Índices: `UNIQUE (tenant_id, lower(email)) WHERE deleted_at IS NULL`; `INDEX (tenant_id, status)`.

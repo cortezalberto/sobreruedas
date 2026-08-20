@@ -4,34 +4,70 @@
 
 ## SLAs públicos por plan
 
-🔴 **Contradicción bloqueante con la spec técnica** — ver `IN-31`.
+> ⚠️ **Ajustados a la baja el 17-ago-2026** por decisión de Dirección + SRE, cerrando [`ESC-001`](../docs/escalaciones/ESC-001-sla-sobre-nodo-unico.md) / `PA-30`. La infraestructura elegida por [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) —**un VPS único, sin redundancia de ninguna clase**— no sostiene los números anteriores. Se baja lo publicado en vez de prometer lo que no se puede cumplir.
 
 | Plan | Disponibilidad | Downtime aceptable/mes | Crédito |
 |---|---|---|---|
 | Starter | **99.0 %** | 7 h 12 min | 5 % de la suscripción |
 | Pro | **99.5 %** | 3 h 36 min | 10 % de la suscripción |
-| Enterprise | **99.9 %** | 43 min | 25 % de la suscripción |
+| Enterprise | **99.5 %** ⬇️ *(era 99.9 %)* | 3 h 36 min | 25 % de la suscripción |
 
-La `spec-tecnica.md` §6.2 y §9.7 dicen en cambio **99.9 % para Starter y Pro, 99.95 % para Enterprise** — cifras que además son **superiores al SLO interno** de 99.7 %, lo cual es matemáticamente insostenible.
+**Enterprise deja de diferenciarse por disponibilidad.** Es una consecuencia asumida, no un descuido: 99.9 % son **43 minutos al mes**, y sobre un nodo único una sola ventana de mantenimiento del proveedor consume el presupuesto entero. Enterprise sigue diferenciándose por lo que sí se puede cumplir — usuarios y stock ilimitados, multi-sucursal, SSO, CSM dedicado, soporte 24/7 para críticos, retención de auditoría.
+
+El crédito de Enterprise **se mantiene en 25 %**: es un plan más caro y el incumplimiento le cuesta más al cliente. Lo que se ajustó es la promesa, no la penalidad.
+
+> **Se sube de nuevo cuando haya redundancia**, no antes. Requiere segundo nodo y réplica de PostgreSQL — ver las consecuencias asumidas de `ADR-023`.
+
+### Contexto histórico de esta cifra
+
+`IN-31` registraba una contradicción bloqueante: la `spec-tecnica.md` §6.2 y §9.7 decían **99.9 % para Starter y Pro, 99.95 % para Enterprise** — cifras además **superiores al SLO interno** de 99.7 %, lo cual es matemáticamente insostenible. [`ADR-000`](../docs/adr/ADR-000-precedencia-documental.md) la resolvió a favor de `plan-sre` (**99.0 / 99.5 / 99.9**) por competencia de dominio, cerrando `PA-09`.
+
+Esta rebaja **no contradice a `ADR-000`**: la toma el mismo decisor que `PA-09` tenía registrado —Dirección + SRE—, ejerciendo su autoridad sobre su propio dominio. No es un ADR pisando a N3; es N3 actualizándose a sí mismo ante un hecho nuevo, que es la infraestructura que `ADR-023` eligió.
 
 ## SLOs internos
 
-Todos declarados "más estrictos que el SLA".
+Todos declarados "más estrictos que el SLA" — el más exigente de los SLA es **99.5 %** y estos van a **99.7 %**, así que la afirmación sigue en pie.
+
+> **Los cuatro SLO de disponibilidad son el mismo número, y eso es deliberado**: comparten la máquina, así que comparten su techo. Ver el bloque de `ESC-002` debajo de la tabla.
 
 | SLI | SLO | Ventana |
 |---|---|---|
 | Disponibilidad de la API principal | **99.7 %** | 30 días rolling |
-| Latencia p95, endpoints típicos | **< 300 ms** ⚠️ `IN-23` | 30 días rolling |
-| Latencia p95, búsqueda compleja | **< 2,0 s** ⚠️ `IN-23` | 30 días rolling |
-| Disponibilidad de webhooks entrantes (Meta) | 99.9 % | 30 días rolling |
+| Latencia p95, endpoints típicos | **< 300 ms** (SLO) · objetivo de ingeniería **200 ms** | 30 días rolling |
+| Latencia p95, búsqueda compleja | **< 2,0 s** (SLO) · objetivo de ingeniería **500 ms** | 30 días rolling |
+| Disponibilidad de webhooks entrantes (Meta) | **99.7 %** ⬇️ *(era 99.9 %)* | 30 días rolling |
 | Latencia de procesamiento de mensajes WhatsApp | p95 < 30 s (recepción → persistencia) | 7 días rolling |
-| Disponibilidad del frontend web | 99.8 % | 30 días rolling |
+| Disponibilidad del frontend web | **99.7 %** ⬇️ *(era 99.8 %)* | 30 días rolling |
 | Cumplimiento de RPO de PostgreSQL | 100 % de backups exitosos | 30 días |
-| Disponibilidad de la cola de eventos | 99.95 % | 30 días rolling |
+| Disponibilidad de la cola de eventos | **99.7 %** ⬇️ *(era 99.95 %)* | 30 días rolling |
 | Lag máximo de consumers | p99 < 60 s | 7 días rolling |
 | Tasa de eventos en DLQ | < 0,1 % del volumen total | 7 días rolling |
 
-⚠️ La constitución y la spec exigen **p95 < 200 ms** en listados y **< 500 ms** en búsqueda. El SLO de SRE es más laxo en ambos casos (y **4× más laxo en búsqueda**). Ver `IN-23`.
+✅ ~~**`IN-23`**~~ — **CERRADO el 18-ago-2026 por [`ADR-030`](../docs/adr/ADR-030-objetivo-de-ingenieria-y-slo-de-latencia.md): no medían lo mismo.**
+
+> La constitución (**N0**) exige p95 < **200 ms** en listados y < **500 ms** en búsqueda; el SLO de SRE dice 300 ms y 2,0 s. Por `ADR-000` regla 2 **N0 nunca pierde**, así que SRE no podía relajarlos — pero son magnitudes distintas: **objetivo de ingeniería bajo carga normal** contra **SLO sobre 30 días rolling**, que incluye picos y degradaciones. El Artículo 4 ya escribe esa distinción cuando dice *"en condiciones normales de carga"*.
+>
+> ⚠️ Para **búsqueda** N0 **no** trae ese calificador: los 500 ms son incondicionales, y los 2,0 s valen solo como umbral de página, nunca como "lo aceptable".
+>
+> **Y apareció un tercer número que `IN-23` no contaba**: la alerta `APILatencyHigh` dispara en **p95 > 500 ms**, que es *más permisiva que el propio SLO de 300 ms*. Hoy ese SLO no tiene ninguna alerta que lo defienda. `ADR-030` la parte en dos, una por SLO.
+
+> ✅ **Tres SLO de disponibilidad alineados al techo del nodo — [`ESC-002`](../docs/escalaciones/ESC-002-slo-internos-sobre-nodo-unico.md) CERRADA el 17-ago-2026, opción A.**
+>
+> `ESC-001` bajó el SLA **público** porque un nodo único no sostiene 99.9 %. Esta tabla había quedado intacta y arrastraba el mismo defecto, con una regla que la rompía entera: **ningún componente puede estar más disponible que la máquina que lo hospeda**, y por [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) los nueve servicios corren en el mismo VPS.
+>
+> | SLI | Antes | Presupuesto que implicaba | Ahora |
+> |---|---|---|---|
+> | Frontend web | 99.8 % | 86 min/mes | **99.7 %** |
+> | Webhooks Meta | 99.9 % | 43 min/mes | **99.7 %** |
+> | Cola de eventos | 99.95 % | **21,6 min/mes** | **99.7 %** |
+>
+> La cola declaraba un presupuesto **6× más estricto** que el de la API que corre en la misma máquina: Redis y el backend se caen juntos cuando el nodo se reinicia. No era un número optimista, era aritméticamente imposible — el mismo error que `IN-31` (SLA por encima del SLO) rotado noventa grados.
+>
+> **Por qué importaba más que `ESC-001`**: aquella era una promesa a clientes que todavía no existen; esta **se aplicaba sola, todos los meses**. Con la cola en 99.95 % su presupuesto de error se agotaba siempre, y la política de abajo dejaba al proyecto en **freeze permanente por un número mal puesto**. El resultado previsible no era el freeze: era que **la política se dejara de mirar**, y que el día que el rojo fuera real nadie frenara.
+>
+> **Lo que NO se perdió.** El compromiso de que la cola sea más confiable que el resto **se movió, no se retiró**: `lag p99 < 60 s` y `DLQ < 0,1 %` ya estaban en esta tabla y miden su salud **sin depender de si el nodo estuvo prendido**. Son mejores SLI para una cola que su disponibilidad, justamente porque aíslan lo que la cola hace de lo que la máquina hace.
+>
+> **Consecuencia operativa**: los cuatro SLO de disponibilidad comparten ahora un único presupuesto de **130 min/mes**. Un solo número que mirar, y que se agota cuando se cae el nodo — que es la única forma en que se caen.
 
 ## Presupuesto de error
 
@@ -163,7 +199,7 @@ Los runbooks se mantienen vivos: se actualizan cada vez que se aprende algo de u
 | API backend | 15 min | 0 |
 | Frontend Next.js | 5 min | 0 |
 | **PostgreSQL primary** | **1 hora** | **5 min** |
-| PostgreSQL replicas | 30 min | 5 min |
+| ~~PostgreSQL replicas~~ ⛔ | ~~30 min~~ | ~~5 min~~ |
 | Redis | 10 min | 1 min (AOF) |
 | OpenSearch | 4 horas | Reconstruible |
 | Object storage | 1 hora | 0 |
@@ -171,9 +207,19 @@ Los runbooks se mantienen vivos: se actualizan cada vez que se aprende algo de u
 | Eventos Redis Streams | 1 hora | 5 min |
 | `audit_logs` | 4 horas | 0 |
 | Pipeline CI/CD | 8 horas | — |
-| **Sistema completo (DR en región alternativa)** | **4 horas** | **1 hora** |
+| ~~**Sistema completo (DR en región alternativa)**~~ ⛔ | ~~4 horas~~ | ~~1 hora~~ |
 
-Esta tabla es **idéntica** en el plan de SRE y en el plan de seguridad ✅. ⚠️ Pero la spec técnica declara *"RTO de una hora ante caída total"* — ver `IN-34`.
+> ⛔ **Dos filas retiradas el 17-ago-2026**, junto con la rebaja del SLA de Enterprise (`ESC-001` / `PA-30`).
+>
+> **`PostgreSQL replicas`**: presupone una réplica, y sobre un nodo único no hay ninguna. Vuelve el día que haya segundo nodo.
+>
+> **`Sistema completo (DR en región alternativa)`**: acá no se ajusta el número, **se elimina la promesa**.
+>
+> No existe región alternativa y no hay plan de que exista — [`ADR-023`](../docs/adr/ADR-023-despliegue-sobre-vps-con-docker-compose.md) eligió un VPS único. Un RTO de 4 horas hacia un lugar que no existe no es un objetivo ambicioso, es una promesa vacía, y dejarla escrita era el riesgo contractual más grande de los dos.
+>
+> **Lo que sí queda comprometido y es alcanzable**: `PostgreSQL primary` con RTO 1 h y RPO 5 min, sostenido por el archivado de WAL **fuera del proveedor** (Backblaze B2, tarea 9.21) y por el **ejercicio de restauración fechado** de la tarea 9.22. Sin esa restauración probada, ese RPO también sería una intención — por eso la tarea existe y no se da por cumplida al escribir el procedimiento.
+
+Esta tabla era **idéntica** en el plan de SRE y en el plan de seguridad ✅. ⚠️ La spec técnica declara *"RTO de una hora ante caída total"* — ver `IN-34`.
 
 ### Estrategia de backup
 
@@ -275,3 +321,4 @@ Failover de PostgreSQL orquestado con **Patroni** o equivalente.
 
 - **Ola 2**: chaos testing mensual.
 - **Ola 3**: SLO de API elevado a **99.9 %** para Pro y Enterprise · **multi-región activo** con RTO < 30 min.
+  > ⚠️ **Incompatible por diseño con la infraestructura vigente.** `ADR-023` eligió un nodo único, y multi-región activo no es una mejora incremental sobre eso: es otra arquitectura. Este objetivo **no se retira** —es de Ola 3 y queda lejos— pero deja de ser una progresión natural y pasa a ser una **migración con su propia decisión y su propio costo**. Es la contracara de haber bajado el SLA hoy: subirlo de nuevo tiene un precio que ahora está a la vista en vez de escondido en un roadmap.
