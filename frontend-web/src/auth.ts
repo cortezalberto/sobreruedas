@@ -28,6 +28,7 @@
 
 import NextAuth from 'next-auth';
 import Keycloak from 'next-auth/providers/keycloak';
+import type { JWT } from 'next-auth/jwt';
 
 /** El emisor. Tiene que ser el MISMO que espera el backend (`KEYCLOAK_ISSUER`). */
 const EMISOR = process.env.AUTH_KEYCLOAK_ISSUER ?? 'http://localhost:8080/realms/deruedas-dev';
@@ -53,9 +54,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // `account` solo viene en el login. Después, el token ya lo tiene.
       if (account?.access_token) {
         token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
         token.expiresAt = account.expires_at;
+        return token;
       }
-      return token;
+
+      // ⚠️ SIN ESTO LA SESIÓN MIENTE. La sesión de NextAuth dura 30 días y el
+      // access token de Keycloak **15 minutos**. Sin refresco, a los quince
+      // minutos la interfaz sigue mostrando al usuario adentro y TODAS las
+      // llamadas al backend responden 401.
+      //
+      // Es el peor modo de falla posible para un login: no falla el login,
+      // falla todo lo demás y sin señal — nadie mira los 401 de la consola
+      // cuando el encabezado dice tu nombre.
+      const expira = typeof token.expiresAt === 'number' ? token.expiresAt : 0;
+      // 30 s de margen: un token que vence mientras viaja la petición ya venció.
+      if (Date.now() / 1000 < expira - 30) {
+        return token;
+      }
+
+      return await refrescar(token);
     },
 
     async session({ session, token }) {
@@ -71,7 +89,64 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // tipo no lo sabe, y afirmarlo con un cast sería exactamente el `any`
       // encubierto que la regla dura 7 prohíbe.
       session.accessToken = typeof token.accessToken === 'string' ? token.accessToken : undefined;
+      // Que el refresco haya fallado tiene que llegar a la interfaz: es la
+      // diferencia entre "reintentá" y "volvé a entrar".
+      session.error = typeof token.error === 'string' ? token.error : undefined;
       return session;
     },
   },
 });
+
+/**
+ * Canjea el refresh token por uno nuevo contra Keycloak.
+ *
+ * Si falla —el refresh token venció, o alguien cerró la sesión del lado de
+ * Keycloak— se marca el JWT con `error` en vez de romper. La sesión sobrevive
+ * lo suficiente para que la interfaz pueda mandar a iniciar sesión de nuevo, en
+ * lugar de tirar una excepción en medio de un render.
+ */
+async function refrescar(token: JWT): Promise<JWT> {
+  if (typeof token.refreshToken !== 'string') {
+    return { ...token, error: 'SinRefreshToken' };
+  }
+
+  try {
+    const respuesta = await fetch(`${EMISOR}/protocol/openid-connect/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        // Cliente público: no hay secreto que mandar. Ver el encabezado.
+        client_id: process.env.AUTH_KEYCLOAK_ID ?? 'frontend-web',
+        refresh_token: token.refreshToken,
+      }),
+    });
+
+    if (!respuesta.ok) {
+      return { ...token, error: 'RefrescoRechazado' };
+    }
+
+    const datos: unknown = await respuesta.json();
+    if (typeof datos !== 'object' || datos === null) {
+      return { ...token, error: 'RefrescoIlegible' };
+    }
+    const d = datos as Record<string, unknown>;
+    if (typeof d.access_token !== 'string' || typeof d.expires_in !== 'number') {
+      return { ...token, error: 'RefrescoIlegible' };
+    }
+
+    return {
+      ...token,
+      accessToken: d.access_token,
+      expiresAt: Math.floor(Date.now() / 1000) + d.expires_in,
+      // Keycloak rota el refresh token: si no se guarda el nuevo, el siguiente
+      // refresco usa uno ya consumido y falla.
+      refreshToken: typeof d.refresh_token === 'string' ? d.refresh_token : token.refreshToken,
+      error: undefined,
+    };
+  } catch {
+    // Keycloak caido o red cortada. NO se invalida la sesion por eso: el
+    // proximo intento puede andar.
+    return { ...token, error: 'RefrescoSinRespuesta' };
+  }
+}
