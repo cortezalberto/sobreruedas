@@ -160,6 +160,18 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HTTP_PORT: 8080
+      # UN SOLO EMISOR, sea quien sea el que pide el token.
+      #
+      # Sin esto Keycloak deriva el `iss` del host del request: el navegador
+      # pide por `localhost` y recibe `iss: http://localhost:8080/...`, el
+      # backend pide por la red interna y recibe `keycloak:8080`. Dos tokens
+      # validos con emisores distintos, y el backend solo puede esperar uno —
+      # el otro se rechaza con 401 y el sintoma parece un problema de firma.
+      #
+      # Se fija el PUBLICO, que es el que ve el navegador. `KEYCLOAK_ISSUER` del
+      # backend tiene que decir lo mismo.
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-8080}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
     ports:
       - "${HOST_BIND_ADDR:-}${KEYCLOAK_PORT:-8080}:8080"
       - "${HOST_BIND_ADDR:-}${KEYCLOAK_MGMT_PORT:-9010}:9000"   # management: /health/ready
@@ -265,6 +277,9 @@ services:
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-backend}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-cambiame}
       KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/${KEYCLOAK_REALM:-deruedas-dev}/protocol/openid-connect/certs
+      # El `iss` que traen los tokens: el hostname PUBLICO, no el de la red
+      # interna. Tiene que coincidir con `KC_HOSTNAME` del servicio keycloak.
+      KEYCLOAK_ISSUER: http://localhost:${KEYCLOAK_PORT:-8080}/realms/${KEYCLOAK_REALM:-deruedas-dev}
       S3_ENDPOINT: http://minio:9000
       S3_BUCKET: ${S3_BUCKET:-deruedas-media}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}

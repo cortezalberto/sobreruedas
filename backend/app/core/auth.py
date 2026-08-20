@@ -300,8 +300,13 @@ def claves_del_proveedor() -> ClavesDelProveedor:
 
 
 def emisor_esperado() -> str:
-    keycloak = get_settings().keycloak
-    return f"{keycloak.url}/realms/{keycloak.realm}"
+    """El `iss` que se exige en el token.
+
+    Sale de `KeycloakSettings.emisor`, que NO siempre es `url`: el navegador
+    pide el token por el hostname publico y el backend habla con Keycloak por el
+    nombre interno de la red. Ver el docstring de esa propiedad.
+    """
+    return get_settings().keycloak.emisor
 
 
 def token_de_la_cabecera(autorizacion: str | None) -> str:

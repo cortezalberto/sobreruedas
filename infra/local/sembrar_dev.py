@@ -8,9 +8,13 @@ Hasta el 20-ago-2026 el realm `deruedas-dev` se importaba **sin un solo
 usuario**, asi que no habia forma de entrar al sistema: ni por el frontend ni
 con `curl`. Cada quien se armaba un token a mano, o no probaba.
 
-Es idempotente: se puede correr las veces que haga falta, y hay que volver a
-correrlo despues de `docker compose down -v`, porque eso borra el volumen de
-Keycloak y la base.
+Es idempotente: se puede correr las veces que haga falta.
+
+⚠️ HAY QUE VOLVER A CORRERLO CADA VEZ QUE SE RECREE EL CONTENEDOR DE KEYCLOAK,
+no solo despues de un `docker compose down -v`. `start-dev` guarda todo en una
+H2 EN MEMORIA, asi que cualquier cambio en el servicio —una variable de entorno
+nueva, por ejemplo— se lleva puestos los usuarios y los mappers. El realm se
+reimporta del JSON, que no tiene ninguno de los dos.
 
 ⚠️ SOLO PARA LOCAL. La clave de abajo es una constante de desarrollo sobre un
 realm que solo levanta `docker-compose.yml` en esta maquina. No es un secreto:
@@ -108,6 +112,50 @@ MAPPERS: list[dict[str, object]] = [
 ]
 
 
+def _declarar_atributos(cliente: httpx.Client, base: str, cabecera: dict[str, str]) -> None:
+    """Declara `tenant_id` y `role` en el *user profile* del realm.
+
+    ⚠️ SIN ESTO KEYCLOAK LOS DESCARTA EN SILENCIO. Desde la version 24 el perfil
+    de usuario es declarativo y la politica de atributos NO declarados viene
+    deshabilitada: se le mandan los atributos al crear el usuario, responde 201,
+    y despues el token sale sin `tenant_id` ni `role`.
+
+    El sintoma es cruel: la firma verifica, el `aud` coincide, el `iss` coincide,
+    y aun asi todo da 401 — porque `core/auth.py` RECHAZA la peticion cuando
+    falta el rol en vez de suponerlo, que es lo correcto.
+
+    Se declaran los dos en vez de habilitar los atributos libres
+    (`unmanagedAttributePolicy: ENABLED`): esa politica acepta cualquier cosa que
+    alguien mande, y estos dos no son cualquier cosa.
+
+    `edit` SOLO para admin. Que un usuario pueda editarse su propio `tenant_id`
+    o su `role` seria escalada de privilegios en un campo de texto.
+    """
+    perfil = cliente.get(f"{base}/users/profile", headers=cabecera).json()
+    declarados = {atributo["name"] for atributo in perfil.get("attributes", [])}
+
+    faltantes = [nombre for nombre in ("tenant_id", "role") if nombre not in declarados]
+    if not faltantes:
+        print("perfil de usuario: tenant_id y role ya declarados")
+        return
+
+    for nombre in faltantes:
+        perfil.setdefault("attributes", []).append(
+            {
+                "name": nombre,
+                "displayName": nombre,
+                "multivalued": False,
+                "permissions": {"view": ["admin", "user"], "edit": ["admin"]},
+                "validations": {},
+            }
+        )
+
+    cliente.put(
+        f"{base}/users/profile", headers=cabecera, content=json.dumps(perfil)
+    ).raise_for_status()
+    print(f"perfil de usuario: declarados {', '.join(faltantes)}")
+
+
 def main() -> int:
     with httpx.Client(timeout=30) as cliente:
         try:
@@ -121,6 +169,8 @@ def main() -> int:
             return 1
 
         base = f"{KEYCLOAK}/admin/realms/{REALM}"
+
+        _declarar_atributos(cliente, base, cabecera)
 
         identificador = cliente.get(
             f"{base}/clients", headers=cabecera, params={"clientId": CLIENTE}
@@ -226,6 +276,23 @@ async def _espejar(personas: list[tuple[str, str, str]]) -> None:
     try:
         async with motor.begin() as conexion:
             for sub, email, rol in personas:
+                # Recrear el contenedor de Keycloak regenera los usuarios con
+                # `sub` NUEVOS, y el espejo conserva las filas viejas con el
+                # mismo email. Es el escenario que documenta el encabezado de la
+                # migracion `014`: la fila vieja sobrevive con `deleted_at`, y
+                # como el indice unico es PARCIAL sobre `deleted_at IS NULL`,
+                # eso libera el email para la nueva.
+                #
+                # Sin esto el sembrador muere con una violacion de unicidad la
+                # segunda vez que se levanta el entorno.
+                await conexion.execute(
+                    text(
+                        "UPDATE users SET deleted_at = now() "
+                        "WHERE tenant_id = :t AND lower(email) = lower(:e) "
+                        "AND id <> :id AND deleted_at IS NULL"
+                    ),
+                    {"t": uuid.UUID(TENANT), "e": email, "id": uuid.UUID(sub)},
+                )
                 await conexion.execute(
                     text(
                         "INSERT INTO users "

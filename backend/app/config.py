@@ -156,6 +156,27 @@ class KeycloakSettings(BaseSettings):
     client_id: str = Field(default="backend", validation_alias="KEYCLOAK_CLIENT_ID")
     client_secret: SecretStr = Field(min_length=1, validation_alias="KEYCLOAK_CLIENT_SECRET")
     jwks_url: TextoOpcional = Field(default=None, validation_alias="KEYCLOAK_JWKS_URL")
+    issuer: TextoOpcional = Field(default=None, validation_alias="KEYCLOAK_ISSUER")
+
+    @property
+    def emisor(self) -> str:
+        """El `iss` que los tokens VAN A TRAER, que no siempre es `url`.
+
+        Keycloak emite el `iss` con el hostname PUBLICO —por el que el navegador
+        pide el token—, y el backend lo alcanza por el nombre interno de la red.
+        En desarrollo son `localhost:8080` y `keycloak:8080`; en produccion, el
+        dominio publico y el del contenedor. Deducirlo de `url` funciona solo
+        mientras coincidan, y deja de funcionar exactamente cuando entra el
+        primer login por navegador.
+
+        El sintoma de tenerlo mal engaña: 401 en todo, y parece un problema de
+        firma cuando es una cadena que no coincide.
+
+        Mismo criterio que `jwks_endpoint`: explicito si esta, deducido si no.
+        """
+        if self.issuer:
+            return self.issuer
+        return f"{self.url}/realms/{self.realm}"
 
     @property
     def jwks_endpoint(self) -> str:

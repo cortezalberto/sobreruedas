@@ -326,3 +326,34 @@ def test_cache_clear_fuerza_una_relectura(
     assert get_settings() is primera, "sin limpiar la cache debe devolver la vieja"
     get_settings.cache_clear()
     assert get_settings().database.pool_size == 77
+
+
+# ── El emisor publico, que no siempre es la URL interna ──────────────────────
+
+
+def test_el_emisor_se_deduce_del_realm_cuando_no_esta_declarado(
+    entorno_valido: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    get_settings.cache_clear()
+    assert get_settings().keycloak.emisor == "http://keycloak:8080/realms/deruedas-dev"
+
+
+def test_el_emisor_declarado_gana_sobre_la_url_interna(
+    entorno_valido: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El caso que importa, y el que rompe el login por navegador.
+
+    Keycloak emite el `iss` con el hostname PUBLICO —por el que el navegador
+    pidio el token— y el backend lo alcanza por el nombre interno de la red. Si
+    el emisor esperado se dedujera siempre de la URL interna, todo token venido
+    de un login real se rechazaria con 401, y el sintoma pareceria un problema
+    de firma.
+    """
+    monkeypatch.setenv("KEYCLOAK_URL", "http://keycloak:8080")
+    monkeypatch.setenv("KEYCLOAK_ISSUER", "https://cuentas.deruedas.test/realms/deruedas")
+    get_settings.cache_clear()
+
+    keycloak = get_settings().keycloak
+    assert keycloak.emisor == "https://cuentas.deruedas.test/realms/deruedas"
+    # Y el JWKS sigue saliendo por la red interna: son dos caminos distintos.
+    assert keycloak.jwks_endpoint.startswith("http://keycloak:8080")
