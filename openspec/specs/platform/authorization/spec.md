@@ -1,8 +1,10 @@
+# platform/authorization Specification
+
 ## Purpose
 
 Establece cómo el sistema decide si el sujeto de una petición puede hacer lo que pide, garantizando que esa decisión se tome siempre del lado del servidor y que negar el acceso sea el resultado por defecto ante cualquier duda.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: La autorización se decide en el backend
 
@@ -70,6 +72,12 @@ El nivel fino MUST poder expresar que el acceso de un sujeto a un recurso quede 
 - **WHEN** ese mismo sujeto pide el recurso filtrando, ordenando o proyectando por un campo que no puede ver
 - **THEN** el valor del campo no se revela por ningún medio
 
+#### Scenario: Alcance acotado al propio sujeto
+
+- **WHEN** un sujeto opera sobre un recurso que **es** él mismo —su sesión, su perfil— y su alcance es el propio sujeto
+- **THEN** la operación se ejecuta
+- **AND** la misma operación sobre otro sujeto es rechazada por falta de permisos
+
 #### Scenario: Alcance acotado a lo asignado
 
 - **WHEN** un sujeto cuyo alcance son los recursos que tiene asignados pide uno que no lo está
@@ -80,6 +88,31 @@ El nivel fino MUST poder expresar que el acceso de un sujeto a un recurso quede 
 - **WHEN** un recurso deja de estar asignado a un sujeto cuyo alcance son los recursos asignados
 - **THEN** ese sujeto deja de acceder al recurso
 - **AND** haberlo creado no le conserva el acceso
+
+### Requirement: El alcance fino llega al cambio de estado
+
+Cuando una operación cambie el estado de un recurso, el sistema SHALL poder acotar **qué cambios de estado** alcanza cada rol, dentro de los que las reglas de negocio consideran válidos.
+
+Las reglas de estado del dominio acotan qué transiciones existen, no quién las hace. Sin este nivel, un sujeto MAY alcanzar un estado que no le corresponde **encadenando transiciones que sí le corresponden**, sin encontrar ningún control en el medio.
+
+El rechazo por transición no autorizada MUST distinguirse del rechazo por transición inválida: el primero se resuelve pidiéndoselo a otro rol, el segundo no se resuelve.
+
+#### Scenario: Transición autorizada
+
+- **WHEN** un sujeto pide un cambio de estado que su rol tiene declarado
+- **THEN** el cambio se aplica
+
+#### Scenario: Transición válida que el rol no alcanza
+
+- **WHEN** un sujeto pide un cambio de estado que las reglas de negocio admiten pero su rol no tiene declarado
+- **THEN** la petición es rechazada por falta de permisos
+- **AND** el rechazo se distingue del de transición inválida
+- **AND** el estado del recurso no cambia
+
+#### Scenario: Estado alcanzado encadenando transiciones
+
+- **WHEN** un sujeto encadena dos cambios de estado para llegar a uno que su rol no tiene declarado
+- **THEN** el segundo cambio es rechazado por falta de permisos
 
 ### Requirement: Los roles no acumulan permisos entre sí
 

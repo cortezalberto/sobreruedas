@@ -2,7 +2,9 @@
 
 > **Qué es esto.** Las cinco capabilities de C-02 declaran **77 escenarios**. Este documento dice cuáles tienen test ejecutable y **cuáles no, con el motivo**. Sin él, "los tests pasan" no dice nada sobre lo que quedó afuera.
 >
-> Medido el **16-ago-2026** sobre 232 tests en verde. **Actualizado el 17-ago-2026**: `platform/authorization` pasó de 16 a **21 escenarios** por [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md) — ver abajo. Ninguno de los 5 nuevos tiene test, por el mismo bloqueo.
+> Medido el **16-ago-2026** sobre 232 tests en verde. **Actualizado el 17-ago-2026**: `platform/authorization` pasó de 16 a **21 escenarios** por [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md).
+>
+> **Actualizado el 20-ago-2026** — bloque 6 implementado, sobre **739 tests en verde**. `platform/authorization` pasó de 21 a **25 escenarios** ([`ADR-033`](../../../docs/adr/ADR-033-alcance-self-distinto-de-own.md) agregó el alcance propio; [`ADR-034`](../../../docs/adr/ADR-034-transiciones-como-tercer-eje-del-permiso.md) agregó el requisito de transiciones, con 3 escenarios) y de **0 a 22 con test**.
 
 ## Resumen
 
@@ -12,36 +14,47 @@
 | `platform/domain-events` | 14 | **13** | 1 |
 | `platform/tenant-isolation` | 14 | **13** | 1 |
 | `platform/identity` | 13 | **11** | 2 |
-| `platform/authorization` | 21 | **0** | 21 |
-| **Total** | **77** | **52** | **25** |
+| `platform/authorization` | 25 | **22** | 3 |
+| **Total** | **81** | **74** | **7** |
 
-**52 de 77.** Los 25 que faltan se agrupan en tres causas, y ninguna es "no se hizo":
+**74 de 81.** Los 7 que faltan se agrupan en dos causas, y ninguna es "no se hizo":
 
 | Causa | Escenarios | Se resuelve en |
 |---|---:|---|
-| El bloque 6 estaba bloqueado por `E-001` — ✅ **ratificada el 20-ago-2026** | 21 | C-02, bloque 6, **ya destrabado y pendiente de implementar** |
-| No existe todavía un endpoint de dominio ni un esquema de entrada | 3 | **C-05** |
+| No existe todavía el endpoint ni el esquema de entrada que el escenario necesita | 3 | **C-05** |
+| No existe todavía la superficie sobre la que ejercer el mecanismo | 2 | **C-14** (campos en escritura) · **C-19** (espacio `/admin`) |
 | No existe todavía ningún receptor de notificaciones externas | 2 | **C-29** / **C-30** |
+
+> El desglose por causa de la medición anterior sumaba 26 contra 25 de la tabla de arriba. Estaba mal por uno y se corrige acá; el total por capability siempre fue el bueno.
+
+El bloqueo de `E-001` **desapareció**: la enmienda se ratificó el 20-ago-2026 y el bloque 6 quedó implementado el mismo día.
 
 ---
 
-## `platform/authorization` — 0 de 21
+## `platform/authorization` — 22 de 25
 
-~~**Bloqueado por `E-001`.**~~ ✅ **Destrabado el 20-ago-2026**: `E-001` quedó ratificada y registrada como apéndice de la constitución, que pasa a v1.1. El bloque 6 **sigue sin implementar** —los 21 escenarios continúan en 0— pero ya no por un bloqueante: ahora es trabajo pendiente, que es una situación distinta y hay que leerla distinto.
+✅ **Implementado el 20-ago-2026.** `E-001` se ratificó, el bloque 6 se escribió entero (`core/rbac.py`, 100 % líneas y ramas) y los 21 escenarios que estaban en 0 pasaron a tener test. La capability creció a 25 por dos ADRs que aparecieron **al transcribir la matriz**, no antes:
 
-~~Agravado por `R-2`~~ — **`R-2` se cerró el 17-ago-2026** con [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md). Los escenarios de permisos finos ya tienen contra qué testear: la matriz canónica. Lo que queda es un bloqueo único, `E-001`, y no dos.
+| ADR | Qué agregó | Escenarios |
+|---|---|---:|
+| [`ADR-033`](../../../docs/adr/ADR-033-alcance-self-distinto-de-own.md) | `ADR-024` usaba `own` con dos sentidos: `assigned_user_id` (§4, *"y nada más"*) y "sobre sí mismo" en Auth y Usuarios, que no tienen esa columna. Tercer valor de alcance, `self`. | +1 |
+| [`ADR-034`](../../../docs/adr/ADR-034-transiciones-como-tercer-eje-del-permiso.md) | La celda *"`own`, solo `available`→`reserved`"* no cabía en dos ejes. Cerró una concesión **que estaba corriendo**: el vendedor vendía en dos saltos legales. | +3 |
 
-Al escribir el ADR apareció un **hueco en esta misma spec**, y por eso la capability creció de 16 a 21 escenarios:
+### Los 3 sin test, con el motivo
 
-| Escenario nuevo | Por qué faltaba |
-|---|---|
-| **Lectura acotada a ciertos campos** | La spec solo cubría **modificación** acotada a campos. `RN-ST-12` obliga lo contrario: `acquisition_cost_ars` es invisible para `salesperson` sobre un recurso que **sí puede leer**. Sin este escenario, el mecanismo se habría construido solo para escritura. |
-| **Campo excluido pedido explícitamente** | Ocultar un campo en la respuesta no alcanza si se lo puede inferir filtrando u ordenando por él. |
-| **El alcance sigue a la asignación vigente** | `ADR-024` §4 define `own` como `assigned_user_id` **en el momento de la petición**. Es lo que hace que `RN-CR-13` (*solo el `manager` reasigna*) sea un control y no un adorno. |
-| **Permiso concedido a un solo rol** | `S3` (plan de seguridad, N3) prohíbe la herencia entre roles y la spec no lo decía. |
-| **Verificación sin asumir contención** | Corolario del anterior sobre la verificación automática: los tres roles de tenant se recorren por separado. |
+| Escenario | Por qué no | Se resuelve en |
+|---|---|---|
+| **Modificación acotada a ciertos campos** | La celda es `vehicles:update` con `[internal_notes, assigned_user_id]`, y **`PATCH /vehicles/{id}` no tiene endpoint**. El mecanismo (`recortar`) tiene test unitario; lo que falta es la puerta por donde ejercerlo. | **C-14** |
+| **Alcance acotado al propio sujeto** | Igual: `self` solo aparece en `auth:*` y `users:update`, y ni `/auth/me` ni `/users` existen. `verificar_alcance` con `Alcance.SELF` tiene test unitario en los dos sentidos. | **C-05** |
+| **Rol de plataforma en el espacio administrativo** | `/admin/api/v1` **no tiene una sola ruta montada**. Se ejercita sobre un endpoint de prueba, no sobre la superficie real. | **C-19** |
 
-Los cinco están bloqueados por lo mismo que los otros 16, así que el conteo de "sin test" sube pero la causa no cambia.
+⚠️ Los tres comparten forma: **el mecanismo está probado, la superficie no existe**. Es distinto de "no se probó", y hay que leerlo distinto — pero tampoco es lo mismo que verde.
+
+### Uno que se cubrió por ausencia, y conviene saberlo
+
+**Campo excluido pedido explícitamente** pide que el valor *"no se revele por ningún medio"*. Recortar la respuesta no alcanza: un filtro por rango sobre un campo invisible lo revela por búsqueda binaria sin mostrarlo nunca.
+
+Hoy no hay por dónde —el orden del listado es fijo, no hay parámetro de ordenamiento ni de proyección, y ningún filtro toca `acquisition_cost_ars`—. Los dos tests que lo cubren **vigilan esa ausencia**: fallan si alguien agrega un `cost_from` o un `sort_by` de texto libre. Es lo único que la sostiene.
 
 ## `platform/identity` — 11 de 13
 
