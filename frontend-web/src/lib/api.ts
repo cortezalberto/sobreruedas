@@ -207,3 +207,89 @@ export async function obtenerModelos(marcaId: string): Promise<Modelo[]> {
 export function idDeMarcaPorSlug(marcas: readonly Marca[], slug: string): string | undefined {
   return marcas.find((marca) => marca.slug === slug)?.id;
 }
+
+// ── Stock ────────────────────────────────────────────────────────────────────
+
+/**
+ * Un vehiculo, como lo devuelve `GET /api/v1/vehicles`.
+ *
+ * ⚠️ `acquisition_cost_ars` ES OPCIONAL A NIVEL DE TIPO, y eso no es laxitud:
+ * es `RN-ST-12` en el sistema de tipos. El backend devuelve 23 campos a un
+ * `salesperson` y 24 a un `manager` — la clave NO viene, no viene en `null`.
+ *
+ * Declararlo obligatorio obligaria a mentir con un `!` en cada uso; declararlo
+ * opcional hace que TypeScript OBLIGUE a contemplar que no este, que es
+ * exactamente la pregunta correcta.
+ */
+export interface Vehiculo {
+  id: string;
+  domain_plate: string | null;
+  chassis_number: string | null;
+  brand_id: string;
+  model_id: string;
+  year: number;
+  mileage_km: number;
+  color: string;
+  status: string;
+  /** Decimal serializado como string. Ver el comentario de `Plan.price_ars`. */
+  price_ars: string;
+  /**
+   * Solo para `manager` y `admin_staff` (`RN-ST-12`).
+   *
+   * ⚠️ AUSENTE Y `null` SIGNIFICAN COSAS DISTINTAS, y la diferencia importa:
+   *
+   *   - la clave NO ESTA  -> tu rol no puede verlo
+   *   - la clave es `null` -> podes verlo, y este vehiculo no lo tiene cargado
+   *
+   * Por eso el tipo admite los dos y quien decide si mostrar la columna
+   * pregunta por la PRESENCIA de la clave, no por su valor.
+   */
+  acquisition_cost_ars?: string | null;
+}
+
+function esVehiculo(valor: unknown): valor is Vehiculo {
+  if (typeof valor !== 'object' || valor === null) return false;
+  const v = valor as Record<string, unknown>;
+
+  return (
+    typeof v.id === 'string' &&
+    typeof v.brand_id === 'string' &&
+    typeof v.model_id === 'string' &&
+    typeof v.year === 'number' &&
+    typeof v.mileage_km === 'number' &&
+    typeof v.color === 'string' &&
+    typeof v.status === 'string' &&
+    typeof v.price_ars === 'string' &&
+    // El costo NO se exige. Su ausencia es el caso normal para un vendedor, y
+    // `null` el de un gerente mirando un vehiculo sin costo cargado.
+    (v.acquisition_cost_ars === undefined ||
+      v.acquisition_cost_ars === null ||
+      typeof v.acquisition_cost_ars === 'string')
+  );
+}
+
+/** El stock de la agencia del token. */
+export async function obtenerVehiculos(token: string): Promise<Vehiculo[]> {
+  const datos = await pedirConToken('/api/v1/vehicles', token);
+
+  if (!Array.isArray(datos) || !datos.every(esVehiculo)) {
+    throw new TypeError('El listado de vehiculos no tiene la forma esperada');
+  }
+
+  return datos;
+}
+
+/**
+ * Las marcas del catalogo, indexadas por id.
+ *
+ * El listado de vehiculos trae `brand_id` y no el nombre. Se resuelve acá y no
+ * pidiendo un endpoint por vehiculo: son 40 marcas para todo el sistema y el
+ * catalogo es cross-tenant, asi que una sola llamada alcanza para cualquier
+ * cantidad de filas.
+ */
+export async function obtenerMarcasPorId(): Promise<ReadonlyMap<string, string>> {
+  // Reusa `obtenerMarcas` en vez de repetir el fetch y el estrechamiento: una
+  // segunda copia de la validacion es una segunda copia que envejece.
+  const marcas = await obtenerMarcas();
+  return new Map(marcas.map((marca) => [marca.id, marca.name]));
+}
