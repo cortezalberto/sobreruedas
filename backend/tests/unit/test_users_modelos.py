@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.db.base import Base
 from app.modules.users.models import (
     ESTADOS_USUARIO,
     ROLES_DE_TENANT,
@@ -41,7 +42,9 @@ DE_KEYCLOAK_Y_NO_NUESTRO = (
 
 @pytest.mark.parametrize("modelo", TABLAS, ids=lambda m: str(m.__tablename__))
 def test_ninguna_tabla_de_identidad_copia_lo_que_es_de_keycloak(
-    modelo: type,
+    # `type[Base]` y no `type` a secas: `__table__` y `__tablename__` los aporta
+    # la base declarativa, y `mypy --strict` no los encuentra en `type`.
+    modelo: type[Base],
 ) -> None:
     columnas = {c.name for c in modelo.__table__.columns}
     assert columnas.isdisjoint(DE_KEYCLOAK_Y_NO_NUESTRO), (

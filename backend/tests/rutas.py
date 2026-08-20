@@ -19,7 +19,7 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
 from app.core.auth import get_current_user
-from app.core.rbac import Espacio, ExigePermiso, ExigeRol, Rol
+from app.core.rbac import Concesion, Espacio, ExigePermiso, ExigeRol, Rol
 
 __all__ = [
     "alcanzables_por",
@@ -141,7 +141,9 @@ def rutas_en_el_espacio_equivocado(app: FastAPI, *, prefijo: str, espacio: Espac
     }
 
 
-def alcanzables_por(app: FastAPI, rol: Rol, matriz: dict[str, object], *, prefijo: str) -> set[str]:
+def alcanzables_por(
+    app: FastAPI, rol: Rol, celdas: dict[str, Concesion], *, prefijo: str
+) -> set[str]:
     """Las rutas del prefijo que ese rol puede atender, segun sus celdas.
 
     ⚠️ Recibe LAS CELDAS DE UN SOLO ROL y no la matriz entera. Es deliberado:
@@ -155,5 +157,5 @@ def alcanzables_por(app: FastAPI, rol: Rol, matriz: dict[str, object], *, prefij
         for ruta in todas_las_rutas(app)
         if ruta.path.startswith(prefijo)
         and (permisos := permisos_de(ruta))
-        and all(permiso in matriz for permiso, _ in permisos)
+        and all(permiso in celdas for permiso, _ in permisos)
     }
