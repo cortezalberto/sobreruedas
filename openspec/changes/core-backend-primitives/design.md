@@ -98,7 +98,7 @@ Se cachean con vencimiento, y además se refresca **bajo demanda** cuando llega 
 
 `auth.py` extrae el rol tal como viene en el token. Es `rbac.py` quien lo contrasta contra el catálogo.
 
-La separación es lo que permite avanzar: **el catálogo depende de `E-001`, que todavía está en discusión** (ver *Migration Plan*). Si `auth.py` enumerara los roles, la traba se comería también la identidad, que no tiene por qué esperar.
+La separación es lo que permitió avanzar: el catálogo dependía de `E-001`, que estuvo en discusión hasta el **20-ago-2026** (ver *Migration Plan*). Si `auth.py` enumerara los roles, la traba se habría comido también la identidad, que no tenía por qué esperar. ✅ **La enmienda ya está ratificada**, pero la separación se conserva: no era andamiaje para la espera, es la razón por la que un cambio de catálogo toca un archivo y no la identidad entera.
 
 ### D-10 · Un evento es un hecho, y su consumo restablece el contexto de tenant
 
@@ -129,7 +129,7 @@ Regla dura 8: sin mocks de base de datos. El aislamiento multi-tenant **no es si
 | ~~**`R-2` — no existe matriz RBAC canónica.**~~ ✅ Cerrado por [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md). | La definición de permisos deja de ser vacía: se transcriben literalmente las celdas de los 7 módulos que el ADR declara. Los otros 9 **quedan denegados por denegar-por-defecto**, que es la decisión del ADR y no una omisión. |
 | **La transcripción del ADR al código se desincroniza** con el tiempo, y nadie lo nota hasta que un endpoint autoriza de más. | La definición ejecutable es la traducción **literal** de las tablas, sin reinterpretación. La verificación automática de 6.9 detecta toda operación que se abra de más, y el ADR es el esperado contra el cual se compara. |
 | **Sin herencia (`S3`), agregar un permiso a un rol no se lo da a los demás** — y es intuitivo suponer que `manager` los tiene todos. | La verificación recorre los tres roles de tenant **por separado**, sin asumir contención. `manager` no es superconjunto de `salesperson`: `salesperson` cierra ventas y `admin_staff` no, así que la jerarquía sería falsa. |
-| **`E-001` no ratifica, o ratifica distinto.** El catálogo de roles cambiaría. | `platform/authorization` se especifica en términos de comportamiento, no de nombres de rol. El catálogo vive en un único lugar (spec: *"fuente única"*), así que un cambio de valores toca un archivo y sus tests, no cada endpoint. |
+| ~~**`E-001` no ratifica, o ratifica distinto.** El catálogo de roles cambiaría.~~ ✅ **No se materializó**: ratificada el 20-ago-2026 **sin modificaciones al texto propuesto**, así que el catálogo quedó en los tres valores previstos. | La mitigación se conserva igual, porque nunca fue solo para este riesgo: `platform/authorization` se especifica en términos de comportamiento, no de nombres de rol, y el catálogo vive en un único lugar (spec: *"fuente única"*). Un cambio de valores toca un archivo y sus tests, no cada endpoint. |
 | **El contexto de tenant se filtra entre requests por reutilización de conexión.** Sería una fuga cross-tenant, incidente P0. | `is_local = true` lo ata a la transacción, y hay un escenario dedicado que lo verifica: tras cerrar la transacción, el parámetro ya no está en esa conexión. |
 | **Un módulo futuro usa `get_platform_session` por comodidad** y se saltea el aislamiento. | Test de arquitectura que recorre los routers y falla si aparece fuera del espacio administrativo. |
 | **La tabla `platform_probe` queda para siempre** ocupando lugar en el esquema. | Es deliberado y está documentado: es el testigo que mantiene vivos los tests de aislamiento. Cuando existan tablas de negocio puede reevaluarse, pero eliminarla sin reemplazo dejaría el mecanismo sin prueba. |
@@ -139,16 +139,16 @@ Regla dura 8: sin mocks de base de datos. El aislamiento multi-tenant **no es si
 
 Este change no despliega nada: produce primitivas. La única migración de base es la de extensiones más la tabla `idempotency_keys` y `platform_probe`, todas reversibles.
 
-**El orden de implementación no es libre.** `E-001` cierra su discusión el **20-ago-2026** y todavía le faltan los pasos (c), (d) y (e) del Artículo 8. Por la regla dura 12, `core/rbac.py` no se escribe antes de eso.
+~~**El orden de implementación no es libre.**~~ ✅ **Resuelto el 20-ago-2026**: `E-001` quedó ratificada y registrada (pasos (c) y (d) del Artículo 8; el (e), la comunicación, lo envía el usuario y no condiciona el código). La regla dura 12 queda satisfecha y **`core/rbac.py` ya se puede escribir**. El tramo 4 deja de estar bloqueado.
 
 | Tramo | Contenido | Bloqueado por |
 |---|---|---|
 | **1** | Extensiones · `db/session.py` · `platform_probe` y sus tests de aislamiento | — |
 | **2** | `core/auth.py` · completar `core/errors.py` · `pagination.py` · `idempotency.py` | — |
 | **3** | `core/events.py` · `conftest.py` y factories | — |
-| **4** | `core/rbac.py` y sus tests de autorización | **`E-001`** |
+| **4** | `core/rbac.py` y sus tests de autorización | ~~**`E-001`**~~ → ✅ **nada, desde el 20-ago-2026** |
 
-Los tramos 1 a 3 son 8 de las 9 tareas. El tramo 4 espera.
+Los tramos 1 a 3 son 8 de las 9 tareas. **El tramo 4 ya no espera**: `E-001` quedó ratificada y es lo único que lo frenaba.
 
 **Reversión**: `alembic downgrade -1` por migración. Las primitivas son código nuevo sin consumidores todavía, así que revertirlas no rompe nada existente — es la ventaja de escribirlas antes del primer módulo.
 

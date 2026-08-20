@@ -51,7 +51,7 @@ Un claim plano por concepto se lee de una sola forma, y hace que "el token no lo
 
 ## Lo que esta decisión NO decide
 
-**Qué valores puede tomar `role`.** El catálogo es `ADR-017` y depende de la ratificación de `E-001`. `core/auth.py` extrae el rol **sin validarlo** contra ningún catálogo (`design.md` D-9 de C-02); quien lo contrasta es `rbac.py`, en el bloque 6.
+**Qué valores puede tomar `role`.** El catálogo es `ADR-017`, firme desde que `E-001` se ratificó el **20-ago-2026**. `core/auth.py` extrae el rol **sin validarlo** contra ningún catálogo (`design.md` D-9 de C-02); quien lo contrasta es `rbac.py`, en el bloque 6.
 
 La separación es deliberada: si la identidad enumerara los roles, la traba de `E-001` se comería también la autenticación, que no tiene por qué esperar.
 

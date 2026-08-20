@@ -49,7 +49,7 @@ Threat model resumido de la spec técnica (§8.1), consistente: filtración cros
 
 ## Autorización
 
-Roles canónicos: **`super_admin`, `manager`, `salesperson`, `admin_staff`** — decididos por [`ADR-017`](../docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md), condicionado a `E-001`. Cuatro en el sistema, **tres en `user_role_enum`**: `super_admin` vive en `super_admins`, fuera de `users`.
+Roles canónicos: **`super_admin`, `manager`, `salesperson`, `admin_staff`** — decididos por [`ADR-017`](../docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md), **sin condición desde el 20-ago-2026**, cuando se ratificó `E-001`. Cuatro en el sistema, **tres en `user_role_enum`**: `super_admin` vive en `super_admins`, fuera de `users`.
 
 ✅ **La matriz RBAC canónica es [`ADR-024`](../docs/adr/ADR-024-matriz-rbac-canonica.md)**, que cierra el riesgo `R-2`. El corpus no la tenía: el plan de seguridad solo listaba los 4 roles y daba ejemplos puntuales, y las dos vistas parciales que la KB había reconstruido en [03_actores_y_roles.md](03_actores_y_roles.md) no coincidían entre sí. `ADR-024` las reconcilió aplicando la precedencia de `ADR-000` e incorporó las reglas `RN-*` y el principio `S3`, que ninguna de las dos había cruzado.
 

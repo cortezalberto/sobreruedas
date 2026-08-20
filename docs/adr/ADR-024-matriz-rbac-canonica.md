@@ -4,7 +4,7 @@
 - **Fecha**: 2026-08-17
 - **Decisores**: Diseñador del sistema
 - **Resuelve**: `R-2` (no existe matriz RBAC canónica)
-- **Depende de**: [`ADR-017`](ADR-017-catalogo-de-roles-y-super-admin.md) (catálogo de roles), condicionado a [`E-001`](E-001-enmienda-glosario-super-admin.md)
+- **Depende de**: [`ADR-017`](ADR-017-catalogo-de-roles-y-super-admin.md) (catálogo de roles) — ✅ **aceptado pleno** desde que [`E-001`](E-001-enmienda-glosario-super-admin.md) se ratificó el 20-ago-2026
 - **Afecta**: `C-02` bloque 6 (`T-014`, `core/rbac.py`), `C-05` (`T-027`), `C-19`, `knowledge-base/03_actores_y_roles.md` §RBAC
 - **Governance**: **CRÍTICO** — define quién puede hacer qué en todo el sistema
 

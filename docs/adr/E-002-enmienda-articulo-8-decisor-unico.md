@@ -57,7 +57,7 @@ Si alguien objeta que un decisor único no puede enmendar el artículo que defin
 - El Artículo 8 pasa a describir cómo se decide de verdad en este proyecto.
 - Toda enmienda futura tiene una forma de registrar su aprobación **sin mentir**.
 - El registro del inciso (d) gana un dato que hoy no pide: **cuántas personas integraban el cuerpo decisor**. Es lo que va a permitir, dentro de dos años, leer una enmienda vieja y saber si "unipersonal" era la situación normal o una excepción.
-- La constitución pasa a **versión 1.2** — asumiendo que `E-001` la haya llevado a 1.1 el 20-ago. Si `E-001` se rechazara, esta queda como 1.1.
+- La constitución pasa a **versión 1.2**. ✅ **Confirmado**: `E-001` se ratificó el 20-ago-2026 y la llevó efectivamente a **1.1**, así que la hipótesis de este inciso ya no es hipótesis. La rama en que `E-001` se rechazaba —y esta quedaba como 1.1— no ocurrió.
 - Se acumula como apéndice al final de `docs/sdd/deRuedas-constitucion.md`, en modo *append-only*, con el mismo criterio que `E-001` fijó (opción A).
 
 ## Impacto si se rechaza

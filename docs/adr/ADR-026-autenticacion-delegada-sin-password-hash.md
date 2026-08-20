@@ -87,7 +87,7 @@ Dos motivos:
 
 **Sobre `docs/openapi.yaml`.** Es de donde el frontend genera sus tipos. Los seis endpoints retirados **nunca deben aparecer ahí**: si aparecen, C-08 genera un cliente que llama a rutas que no existen, y el error sale recién en runtime.
 
-> ⚠️ **Lo que este ADR NO decide.** La forma del `sub` y de los claims la fija `ADR-021`. La matriz de permisos la fija `ADR-024`. El catálogo de roles sigue condicionado a `E-001`, cuyo cierre mínimo es el **20-ago-2026** — y por la regla dura 12, el bloque de autorización de C-02 no se implementa hasta entonces. **Este ADR no destraba `E-001`**: es ortogonal, decide de dónde sale la identidad, no qué puede hacer cada rol.
+> ⚠️ **Lo que este ADR NO decide.** La forma del `sub` y de los claims la fija `ADR-021`. La matriz de permisos la fija `ADR-024`. ~~El catálogo de roles sigue condicionado a `E-001`~~ — ✅ **`E-001` se ratificó el 20-ago-2026** y el catálogo quedó firme; el bloque de autorización de C-02 está destrabado. **Este ADR nunca destrabó `E-001`**: es ortogonal, decide de dónde sale la identidad, no qué puede hacer cada rol.
 
 ---
 

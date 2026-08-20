@@ -16,7 +16,7 @@ Este es uno de los puntos **bloqueantes** de la base documental. Cuatro versione
 | `historias-usuario.md` | 5 *personas*: P1 Gerente, P2 Vendedor, P3 Administrativo, P4 Customer Success Manager, P5 Super Admin |
 | `manual-usuario.md` | Solo `manager`, `salesperson`, `admin_staff` (es el manual del cliente) |
 
-✅ **`IN-01` e `IN-02` están decididos** por [`ADR-017`](../docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md), **condicionado a la ratificación de [`E-001`](../docs/adr/E-001-enmienda-glosario-super-admin.md)** (cierre de discusión: 20-ago-2026). La tabla de arriba queda como registro de la discrepancia original.
+✅ **`IN-01` e `IN-02` están decididos** por [`ADR-017`](../docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md), **ya sin condición**: la enmienda [`E-001`](../docs/adr/E-001-enmienda-glosario-super-admin.md) quedó **ratificada el 20-ago-2026** y la constitución pasó a **v1.1**, incorporando *Super Admin* al glosario canónico. La tabla de arriba queda como registro de la discrepancia original.
 
 **Catálogo vigente**: **4 roles en el sistema, 3 en `user_role_enum`.** Los tres roles *de tenant* viven en `users`; `super_admin` es un rol *de plataforma* y vive en su propia tabla `super_admins`, sin `tenant_id` y exenta de RLS. `users.tenant_id` sigue **`NOT NULL` sin excepciones**.
 

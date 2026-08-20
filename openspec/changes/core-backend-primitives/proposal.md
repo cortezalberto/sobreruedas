@@ -51,13 +51,13 @@ Ninguna. Las tres capabilities de C-01 (`platform/service-health`, `platform/con
 
 | Bloqueante | Estado | Qué frena |
 |---|---|---|
-| `IN-01` catálogo de roles | Decidido por `ADR-017` — **condicionado** | `core/rbac.py` |
-| `IN-02` representación de `super_admin` | Decidido por `ADR-017` — **condicionado** | `core/rbac.py`, migración de `users` (C-05) |
-| `E-001` enmienda al glosario | 🟡 **EN DISCUSIÓN**, cierre mínimo **20-ago-2026** | ratifica lo anterior |
+| `IN-01` catálogo de roles | ✅ **Cerrado** por `ADR-017`, ya sin condición | `core/rbac.py` — **destrabado** |
+| `IN-02` representación de `super_admin` | ✅ **Cerrado** por `ADR-017`, ya sin condición | `core/rbac.py`, migración de `users` (C-05) — **destrabado** |
+| `E-001` enmienda al glosario | ✅ **RATIFICADA el 20-ago-2026** | ratificó lo anterior |
 
-`ADR-017` está aceptado *condicionado a que se ratifique `E-001`*, que hoy está en el paso (b) del Artículo 8 y todavía le faltan los pasos (c) aprobación, (d) registro y (e) comunicación. Por la **regla dura 12** no se implementa sobre un bloqueante sin resolver.
+`ADR-017` estaba aceptado *condicionado a que se ratifique `E-001`*. **La condición cayó el 20-ago-2026**: la enmienda completó el paso (c) —aprobación, registrada como decisión unipersonal del Tech Lead— y el (d) —apéndice *append-only* al final de la constitución, que pasa a **v1.1**—. El paso (e) es la comunicación y su envío es del usuario; no condiciona la implementación, porque lo que la **regla dura 12** exige es que el bloqueante esté *resuelto*, y la norma ya está registrada.
 
-**Alcance de la traba: una de las nueve tareas.** El contexto de tenant, las extensiones, la identidad, las convenciones de API, los eventos y las factories no dependen del catálogo de roles. `platform/authorization` se especifica ahora —para que la ratificación no encuentre una hoja en blanco— y se implementa después.
+**Alcance de la traba: fue una de las nueve tareas.** El contexto de tenant, las extensiones, la identidad, las convenciones de API, los eventos y las factories nunca dependieron del catálogo de roles. `platform/authorization` se especificó por anticipado —para que la ratificación no encontrara una hoja en blanco— y **ahora se implementa**.
 
 ### Riesgo cerrado
 

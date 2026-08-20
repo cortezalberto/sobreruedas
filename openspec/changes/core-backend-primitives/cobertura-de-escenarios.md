@@ -19,7 +19,7 @@
 
 | Causa | Escenarios | Se resuelve en |
 |---|---:|---|
-| El bloque 6 está bloqueado por `E-001` | 21 | C-02, tras la ratificación (cierre mínimo: 20-ago-2026) |
+| El bloque 6 estaba bloqueado por `E-001` — ✅ **ratificada el 20-ago-2026** | 21 | C-02, bloque 6, **ya destrabado y pendiente de implementar** |
 | No existe todavía un endpoint de dominio ni un esquema de entrada | 3 | **C-05** |
 | No existe todavía ningún receptor de notificaciones externas | 2 | **C-29** / **C-30** |
 
@@ -27,7 +27,7 @@
 
 ## `platform/authorization` — 0 de 21
 
-**Bloqueado por `E-001`.** El bloque 6 no se implementó y la regla dura 12 lo prohíbe expresamente: no se escribe sobre un bloqueante sin resolver. `E-001` cierra su discusión el **20-ago-2026** y todavía le faltan los pasos (c), (d) y (e) del Artículo 8.
+~~**Bloqueado por `E-001`.**~~ ✅ **Destrabado el 20-ago-2026**: `E-001` quedó ratificada y registrada como apéndice de la constitución, que pasa a v1.1. El bloque 6 **sigue sin implementar** —los 21 escenarios continúan en 0— pero ya no por un bloqueante: ahora es trabajo pendiente, que es una situación distinta y hay que leerla distinto.
 
 ~~Agravado por `R-2`~~ — **`R-2` se cerró el 17-ago-2026** con [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md). Los escenarios de permisos finos ya tienen contra qué testear: la matriz canónica. Lo que queda es un bloqueo único, `E-001`, y no dos.
 

@@ -86,11 +86,13 @@
       ⚠️ **`tests/factories/` NO se creó.** No hay ninguna entidad de negocio: la única tabla con `tenant_id` es la testigo `platform_probe`, y `Base` no tiene un solo modelo registrado. Una fábrica base sin nada que fabricar es andamiaje que hay que adivinar dos veces — se escribe junto a la primera entidad real (`users`, C-05), que es cuando se sabe qué convención necesita.
 - [x] 5.12 Test de arquitectura en `tests/unit/test_arquitectura.py`: analiza el **AST** de todo `app/**.py` y falla si `sesion_de_plataforma` se referencia fuera de `modules/admin/`. Por AST y no por texto para no marcar comentarios ni docstrings — un detector ruidoso termina desactivado. Se prueba el detector en cuatro variantes: infractor, espacio permitido, menciones que no son usos, y el uso por atributo (`session.sesion_de_plataforma()`), que es la forma de esquivarlo sin proponérselo.
 
-## 6. Autorización — `T-014` · tramo 4 · ⛔ BLOQUEADO POR `E-001`
+## 6. Autorización — `T-014` · tramo 4 · ✅ DESBLOQUEADO
 
-> **No empezar hasta que `E-001` complete los pasos (c), (d) y (e) del Artículo 8.** Cierre mínimo de discusión: 20-ago-2026. `ADR-017` está aceptado *condicionado* a esa ratificación. Regla dura 12.
+> ✅ **`E-001` ratificada el 20-ago-2026.** Pasos (c) y (d) del Artículo 8 completos; el (e) es la comunicación y su envío es del usuario, no bloquea la implementación. `ADR-017` pasó a **aceptado pleno** y el catálogo de roles quedó firme en sus tres valores — `manager`, `salesperson`, `admin_staff`. La constitución es **v1.1**.
+>
+> ⚠️ **Sigue vigente la gobernanza CRÍTICA**: `rbac.py` es el mecanismo de autorización del sistema. Que el bloqueante documental esté resuelto no convierte esto en trabajo autónomo.
 
-- [ ] 6.1 Verificar que `E-001` está ratificada y registrada; si no, **detenerse acá**
+- [x] 6.1 Verificar que `E-001` está ratificada y registrada; si no, **detenerse acá** — ✅ **20-ago-2026**: ratificada, registrada como apéndice *append-only* en [`deRuedas-constitucion.md`](../../../docs/sdd/deRuedas-constitucion.md) §Historial de enmiendas, y `ADR-017` sin condición. El portón se abre
 - [ ] 6.2 Definir el catálogo de roles en un único lugar consultable, con la equivalencia al glosario que `ADR-017` documenta
 - [ ] 6.3 Escribir el test de que declarar un rol fuera del catálogo falla de forma detectable antes de atender peticiones, y no se interpreta como "nadie" ni como "cualquiera"
 - [ ] 6.4 Implementar `require_role(...)` devolviendo rechazo por falta de permisos, distinguible del rechazo por falta de autenticación

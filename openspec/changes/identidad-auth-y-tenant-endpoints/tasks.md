@@ -1,20 +1,20 @@
 # C-05 · Tareas
 
-> ⛔ **NADA DE ESTE ARCHIVO SE IMPLEMENTA ANTES DEL 20-AGO-2026.**
+> ✅ **La traba documental de `E-001` cayó el 20-ago-2026.**
 >
-> `E-001` nombra la *"migración inicial de `users`"* entre lo que bloquea, y `ADR-017` —que fija los tres valores de `user_role_enum`— está aceptado **condicionado** a esa ratificación. Si se rechaza, el catálogo de roles cambia y **quitar un valor de un enum es una migración destructiva**, prohibida en un paso por la regla dura 13.
+> `E-001` nombraba la *"migración inicial de `users`"* entre lo que bloqueaba, y `ADR-017` —que fija los tres valores de `user_role_enum`— estaba aceptado **condicionado** a esa ratificación. **Se ratificó sin cambios al texto propuesto**, así que el catálogo quedó firme en `manager`, `salesperson` y `admin_staff`, y el escenario que preocupaba —quitar un valor del enum, migración destructiva prohibida en un paso por la regla dura 13— **ya no puede ocurrir**.
 >
-> **Regla dura 12**: no se implementa sobre un bloqueante sin resolver. La tarea 0.1 es la puerta.
+> ⚠️ **Esto NO habilita a empezar.** La puerta de abajo tiene tres hojas y `E-001` era una sola. La **0.2** sigue cerrada: el bloque 6 de C-02 (`core/rbac.py`) está destrabado pero **sin implementar**, y los endpoints de este change lo invocan. **Regla dura 12**: no se implementa sobre un bloqueante sin resolver.
 
-> **Gobernanza CRÍTICA.** Es el dominio de autenticación y autorización completo. Ningún código sin aprobación humana explícita, incluso después de que `E-001` se ratifique.
+> **Gobernanza CRÍTICA.** Es el dominio de autenticación y autorización completo. Ningún código sin aprobación humana explícita — y que `E-001` ya esté ratificada **no cambia esto en nada**: eran dos exigencias distintas y solo se levantó una.
 
 > **TDD estricto.** Cada tarea de implementación va precedida de su test.
 
 ## 0. La puerta
 
-- [ ] 0.1 Verificar que `E-001` está **ratificada y registrada** —pasos (c), (d) y (e) del Artículo 8—; si no, **detenerse acá**
-- [ ] 0.2 Verificar que el bloque 6 de C-02 (`core/rbac.py`) quedó implementado: los endpoints de este change lo invocan
-- [ ] 0.3 Confirmar que `ADR-017` pasó de *"Aceptado condicionado"* a **Aceptado** y actualizar su encabezado
+- [x] 0.1 Verificar que `E-001` está **ratificada y registrada** —pasos (c), (d) y (e) del Artículo 8—; si no, **detenerse acá** — ✅ **20-ago-2026**: pasos (c) y (d) completos, enmienda registrada como apéndice *append-only* en la constitución, que pasa a **v1.1**. El paso (e) es la comunicación y **queda pendiente de envío por el usuario**; no frena el código, porque lo que la regla dura 12 exige es que la norma esté resuelta y registrada, y lo está
+- [ ] 0.2 Verificar que el bloque 6 de C-02 (`core/rbac.py`) quedó implementado: los endpoints de este change lo invocan — ⛔ **ESTA ES LA PUERTA QUE SIGUE CERRADA.** El bloque 6 está destrabado desde el 20-ago pero **no implementado**: 0 de 21 escenarios de `platform/authorization`
+- [x] 0.3 Confirmar que `ADR-017` pasó de *"Aceptado condicionado"* a **Aceptado** y actualizar su encabezado — ✅ **20-ago-2026**: encabezado actualizado a *Aceptado pleno* y levantada la consecuencia condicionada del cuerpo del ADR
 
 ## 1. Migraciones
 
