@@ -7,6 +7,8 @@
 - **Depende de**: [`ADR-017`](ADR-017-catalogo-de-roles-y-super-admin.md) (catálogo de roles) — ✅ **aceptado pleno** desde que [`E-001`](E-001-enmienda-glosario-super-admin.md) se ratificó el 20-ago-2026
 - **Afecta**: `C-02` bloque 6 (`T-014`, `core/rbac.py`), `C-05` (`T-027`), `C-19`, `knowledge-base/03_actores_y_roles.md` §RBAC
 - **Governance**: **CRÍTICO** — define quién puede hacer qué en todo el sistema
+- **Enmendado por**: [`ADR-033`](ADR-033-alcance-self-distinto-de-own.md) (20-ago-2026) — el eje *Alcance* de §3 gana un tercer valor, `self`. **§3 y §6 no se leen sin ese documento.**
+- **Enmendado por**: [`ADR-034`](ADR-034-transiciones-como-tercer-eje-del-permiso.md) (20-ago-2026) — §3 gana un **tercer eje**, *Transiciones*. Lo usa una sola celda: `POST /vehicles/{id}/status` para `salesperson`.
 
 ---
 
@@ -52,8 +54,10 @@ Un permiso se identifica con `recurso:acción` en inglés (`leads:assign`, `vehi
 |---|---|---|
 | **Alcance** | `all` | Todos los registros del tenant |
 | | `own` | Solo los que el sujeto tiene asignados — ver §4 |
+| | `self` | Solo el propio sujeto (`recurso.id == sujeto.user_id`) — agregado por [`ADR-033`](ADR-033-alcance-self-distinto-de-own.md) |
 | | *(ausente)* | **Denegado.** La ausencia es la denegación; no existe un valor "denegado" explícito |
 | **Campos** | conjunto, opcional | Si está presente, la operación se limita a esos campos. Aplica **tanto a escritura como a lectura** |
+| **Transiciones** | conjunto de pares `(desde, hasta)`, opcional | Si está presente, la operación se limita a esos cambios de estado — agregado por [`ADR-034`](ADR-034-transiciones-como-tercer-eje-del-permiso.md) |
 
 La restricción de campos **en lectura** no estaba prevista por la spec de `authorization`, que solo describe modificación acotada. `RN-ST-12` la obliga: `acquisition_cost_ars` solo lo ven `manager` y `admin_staff`, sobre un recurso que `salesperson` sí puede leer. Es una omisión de la spec, no de este ADR — se registra en §Consecuencias.
 
@@ -83,9 +87,9 @@ Leyenda: `all` · `own` · `—` denegado · `[campos]` restricción de campos �
 | Operación | `manager` | `salesperson` | `admin_staff` |
 |---|:--:|:--:|:--:|
 | `login`, `refresh`, `forgot-password`, `reset-password` | *ruta pública, sin JWT* | *ruta pública* | *ruta pública* |
-| `logout`, `GET /auth/me`, `mfa/enable`, `mfa/verify` | `own` | `own` | `own` |
+| `logout`, `GET /auth/me`, `mfa/enable`, `mfa/verify` | `self` | `self` | `self` |
 
-`own` acá significa "sobre sí mismo": ningún rol opera la sesión ni la MFA de otro usuario. La obligatoriedad de MFA para `manager` está en disputa (`IN-17`) y **no es un permiso** — no se decide acá.
+**Alcance `self`** ([`ADR-033`](ADR-033-alcance-self-distinto-de-own.md)): ningún rol opera la sesión ni la MFA de otro usuario. Estas celdas decían `own`, pero no era el `own` de §4 — la sesión no tiene `assigned_user_id`. La obligatoriedad de MFA para `manager` está en disputa (`IN-17`) y **no es un permiso** — no se decide acá.
 
 #### Tenancy y sucursales
 
@@ -108,7 +112,7 @@ Leyenda: `all` · `own` · `—` denegado · `[campos]` restricción de campos �
 |---|:--:|:--:|:--:|
 | `GET /users` | `all` | ⚠ `all` `[id, nombre, rol, sucursales]` | ⚠ `all` `[id, nombre, rol, sucursales]` |
 | `POST /users/invite` | `all` | — | — |
-| `PATCH /users/{id}` | `all` | `own` `[perfil]` | `own` `[perfil]` |
+| `PATCH /users/{id}` | `all` | `self` `[perfil]` | `self` `[perfil]` |
 | `POST /users/{id}/deactivate` | `all` | — | — |
 | `POST /users/{id}/branches` | `all` | — | — |
 
@@ -135,8 +139,11 @@ La vista por recurso decía *"el propio usuario puede editar campos no privilegi
 | `POST /vehicles/{id}/photos` | `all` | `own` | `all` |
 | `DELETE` foto, `PATCH /photos/order` | `all` | — | `all` |
 | `POST /vehicles/import` | `all` | — | `all` |
+| `GET /vehicles/import/template`, `GET /imports`, `GET /imports/{id}` | `all` | — | `all` |
 | `GET /catalog/*` (marcas, modelos, versiones) | `all` | `all` | `all` |
 | Escritura de catálogo | — | — | — |
+
+**Fila agregada el 20-ago-2026.** La plantilla, el listado de corridas y el progreso de una importación se expusieron en `C-17` sin fila en esta matriz — exactamente lo que §8 prohíbe. Las trae la verificación automática del bloque 6 de `C-02`, que recorre las operaciones realmente expuestas. Se les asignan los **mismos actores** que a `POST /vehicles/import`: son facetas de la misma capacidad, no una capacidad nueva. En el código comparten la clave `vehicles:import`.
 
 El catálogo es **cross-tenant y de solo lectura para los tenants**; solo `super_admin` lo edita (`RN-ST-15`). Es la única tabla que los tres roles leen sin que `tenant_id` intervenga, y está en la lista de exentas de RLS.
 
