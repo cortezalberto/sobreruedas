@@ -11,7 +11,18 @@
 | Rol, tenant, sucursales | **Nosotros** | Son dominio de negocio. Keycloak no sabe qué es una sucursal |
 | Estado (`invited`/`active`/…) | **Nosotros** | Es ciclo de vida de negocio, no de credencial |
 
-**La copia de email y nombre se desincroniza**, y hay que decir qué pasa cuando eso ocurre. La regla es: **Keycloak gana**. En cada request, `get_current_user` compara el email del token contra el espejo y lo actualiza si difiere. Un espejo que miente sobre a quién pertenece una cuenta es peor que no tener espejo.
+**La copia de email y nombre se desincroniza**, y hay que decir qué pasa cuando eso ocurre. La regla es: **Keycloak gana**. Un espejo que miente sobre a quién pertenece una cuenta es peor que no tener espejo.
+
+> **Dónde se corrige — corregido el 21-ago-2026, al implementarlo.** Esta decisión decía *"en cada request, `get_current_user` compara el email del token contra el espejo y lo actualiza si difiere"*. Al escribirlo apareció que **`get_current_user` no toca la base**: solo verifica la firma del token contra el JWKS. Cumplirlo al pie de la letra obligaría a darle una sesión de base y a sumarle un `SELECT` a **cada request del sistema**, incluidas todas las que no miran `users` para nada.
+>
+> Se corrige en **`GET /auth/me`**, que ya tiene la fila en la mano. Mismo efecto, costo cero.
+>
+> **Lo que se pierde, y queda escrito**: el espejo de alguien que nunca abre su perfil sigue viejo para un listado ajeno. Se acepta — el email de una persona cambia rara vez, y quien lo cambia en Keycloak es porque está usando el sistema.
+>
+> Dos límites que el diseño no había previsto y que los tests fijan:
+>
+> - **Un token sin `email` no borra el del espejo.** El claim viene del client scope homónimo, que es un *default* del realm y no una garantía del protocolo. Pisar el email con `None` cambiaría un espejo desactualizado —el problema que esta decisión resuelve— por uno vacío, que es peor.
+> - **Se corrige el email y nada más.** El token trae el rol que la persona tenía cuando se emitió; arrastrarlo desharía una degradación de permisos sola en el próximo request, con la fuente equivocada mandando sobre la buena.
 
 > **Se evaluó no copiar nada y consultar a Keycloak siempre, y se descartó.** Listar los usuarios de una agencia se convertiría en N llamadas HTTP a Keycloak, y una caída suya dejaría de ser "nadie puede entrar" para pasar a ser "nadie puede ver nada". El acoplamiento se acota a lo que ya existe.
 
@@ -110,7 +121,18 @@ Las tres son **aditivas** (regla dura 13). `user_branches` lleva `tenant_id` pro
 
 ## D-9 — El realm de Keycloak se versiona como archivo
 
-`infra/keycloak/realm-deruedas.json`, importado al arrancar. No se configura a mano por la UI.
+`infra/local/keycloak/deruedas-dev-realm.json`, importado al arrancar. No se configura a mano por la UI.
+
+> **Corregido el 21-ago-2026.** Esta decisión había escrito `infra/keycloak/realm-deruedas.json`, una ruta que nunca existió. El archivo real vive bajo `infra/local/`, y esa separación —`local/`, `vps/`, `observability/`— ya existía en el repositorio y dice algo que la ruta plana no: **qué realm es de qué entorno**. Se acepta la ruta real y se corrige el texto, en vez de mover el archivo para que le dé la razón a un renglón.
+>
+> Va con una regla que el diseño no había explicitado y que hacía falta al mover los *mappers*:
+>
+> | Qué | Dónde | Por qué |
+> |---|---|---|
+> | Estructura del realm — roles, flujos, mappers, vida de los tokens | **El JSON versionado** | Es igual en toda máquina |
+> | Configuración por máquina — el `redirectUri` del puerto del frontend | **`sembrar_dev.py`** | El puerto vive en `.env` y cambia por escritorio; el seed lo **agrega**, no lo reemplaza |
+>
+> Los mappers estaban del lado equivocado: los creaba el seed por la API de administración. No era configuración a mano —el seed es idempotente— pero era un segundo lugar donde vivía la verdad, y el JSON declaraba menos de lo que el realm realmente tenía.
 
 Un realm configurado a mano no es reproducible: el entorno local de cada uno diverge, staging diverge del local, y el día que hay que levantarlo de nuevo nadie sabe qué tenía. Es el mismo criterio que `ADR-023` le aplicó al VPS.
 

@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -278,3 +279,189 @@ async def test_los_tres_roles_de_tenant_alcanzan_su_propio_perfil(
         )
         assert respuesta.status_code == 200, f"{rol}: {respuesta.text}"
         assert respuesta.json()["role"] == rol
+
+
+# ── 3.6 y 3.7 · La correccion del espejo ─────────────────────────────────────
+#
+# `D-1` fija la frontera: Keycloak es dueño del email y nosotros lo copiamos
+# para poder listar y buscar sin llamarlo en cada request. Una copia se
+# desincroniza, asi que hay que decir quien gana — y gana el TOKEN. Un espejo
+# que miente sobre a quien pertenece una cuenta es peor que no tener espejo.
+#
+# ⚠️ DONDE SE CORRIGE, Y POR QUE NO DONDE `D-1` DECIA. El diseño escribio "en
+# cada request, `get_current_user` compara". `get_current_user` NO TOCA LA BASE
+# —solo verifica la firma del token— asi que cumplirlo al pie habria que darle
+# una sesion y sumarle un SELECT a CADA request del sistema, incluidas las que
+# no miran `users` para nada.
+#
+# Se corrige en `/auth/me`, que ya tiene la fila en la mano: mismo efecto,
+# costo cero. Lo que se pierde es que el espejo de alguien que nunca abre su
+# perfil sigue viejo para un listado ajeno — se acepta, y queda escrito.
+
+
+async def _email_local(uid: uuid.UUID) -> str:
+    async with sesion_de_propietario() as sesion:
+        fila = await sesion.execute(text("SELECT email FROM users WHERE id = :id"), {"id": uid})
+        valor: str = fila.scalar_one()
+        return valor
+
+
+async def test_si_el_email_del_token_difiere_gana_el_token(
+    cliente: TestClient, proveedor: EmisorDePrueba
+) -> None:
+    """`D-1`: Keycloak es el dueño del email y el espejo se corrige solo."""
+    tenant, _ = await agencia_con_sucursal()
+    sub = await _persona(tenant, email="viejo@demo.test")
+
+    respuesta = cliente.get(
+        "/api/v1/auth/me",
+        headers={
+            "Authorization": "Bearer "
+            + proveedor.firmar(
+                tenant_id=tenant, sub=str(sub), role="manager", extra={"email": "nuevo@demo.test"}
+            )
+        },
+    )
+
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json()["email"] == "nuevo@demo.test", "la respuesta devolvio el email viejo"
+    assert await _email_local(sub) == "nuevo@demo.test", "el espejo no se corrigio en la base"
+
+
+async def test_corregir_el_email_no_toca_rol_agencia_ni_sucursales(
+    cliente: TestClient, proveedor: EmisorDePrueba
+) -> None:
+    """Tarea 3.7 — la mitad de `D-1` que dice que NO se copia.
+
+    Rol, agencia y sucursales son DOMINIO DE NEGOCIO: Keycloak no sabe que es
+    una sucursal. Un token viejo trae el rol que la persona tenia cuando se
+    emitio; si la correccion del email arrastrara el rol del token, una
+    degradacion de permisos se desharia sola en el proximo request — con la
+    fuente equivocada mandando sobre la buena.
+    """
+    tenant, sucursal = await agencia_con_sucursal()
+    sub = await _persona(tenant, email="viejo@demo.test", rol="admin_staff", sucursal=sucursal)
+
+    respuesta = cliente.get(
+        "/api/v1/auth/me",
+        headers={
+            "Authorization": "Bearer "
+            + proveedor.firmar(
+                # El token dice `manager` y el espejo dice `admin_staff`.
+                tenant_id=tenant,
+                sub=str(sub),
+                role="manager",
+                extra={"email": "nuevo@demo.test"},
+            )
+        },
+    )
+
+    assert respuesta.status_code == 200, respuesta.text
+    cuerpo = respuesta.json()
+
+    assert cuerpo["email"] == "nuevo@demo.test"
+    assert cuerpo["role"] == "admin_staff", "la correccion del email arrastro el rol del token"
+    assert cuerpo["tenant_id"] == str(tenant)
+    assert [s["name"] for s in cuerpo["branches"]] == ["Casa central"]
+
+    async with sesion_de_propietario() as sesion:
+        fila = (
+            await sesion.execute(
+                text("SELECT role, tenant_id FROM users WHERE id = :id"), {"id": sub}
+            )
+        ).one()
+    assert fila.role == "admin_staff"
+    assert fila.tenant_id == tenant
+
+
+async def test_un_token_sin_email_no_borra_el_del_espejo(
+    cliente: TestClient, proveedor: EmisorDePrueba
+) -> None:
+    """El contrapeso, y el que evita la peor version de esto.
+
+    El claim `email` sale del scope homonimo, que es un DEFAULT client scope y
+    no una garantia del protocolo: un cliente configurado sin el emite tokens
+    sin `email`. Si "gana el token" se implementara sin mirar si el claim esta,
+    ese caso pisaria el email con `None` — y en vez de un espejo desactualizado
+    quedaria un espejo vacio, que es exactamente lo que `D-1` queria evitar.
+    """
+    tenant, _ = await agencia_con_sucursal()
+    sub = await _persona(tenant, email="unico@demo.test")
+
+    respuesta = cliente.get("/api/v1/auth/me", headers=_cabecera(proveedor, tenant, sub))
+
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json()["email"] == "unico@demo.test"
+    assert await _email_local(sub) == "unico@demo.test"
+
+
+# ── 5.5 y 5.6 · El logout ────────────────────────────────────────────────────
+
+
+class KeycloakDeSalida:
+    """Registra los cierres de sesion pedidos. No toca cuentas."""
+
+    def __init__(self) -> None:
+        self.cerradas: list[str] = []
+
+    async def cerrar_sesion(self, sub: str) -> None:
+        self.cerradas.append(sub)
+
+
+async def test_logout_cierra_la_sesion_en_keycloak_y_no_guarda_nada_local(
+    cliente: TestClient, proveedor: EmisorDePrueba
+) -> None:
+    """`D-4`. No hay denylist nuestra: mantenerla seria reimplementar OIDC."""
+    from app.main import create_app  # noqa: F401  (documenta de donde sale la app)
+    from app.modules.users.router import cliente_de_keycloak
+
+    tenant, _ = await agencia_con_sucursal()
+    sub = await _persona(tenant)
+
+    doble = KeycloakDeSalida()
+    # `TestClient.app` esta tipado como un callable ASGI generico, asi que el
+    # acceso a `dependency_overrides` necesita el `cast` para `mypy .`.
+    app = cast(FastAPI, cliente.app)
+    app.dependency_overrides[cliente_de_keycloak] = lambda: doble
+
+    try:
+        respuesta = cliente.post("/api/v1/auth/logout", headers=_cabecera(proveedor, tenant, sub))
+    finally:
+        app.dependency_overrides.pop(cliente_de_keycloak, None)
+
+    assert respuesta.status_code == 204, respuesta.text
+    assert doble.cerradas == [str(sub)]
+
+
+async def test_tras_el_logout_el_access_token_ya_emitido_sigue_valido(
+    cliente: TestClient, proveedor: EmisorDePrueba
+) -> None:
+    """Tarea 5.6 — el test que DOCUMENTA una consecuencia asumida, no un defecto.
+
+    `D-4` lo dice con todas las letras: entre el logout y el vencimiento pueden
+    pasar hasta 15 minutos en los que ese token sigue sirviendo. Es el
+    comportamiento estandar de OIDC con tokens de vida corta.
+
+    ⚠️ SI ESTE TEST EMPIEZA A FALLAR, NO SE "ARREGLA" — significa que alguien
+    agrego revocacion inmediata, y entonces lo que hay que revisar es si se
+    hizo por introspeccion (el mecanismo identificado) o por una denylist
+    propia, que es lo que la decision descarto.
+    """
+    from app.modules.users.router import cliente_de_keycloak
+
+    tenant, _ = await agencia_con_sucursal()
+    sub = await _persona(tenant)
+    cabecera = _cabecera(proveedor, tenant, sub)
+
+    doble = KeycloakDeSalida()
+    # `TestClient.app` esta tipado como un callable ASGI generico, asi que el
+    # acceso a `dependency_overrides` necesita el `cast` para `mypy .`.
+    app = cast(FastAPI, cliente.app)
+    app.dependency_overrides[cliente_de_keycloak] = lambda: doble
+    try:
+        assert cliente.post("/api/v1/auth/logout", headers=cabecera).status_code == 204
+    finally:
+        app.dependency_overrides.pop(cliente_de_keycloak, None)
+
+    # El mismo token, despues del logout.
+    assert cliente.get("/api/v1/auth/me", headers=cabecera).status_code == 200

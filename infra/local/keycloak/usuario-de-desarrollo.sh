@@ -1,5 +1,54 @@
 #!/usr/bin/env bash
 #
+# ⛔ OBSOLETO DESDE EL 21-ago-2026 — NO LO CORRAS. Usá `make seed`.
+#
+# Este script quedó superado por tres cosas a la vez, y la tercera lo rompe:
+#
+#   1. Los mappers ahora los declara el realm versionado
+#      (`deruedas-dev-realm.json`), y `backend/tests/unit/test_realm_keycloak.py`
+#      los vigila. Acá se creaban por la API.
+#
+#   2. Los crea CON OTROS NOMBRES que `make seed` —`tenant-id` y `rol` contra
+#      `tenant_id-claim` y `role-claim`—, así que correr los dos deja DOS
+#      mappers para el mismo claim. Ninguno de los dos los detecta: cada uno
+#      busca el suyo, lo encuentra, y dice "ya estaba".
+#
+#   3. El bloque final pide el token con `grant_type=password`, y ese flujo
+#      está APAGADO en los cuatro clientes por la tarea 3.2 de C-05. Hoy
+#      responde `400 unauthorized_client`. No es un desperfecto: es la decisión
+#      que hace cumplible a `ADR-026`, verificada contra el servidor corriendo.
+#
+# `make seed` hace todo lo que hacía éste —usuarios, atributos, perfil del
+# realm, reconciliación de mappers— de forma idempotente y sin duplicar nada.
+#
+# CÓMO CONSEGUIR UN TOKEN AHORA, que es lo único que este archivo daba y
+# `make seed` no. Sin ROPC, la vía es el SERVICE ACCOUNT del cliente `backend`
+# con `client_credentials` — que no es la contraseña de nadie, es la credencial
+# de la aplicación. Verificado el 21-ago-2026 de punta a punta contra la API.
+#
+#   1. Darle atributos al service account por la API de administración:
+#
+#        GET  /admin/realms/$REALM/clients?clientId=backend        -> id interno
+#        GET  /admin/realms/$REALM/clients/{id}/service-account-user
+#        PUT  /admin/realms/$REALM/users/{sa_id}
+#             {...el usuario ENTERO..., "attributes": {"tenant_id": [...],
+#                                                      "role": ["manager"]}}
+#
+#      ⚠️ EL `PUT` LLEVA EL OBJETO COMPLETO, no solo `attributes`. Mandar el
+#      fragmento —o usar `kcadm.sh update users/{id} -s attributes=...`—
+#      devuelve 204 y NO GUARDA NADA: se consulta después y `attributes` está
+#      vacío. Silencioso, y costó dos intentos descubrirlo.
+#
+#   2. Pedir el token, DESDE ADENTRO de la red de Docker por el `iss`:
+#
+#        grant_type=client_credentials&client_id=backend&client_secret=...
+#
+#      Sale con `tenant_id`, `role` y `aud: ["backend","account"]`, y la API lo
+#      acepta — los mappers del realm hacen su trabajo igual que con una persona.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# Lo que este archivo hacía, para referencia mientras exista:
+#
 # Deja el Keycloak de DESARROLLO listo para emitir un token que la API acepte.
 #
 # ⚠️ SOLO DESARROLLO. Crea un usuario con contraseña conocida y habilita los

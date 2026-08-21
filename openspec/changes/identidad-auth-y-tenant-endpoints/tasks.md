@@ -43,27 +43,30 @@
 
 ## 3. Sincronización con Keycloak
 
-- [ ] 3.1 `infra/keycloak/realm-deruedas.json` versionado e importado al arrancar (`D-9`)
-- [ ] 3.2 Test sobre el JSON: **`Direct Access Grants` desactivado**. Es lo que hace cumplible a `ADR-026` — con ese flujo, usuario y contraseña se cambian por un token y el "nunca manejamos contraseñas" pasa a depender de que a nadie se le ocurra usarlo
-- [ ] 3.3 Test sobre el JSON: PKCE obligatorio, los *mappers* de `tenant_id` y `role` como claims planos (`ADR-021`), y la vida de los tokens (15 min / 7 días)
-- [ ] 3.4 Cliente de administración de Keycloak: crear usuario, deshabilitar, disparar *required action*
-- [ ] 3.5 Test: el cliente **nunca** envía una contraseña en ninguna de sus llamadas
-- [ ] 3.6 Implementar la corrección del espejo: si el email del token difiere del local, **gana el token** (`D-1`)
-- [ ] 3.7 Test: corregir el email **no** toca rol, agencia ni sucursales
+- [x] 3.1 `infra/local/keycloak/deruedas-dev-realm.json` versionado e importado al arrancar (`D-9`). **La ruta no es la que `D-9` escribió**: la separación `local/` vs `vps/` ya existía en `infra/` y dice más que la ruta plana. Se acepta la real y se corrige el diseño
+- [x] 3.2 Test sobre el JSON: **`Direct Access Grants` desactivado**. Es lo que hace cumplible a `ADR-026` — con ese flujo, usuario y contraseña se cambian por un token y el "nunca manejamos contraseñas" pasa a depender de que a nadie se le ocurra usarlo
+- [x] 3.3 Test sobre el JSON: PKCE obligatorio, los *mappers* de `tenant_id` y `role` como claims planos (`ADR-021`), y la vida de los tokens (15 min / 7 días)
+- [x] 3.4 Cliente de administración de Keycloak: crear usuario, deshabilitar, disparar *required action*
+- [x] 3.5 Test: el cliente **nunca** envía una contraseña en ninguna de sus llamadas
+- [x] 3.6 Implementar la corrección del espejo: si el email del token difiere del local, **gana el token** (`D-1`)
+- [x] 3.7 Test: corregir el email **no** toca rol, agencia ni sucursales
 
 ## 4. Servicio de usuarios
 
-- [ ] 4.1 Test: invitar crea primero en Keycloak y después local (`D-5`) — el orden es lo que hace recuperable el fallo parcial
-- [ ] 4.2 Test: si Keycloak falla, **no** queda una persona invitada en la base
-- [ ] 4.3 Implementar `service.py`: invitar, aceptar, desactivar, dar de baja, asignar sucursales
-- [ ] 4.4 Registrar el contador de usuarios: `limites.registrar(Recurso.USERS, contar_usuarios)`. **Sin esta línea `assert_can_add_user` levanta** — C-04 lo dejó fallando cerrado para que el olvido sea imposible de no notar
-- [ ] 4.5 Test: invitar superando el cupo del plan se rechaza con **402** y no crea nada, ni local ni en Keycloak
-- [ ] 4.6 Test: desactivar **sigue** consumiendo cupo; dar de baja lo libera (`D-6`)
-- [ ] 4.7 Test: dar de baja **deshabilita** en Keycloak, no borra
-- [ ] 4.8 Test: el email de una persona dada de baja **sigue ocupado** en esa agencia
-- [ ] 4.9 Test: a lo sumo una sucursal principal por persona; marcar otra desmarca la anterior
-- [ ] 4.10 Test: asignar a una sucursal de otra agencia se rechaza
-- [ ] 4.11 Test: las asignaciones sobreviven a la baja (`D-7`)
+- [x] 4.1 Test: invitar crea primero en Keycloak y después local (`D-5`) — el orden es lo que hace recuperable el fallo parcial
+- [x] 4.2 Test: si Keycloak falla, **no** queda una persona invitada en la base
+- [x] 4.3 Implementar `service.py`: invitar, aceptar, desactivar, dar de baja, asignar sucursales
+- [x] 4.4 Registrar el contador de usuarios: `limites.registrar(Recurso.USERS, contar_usuarios)`. **Sin esta línea `assert_can_add_user` levanta** — C-04 lo dejó fallando cerrado para que el olvido sea imposible de no notar
+- [x] 4.5 Test: invitar superando el cupo del plan se rechaza con **402** y no crea nada, ni local ni en Keycloak
+- [x] 4.6 Test: desactivar **sigue** consumiendo cupo; dar de baja lo libera (`D-6`)
+- [x] 4.7 Test: dar de baja **deshabilita** en Keycloak, no borra
+- [x] 4.8 Test: dar de baja **libera** el email en esa agencia, y reinvitar **rehabilita** la cuenta de Keycloak en vez de crear otra.
+      **Corregido el 21-ago-2026 — decia lo contrario.** El indice `ux_users_tenant_email` es parcial (`WHERE deleted_at IS NULL`) por una decision del bloque 1 con su razon escrita en [`test_identidad_migraciones.py`](../../../backend/tests/integration/test_identidad_migraciones.py): *"si no lo fuera, el email de alguien que se fue quedaria tomado para siempre y la reincorporacion seria imposible"*.
+      Tres evidencias en la misma direccion: (a) ese test existe y pasa; (b) `make seed` **depende** de que el email quede libre — al recrearse Keycloak cambia el `sub`, y como el `id` local ES el `sub`, el seed da de baja el espejo viejo y crea uno nuevo con el mismo email; (c) la reincorporacion de un empleado es un caso real del negocio.
+      La divergencia con Keycloak —donde la cuenta sigue existiendo deshabilitada— **no se resuelve ocupando el email local sino reutilizando la cuenta remota**, que es lo que `D-5` ya insinuaba: *"la reinvitacion la reutiliza por email"*
+- [x] 4.9 Test: a lo sumo una sucursal principal por persona; marcar otra desmarca la anterior
+- [x] 4.10 Test: asignar a una sucursal de otra agencia se rechaza
+- [x] 4.11 Test: las asignaciones sobreviven a la baja (`D-7`)
 
 ## 5. Endpoints — necesitan `rbac.py` del bloque 6 de C-02
 
@@ -72,8 +75,8 @@
 - [x] 5.3 401 con código `not_authenticated`, distinguible del 403 por código y no solo por estado
 - [x] 5.4 Los dos casos. Cero sucursales es el estado **normal** de alguien recién invitado: devolver 500 ahí convertiría eso en una caída.
       Además: la respuesta no trae ninguna clave de MFA ni de credencial, ni siquiera como `null`
-- [ ] 5.5 `POST /api/v1/auth/logout` — *end-session* en Keycloak, **sin denylist propia** (`D-4`)
-- [ ] 5.6 Test que documenta la consecuencia asumida: tras el logout, el access token ya emitido **sigue siendo válido hasta vencer**
+- [x] 5.5 `POST /api/v1/auth/logout` — *end-session* en Keycloak, **sin denylist propia** (`D-4`)
+- [x] 5.6 Test que documenta la consecuencia asumida: tras el logout, el access token ya emitido **sigue siendo válido hasta vencer**
 - [ ] 5.7 `POST /api/v1/auth/accept-invitation` — **público**, no recibe contraseña (`ADR-026` §4)
 - [ ] 5.8 Test: token de invitación inválido o vencido se rechaza y deja el estado en `invited`
 - [ ] 5.9 Endpoints de `users`: listar, invitar, ver, actualizar, desactivar, dar de baja, asignar sucursales

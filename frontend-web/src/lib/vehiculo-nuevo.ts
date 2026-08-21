@@ -361,14 +361,29 @@ export function aCuerpo(borrador: BorradorDeVehiculo): CuerpoDeAlta {
  * llenar la cuota de la agencia demo. Sale de `assert_can_add_vehicle`, que
  * `StockService.crear` llama antes de cualquier otra cosa.
  *
- * `domain_error` merece una nota: `VehiculoDuplicado` NO declara un `code`
- * propio, así que hereda el genérico de `DomainError`. Hoy es el único
- * `DomainError` que el alta puede levantar, y por eso se puede traducir a
- * "dominio repetido" sin mentir. Si el servicio levantara un segundo, este
- * mensaje pasaría a ser incorrecto en silencio — el arreglo de fondo es un
- * código propio en el backend, y está anotado como tal.
+ * `domain_error` tenía una nota que ya se saldó: `VehiculoDuplicado` no
+ * declaraba `code` propio y heredaba el genérico de `DomainError`, así que este
+ * módulo lo traducía a "dominio repetido" POR DESCARTE —era el único
+ * `DomainError` que el alta podía levantar—. Funcionaba y era frágil: un
+ * segundo `DomainError` en el alta habría vuelto ese mensaje incorrecto en
+ * silencio, diciéndole al usuario que repitió un dominio cuando el problema era
+ * otro. El backend ahora declara `vehicle_duplicate` y la traducción es directa.
+ *
+ * Se siguen aceptando los dos por la ventana de despliegue; ver el test que lo
+ * explica antes de sacar el viejo.
  */
 const SIN_PERMISO = 'Tu rol no puede cargar vehículos. Pediselo a un gerente.';
+
+/**
+ * El `code` de `VehiculoDuplicado`, textual.
+ *
+ * Vive en una constante y no suelto en el `if` para que el guardián del backend
+ * —`test_alta_espejada.py`— pueda leerlo con un `re` y compararlo contra el
+ * atributo de la excepción, igual que hace con los enums y los regex. Un código
+ * copiado a mano en los dos lados es exactamente la clase de espejo que se
+ * desincroniza sin que nada se ponga rojo.
+ */
+export const DUPLICADO = 'vehicle_duplicate';
 
 const MENSAJES_DE_ALTA: ReadonlyMap<string, string> = new Map([
   ['not_authenticated', 'Tu sesión venció. Volvé a iniciar sesión.'],
@@ -395,9 +410,10 @@ const MENSAJES_DE_ALTA: ReadonlyMap<string, string> = new Map([
  * que hace falta ver.
  */
 export function mensajeDeAlta(codigo: string, status: number): string | null {
-  // El duplicado depende del estado: `domain_error` es genérico y solo en un
-  // 422 del alta significa `RN-ST-01`.
-  if (codigo === 'domain_error' && status === 422) {
+  // `domain_error` depende del estado: es genérico, y solo en un 422 del alta
+  // significa `RN-ST-01`. `vehicle_duplicate` no lo necesita —nombra la regla—
+  // pero se acepta igual mientras dure la ventana de despliegue.
+  if (codigo === DUPLICADO || (codigo === 'domain_error' && status === 422)) {
     return 'Ya hay un vehículo cargado con ese dominio.';
   }
   return MENSAJES_DE_ALTA.get(codigo) ?? null;

@@ -13,8 +13,18 @@ Es idempotente: se puede correr las veces que haga falta.
 ⚠️ HAY QUE VOLVER A CORRERLO CADA VEZ QUE SE RECREE EL CONTENEDOR DE KEYCLOAK,
 no solo despues de un `docker compose down -v`. `start-dev` guarda todo en una
 H2 EN MEMORIA, asi que cualquier cambio en el servicio —una variable de entorno
-nueva, por ejemplo— se lleva puestos los usuarios y los mappers. El realm se
-reimporta del JSON, que no tiene ninguno de los dos.
+nueva, por ejemplo— se lleva puestos los USUARIOS. El realm se reimporta del
+JSON, que desde el 21-ago-2026 SI trae los mappers.
+
+⚠️ LOS MAPPERS YA NO LOS CREA ESTE ARCHIVO — los declara el realm versionado, y
+`backend/tests/unit/test_realm_keycloak.py` lo vigila. El codigo de abajo que
+los reconcilia se conserva a proposito y es IDEMPOTENTE: encuentra los del
+realm por nombre y no toca nada. Sirve para el caso en que alguien este contra
+un Keycloak cuyo realm se importo antes del cambio.
+
+Estaban aca por una razon que dejo de valer: cuando el JSON no los traia, este
+era el unico lugar donde existian. Que sigan siendo dos lugares posibles y una
+sola verdad es la diferencia entre reconciliar y duplicar.
 
 ⚠️ SOLO PARA LOCAL. La clave de abajo es una constante de desarrollo sobre un
 realm que solo levanta `docker-compose.yml` en esta maquina. No es un secreto:
