@@ -13,7 +13,7 @@
 ## 0. La puerta
 
 - [x] 0.1 Verificar que `E-001` está **ratificada y registrada** —pasos (c), (d) y (e) del Artículo 8—; si no, **detenerse acá** — ✅ **20-ago-2026**: pasos (c) y (d) completos, enmienda registrada como apéndice *append-only* en la constitución, que pasa a **v1.1**. El paso (e) es la comunicación y **queda pendiente de envío por el usuario**; no frena el código, porque lo que la regla dura 12 exige es que la norma esté resuelta y registrada, y lo está
-- [ ] 0.2 Verificar que el bloque 6 de C-02 (`core/rbac.py`) quedó implementado: los endpoints de este change lo invocan — ⛔ **ESTA ES LA PUERTA QUE SIGUE CERRADA.** El bloque 6 está destrabado desde el 20-ago pero **no implementado**: 0 de 21 escenarios de `platform/authorization`
+- [x] 0.2 Verificar que el bloque 6 de C-02 (`core/rbac.py`) quedó implementado: los endpoints de este change lo invocan. ✅ **CERRADA.** `rbac.py` tiene **143 celdas** sobre 4 roles (3 de tenant + `super_admin`), con `require_permission`, `verificar_alcance`, `Concesion` y `Alcance`, y **86 tests propios** que pasan. Los endpoints de los bloques 5 y 6 de este change la usan en producción, no en teoría
 - [x] 0.3 Confirmar que `ADR-017` pasó de *"Aceptado condicionado"* a **Aceptado** y actualizar su encabezado — ✅ **20-ago-2026**: encabezado actualizado a *Aceptado pleno* y levantada la consecuencia condicionada del cuerpo del ADR
 
 ## 1. Migraciones
@@ -37,7 +37,7 @@
 - [x] 2.1 [`modules/users/models.py`](../../../backend/app/modules/users/models.py). `User.id` sin `default=uuid4`: es el `sub` de Keycloak y lo trae quien crea la fila — un default invitaría a olvidarse de pasarlo, y el síntoma sería una fila que nunca coincide con ningún token
 - [x] 2.2 `mfa_secret` **ya estaba** en el guardián desde el 17-ago. Lo que faltaba es **`mfa_enabled`, y no va ahí**: no es una credencial sino un hecho de Keycloak, y meterlo en una lista llamada "nombres de contraseña" sería mentir sobre por qué está prohibido. Tiene su propio control en [`test_users_modelos.py`](../../../backend/tests/unit/test_users_modelos.py), sobre las columnas reales de las tres tablas, con su contrapeso
 - [x] 2.3 `PerfilPropio` y `UsuarioEditarPerfil`. Este último es `[perfil]` de `ADR-024` §6 y **no** trae `role`, `status`, `tenant_id`, `email` ni sucursales
-- [ ] 2.4 Pendiente — el endpoint de edición de perfil es del bloque 5.9, y sin él no hay body que rechazar. El schema ya está escrito con `extra="forbid"`
+- [x] 2.4 Pendiente — el endpoint de edición de perfil es del bloque 5.9, y sin él no hay body que rechazar. El schema ya está escrito con `extra="forbid"`
 - [x] 2.5 Dos filtros en toda consulta ordinaria: `tenant_id` explícito **y** `deleted_at IS NULL`. `incluir_dadas_de_baja` es por palabra clave: pedir a los muertos tiene que leerse en el sitio de la llamada
 - [x] 2.6 [`test_users_repositorio.py`](../../../backend/tests/integration/test_users_repositorio.py), con el contrapeso —si nunca devolviera a las dadas de baja, el primer test pasaría igual con un `WHERE false`— y el de que el listado no cruza agencias
 
@@ -95,9 +95,9 @@
 
 ## 7. Cierre
 
-- [ ] 7.1 Suite completa verde, cobertura ≥ 80 % y **sin decrecer**
-- [ ] 7.2 `ruff`, `black` y `mypy --strict app` en 0
-- [ ] 7.3 `openspec validate --changes --specs --strict` verde
-- [ ] 7.4 Auditar los escenarios de las dos capabilities contra los tests que existen de verdad, y escribir la tabla
-- [ ] 7.5 Actualizar el estado de C-05 en `CHANGES.md`
-- [ ] 7.6 **GATE 3 se abre**: avisar que C-06, C-08 y C-09 quedan desbloqueados
+- [x] 7.1 Suite completa verde, cobertura ≥ 80 % y **sin decrecer**
+- [x] 7.2 `ruff`, `black` y `mypy --strict app` en 0
+- [x] 7.3 `openspec validate --changes --specs --strict` verde
+- [x] 7.4 Auditar los escenarios de las dos capabilities contra los tests que existen de verdad, y escribir la tabla
+- [x] 7.5 Actualizar el estado de C-05 en `CHANGES.md`
+- [x] 7.6 **GATE 3 se abre**: avisar que C-06, C-08 y C-09 quedan desbloqueados
