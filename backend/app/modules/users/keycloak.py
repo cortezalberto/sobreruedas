@@ -165,6 +165,24 @@ class ClienteDeKeycloak:
         if respuesta.status_code not in (httpx.codes.OK, httpx.codes.NO_CONTENT):
             raise ErrorDeKeycloak("deshabilitar el usuario", respuesta)
 
+    async def rehabilitar(self, sub: str) -> None:
+        """La otra mitad de `D-6`, y la que hace posible la reincorporacion.
+
+        Como la baja DESHABILITA en vez de borrar, la cuenta sigue existiendo
+        con su email tomado. Cuando esa persona vuelve, crear una cuenta nueva
+        reboteria con 409 — hay que reactivar la que ya esta.
+
+        No toca credenciales: la persona vuelve a fijar su contraseña por el
+        mail de la *required action*, igual que en la primera invitacion.
+        """
+        respuesta = await self._cliente.put(
+            f"{self._usuarios()}/{sub}",
+            headers=await self._cabecera(),
+            json={"enabled": True},
+        )
+        if respuesta.status_code not in (httpx.codes.OK, httpx.codes.NO_CONTENT):
+            raise ErrorDeKeycloak("rehabilitar el usuario", respuesta)
+
     async def pedir_que_fije_contrasenia(self, sub: str) -> None:
         """Dispara `UPDATE_PASSWORD` — el mail lo manda Keycloak, no nosotros.
 

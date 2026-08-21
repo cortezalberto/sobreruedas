@@ -386,3 +386,38 @@ async def test_el_context_manager_cierra_el_cliente_http() -> None:
         await abierto.deshabilitar(SUB)
 
     assert cliente._cliente.is_closed, "el cliente httpx quedo abierto"
+
+
+@pytest.mark.asyncio
+async def test_rehabilitar_vuelve_a_habilitar_sin_tocar_credenciales() -> None:
+    """La otra mitad de `D-6`, y la que hace posible la reincorporacion.
+
+    Dar de baja DESHABILITA en Keycloak, no borra — asi que la cuenta sigue ahi
+    con su email tomado. Cuando esa persona vuelve, crear una cuenta nueva
+    rebotaria con 409. Se rehabilita la que ya existe.
+
+    Y como todo lo demas en este cliente: sin mandar una sola credencial. La
+    persona vuelve a fijar su contraseña por el mail de la required action.
+    """
+    espia = Espia()
+    await _cliente(espia).rehabilitar(SUB)
+
+    cuerpos = [cuerpo for cuerpo in espia.cuerpos() if "enabled" in cuerpo]
+    assert cuerpos, "no se mando ningun cuerpo con `enabled`"
+    assert cuerpos[0]["enabled"] is True
+
+    for peticion in espia.peticiones:
+        if peticion.url.path.endswith("/protocol/openid-connect/token"):
+            continue
+        claves = {c.lower() for c in _claves(json.loads(peticion.content))}
+        assert not (claves & set(CLAVES_DE_CONTRASENIA))
+
+
+@pytest.mark.asyncio
+async def test_si_falla_rehabilitar_se_levanta() -> None:
+    espia = EspiaQueFalla(httpx.codes.NOT_FOUND)
+
+    with pytest.raises(ErrorDeKeycloak) as fallo:
+        await _cliente(espia).rehabilitar(SUB)
+
+    assert fallo.value.operacion == "rehabilitar el usuario"
