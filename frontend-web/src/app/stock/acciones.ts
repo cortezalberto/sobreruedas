@@ -15,10 +15,16 @@ import { revalidatePath } from 'next/cache';
 
 import { auth } from '@/auth';
 import { API_BASE_URL } from '@/lib/api';
+import { mensajeDeAlta, type CuerpoDeAlta } from '@/lib/vehiculo-nuevo';
 
 export interface Resultado {
   ok: boolean;
   mensaje: string;
+}
+
+/** El alta devuelve ademas el id, que es lo unico util que trae el 201. */
+export interface ResultadoDeAlta extends Resultado {
+  id?: string;
 }
 
 /**
@@ -97,5 +103,71 @@ export async function cambiarEstado(vehiculoId: string, destino: string): Promis
   return {
     ok: false,
     mensaje: mensajeDe(codigo) ?? `El backend rechazó el cambio (${respuesta.status}).`,
+  };
+}
+
+/**
+ * El alta de un vehículo.
+ *
+ * Recibe el cuerpo YA armado por `aCuerpo`, no el borrador del formulario: la
+ * conversión y la validación son lógica pura y viven en `lib/vehiculo-nuevo.ts`,
+ * donde se pueden probar sin montar Next ni NextAuth. Acá solo queda mandar la
+ * petición y traducir la respuesta.
+ *
+ * NO decide permisos, igual que `cambiarEstado`. Un `salesperson` puede llegar
+ * hasta acá y recibir 403 — verificado en vivo—, y eso es lo correcto: la única
+ * copia de la matriz que existe es `rbac.py`.
+ */
+export async function crearVehiculo(cuerpo: CuerpoDeAlta): Promise<ResultadoDeAlta> {
+  const sesion = await auth();
+
+  if (!sesion?.accessToken) {
+    return { ok: false, mensaje: MENSAJES.not_authenticated };
+  }
+
+  let respuesta: Response;
+  try {
+    respuesta = await fetch(`${API_BASE_URL}/api/v1/vehicles`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sesion.accessToken}`,
+      },
+      body: JSON.stringify(cuerpo),
+      cache: 'no-store',
+    });
+  } catch (error) {
+    console.error('[stock] no se pudo cargar el vehiculo:', error);
+    return { ok: false, mensaje: 'El servicio no respondió. Intentá de nuevo.' };
+  }
+
+  if (respuesta.status === 201) {
+    // La tabla del stock se renderiza en el servidor y su caché no sabe que
+    // apareció una fila. Sin esto el vehículo recién cargado no aparece hasta
+    // que alguien recargue a mano, y el usuario vuelve a cargarlo.
+    revalidatePath('/stock');
+
+    const creado: unknown = await respuesta.json().catch(() => null);
+    const id =
+      typeof creado === 'object' && creado !== null && 'id' in creado
+        ? String((creado as { id: unknown }).id)
+        : undefined;
+
+    return { ok: true, mensaje: 'Vehículo cargado.', id };
+  }
+
+  const cuerpoDelError: unknown = await respuesta.json().catch(() => null);
+  const codigo =
+    typeof cuerpoDelError === 'object' && cuerpoDelError !== null && 'code' in cuerpoDelError
+      ? String((cuerpoDelError as { code: unknown }).code)
+      : '';
+
+  console.error(`[stock] el backend rechazo el alta: ${respuesta.status} ${codigo}`);
+
+  return {
+    ok: false,
+    mensaje:
+      mensajeDeAlta(codigo, respuesta.status) ??
+      `El backend rechazó el alta (${respuesta.status}).`,
   };
 }

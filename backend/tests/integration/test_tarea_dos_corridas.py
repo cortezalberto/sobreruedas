@@ -47,7 +47,12 @@ from app.modules.stock.importacion_modelo import EstadoDeImportacion
 from app.modules.stock.importacion_servicio import ImportService
 from app.modules.stock.models import Vehicle
 
-from .soporte import DSN_APLICACION, reponer_entorno, sesion_de_propietario
+from .soporte import (
+    DSN_APLICACION,
+    agencia_con_sucursal,
+    reponer_entorno,
+    sesion_de_propietario,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -113,26 +118,8 @@ def test_la_segunda_importacion_tambien_funciona(base_migrada: None) -> None:
 
 
 async def _agencia() -> tuple[str, str, uuid.UUID]:
-    tenant_id, branch_id = uuid.uuid4(), uuid.uuid4()
+    tenant_id, _ = await agencia_con_sucursal()
     async with sesion_de_propietario() as sesion:
-        await sesion.execute(
-            text(
-                "INSERT INTO tenants (id, name, slug, cuit, billing_email, status) "
-                "VALUES (:id, 'Agencia', :s, :c, 'f@example.com', 'active')"
-            ),
-            {
-                "id": tenant_id,
-                "s": f"ag-{tenant_id.hex[:8]}",
-                "c": f"30{tenant_id.int % 10**9:09d}0"[:11],
-            },
-        )
-        await sesion.execute(
-            text(
-                "INSERT INTO branches (id, tenant_id, name, city, province) "
-                "VALUES (:id, :t, 'Casa central', 'Mendoza', 'Mendoza')"
-            ),
-            {"id": branch_id, "t": tenant_id},
-        )
         marca, modelo = (
             await sesion.execute(
                 text(

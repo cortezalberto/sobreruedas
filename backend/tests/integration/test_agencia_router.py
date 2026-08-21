@@ -27,7 +27,12 @@ from app.core import auth
 from app.main import create_app
 
 from ..emisor_de_tokens import EmisorDePrueba
-from .soporte import DSN_APLICACION, reponer_entorno, sesion_de_propietario
+from .soporte import (
+    DSN_APLICACION,
+    agencia_con_sucursal,
+    reponer_entorno,
+    sesion_de_propietario,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -55,54 +60,14 @@ def cliente(
         yield c
 
 
-async def _agencia(*, plan: str | None = None) -> tuple[uuid.UUID, uuid.UUID]:
-    """Un tenant con una sucursal, creados con el rol PROPIETARIO.
-
-    Es andamiaje: `tenants` no tiene politica RLS y el rol de aplicacion no la
-    escribe. La precondicion se arma por la puerta de servicio y el endpoint se
-    prueba por la de adelante.
-
-    `plan` toma el CODIGO del plan sembrado por la migracion `005`, no su id:
-    el id es un UUID generado en esa migracion y no se puede escribir aca.
-    """
-    tenant_id, branch_id = uuid.uuid4(), uuid.uuid4()
-    async with sesion_de_propietario() as sesion:
-        plan_id = None
-        if plan is not None:
-            plan_id = await sesion.scalar(text("SELECT id FROM plans WHERE code = :c"), {"c": plan})
-            assert plan_id is not None, f"la migracion 005 no sembro el plan '{plan}'"
-        await sesion.execute(
-            text(
-                "INSERT INTO tenants (id, name, slug, cuit, billing_email, status, plan_id) "
-                "VALUES (:id, :n, :s, :c, :e, 'active', :p)"
-            ),
-            {
-                "id": tenant_id,
-                "n": f"Agencia {tenant_id.hex[:6]}",
-                "s": f"agencia-{tenant_id.hex[:8]}",
-                "c": f"30{tenant_id.int % 10**9:09d}0"[:11],
-                "e": "facturacion@example.com",
-                "p": plan_id,
-            },
-        )
-        await sesion.execute(
-            text(
-                "INSERT INTO branches (id, tenant_id, name, city, province) "
-                "VALUES (:id, :t, 'Casa central', 'Mendoza', 'Mendoza')"
-            ),
-            {"id": branch_id, "t": tenant_id},
-        )
-    return tenant_id, branch_id
-
-
 @pytest.fixture
 async def agencia() -> tuple[uuid.UUID, uuid.UUID]:
-    return await _agencia()
+    return await agencia_con_sucursal()
 
 
 @pytest.fixture
 async def otra_agencia() -> tuple[uuid.UUID, uuid.UUID]:
-    return await _agencia()
+    return await agencia_con_sucursal()
 
 
 def _cabecera(proveedor: EmisorDePrueba, tenant: uuid.UUID) -> dict[str, str]:
@@ -280,7 +245,7 @@ async def test_el_techo_del_plan_responde_402(
     el cuerpo trae `resource`/`limit`/`used` para que el frontend no parsee
     texto para humanos.
     """
-    tenant_id, _ = await _agencia(plan="starter")
+    tenant_id, _ = await agencia_con_sucursal(plan="starter")
 
     respuesta = cliente.post(
         "/api/v1/branches", json=_SUCURSAL, headers=_cabecera(proveedor, tenant_id)
@@ -297,7 +262,7 @@ async def test_una_baja_devuelve_cuota_al_plan(
 ) -> None:
     """La contracara del test anterior, y la que prueba que la cuota se CUENTA
     y no se guarda: dada de baja la unica sucursal de Starter, entra otra."""
-    tenant_id, sucursal_id = await _agencia(plan="starter")
+    tenant_id, sucursal_id = await agencia_con_sucursal(plan="starter")
     cabecera = _cabecera(proveedor, tenant_id)
 
     cliente.post(f"/api/v1/branches/{sucursal_id}/deactivate", headers=cabecera)

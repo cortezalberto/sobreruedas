@@ -32,7 +32,12 @@ from app.modules.stock.schemas import (
 )
 
 from ..emisor_de_tokens import EmisorDePrueba
-from .soporte import DSN_APLICACION, reponer_entorno, sesion_de_propietario
+from .soporte import (
+    DSN_APLICACION,
+    agencia_con_sucursal,
+    reponer_entorno,
+    sesion_de_propietario,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -60,39 +65,6 @@ def cliente(
         yield c
 
 
-async def _agencia_con_sucursal() -> tuple[uuid.UUID, uuid.UUID]:
-    """Crea un tenant y su sucursal con el rol PROPIETARIO.
-
-    Es andamiaje, no lo que se prueba: `tenants` y `branches` los escribe C-05, y
-    el rol de aplicacion no puede crear el tenant porque `tenants` no tiene
-    politica. Se arma la precondicion por la puerta de servicio y se prueba el
-    endpoint por la de adelante.
-    """
-    tenant_id, branch_id = uuid.uuid4(), uuid.uuid4()
-    async with sesion_de_propietario() as sesion:
-        await sesion.execute(
-            text(
-                "INSERT INTO tenants (id, name, slug, cuit, billing_email, status) "
-                "VALUES (:id, :n, :s, :c, :e, 'active')"
-            ),
-            {
-                "id": tenant_id,
-                "n": f"Agencia {tenant_id.hex[:6]}",
-                "s": f"agencia-{tenant_id.hex[:8]}",
-                "c": f"30{tenant_id.int % 10**9:09d}0"[:11],
-                "e": "facturacion@example.com",
-            },
-        )
-        await sesion.execute(
-            text(
-                "INSERT INTO branches (id, tenant_id, name, city, province) "
-                "VALUES (:id, :t, 'Casa central', 'Mendoza', 'Mendoza')"
-            ),
-            {"id": branch_id, "t": tenant_id},
-        )
-    return tenant_id, branch_id
-
-
 @pytest.fixture
 async def modelo_del_catalogo() -> tuple[uuid.UUID, uuid.UUID]:
     """Una marca y un modelo REALES del catalogo sembrado.
@@ -113,12 +85,12 @@ async def modelo_del_catalogo() -> tuple[uuid.UUID, uuid.UUID]:
 
 @pytest.fixture
 async def agencia() -> tuple[uuid.UUID, uuid.UUID]:
-    return await _agencia_con_sucursal()
+    return await agencia_con_sucursal()
 
 
 @pytest.fixture
 async def otra_agencia() -> tuple[uuid.UUID, uuid.UUID]:
-    return await _agencia_con_sucursal()
+    return await agencia_con_sucursal()
 
 
 def _cabecera(proveedor: EmisorDePrueba, tenant: uuid.UUID) -> dict[str, str]:

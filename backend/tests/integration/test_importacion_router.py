@@ -20,14 +20,13 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 
 from app.core import auth, tasks
 from app.main import create_app
 from app.modules.stock.importacion import LIMITE_DE_BYTES, PLANTILLA
 
 from ..emisor_de_tokens import EmisorDePrueba
-from .soporte import DSN_APLICACION, reponer_entorno, sesion_de_propietario
+from .soporte import DSN_APLICACION, agencia_con_sucursal, reponer_entorno
 
 pytestmark = pytest.mark.integration
 
@@ -64,38 +63,16 @@ def cliente(
         yield c
 
 
-async def _agencia() -> uuid.UUID:
-    tenant_id, branch_id = uuid.uuid4(), uuid.uuid4()
-    async with sesion_de_propietario() as sesion:
-        await sesion.execute(
-            text(
-                "INSERT INTO tenants (id, name, slug, cuit, billing_email, status) "
-                "VALUES (:id, 'Agencia', :s, :c, 'f@example.com', 'active')"
-            ),
-            {
-                "id": tenant_id,
-                "s": f"ag-{tenant_id.hex[:8]}",
-                "c": f"30{tenant_id.int % 10**9:09d}0"[:11],
-            },
-        )
-        await sesion.execute(
-            text(
-                "INSERT INTO branches (id, tenant_id, name, city, province) "
-                "VALUES (:id, :t, 'Casa central', 'Mendoza', 'Mendoza')"
-            ),
-            {"id": branch_id, "t": tenant_id},
-        )
+@pytest.fixture
+async def agencia() -> uuid.UUID:
+    tenant_id, _ = await agencia_con_sucursal()
     return tenant_id
 
 
 @pytest.fixture
-async def agencia() -> uuid.UUID:
-    return await _agencia()
-
-
-@pytest.fixture
 async def otra_agencia() -> uuid.UUID:
-    return await _agencia()
+    tenant_id, _ = await agencia_con_sucursal()
+    return tenant_id
 
 
 def _cabecera(proveedor: EmisorDePrueba, tenant: uuid.UUID) -> dict[str, str]:

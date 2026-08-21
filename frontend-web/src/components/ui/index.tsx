@@ -318,6 +318,81 @@ export function Seleccion({
   );
 }
 
+// ── 7 bis. Campo ────────────────────────────────────────────────────────────
+
+/**
+ * Campo de texto con etiqueta y error asociados.
+ *
+ * MISMA REGLA QUE `Seleccion`: la etiqueta va con `htmlFor` y no envolviendo al
+ * control. Las dos formas son validas en HTML, y solo la explicita sobrevive a
+ * que alguien reordene el JSX.
+ *
+ * EL ERROR SE ATA CON `aria-describedby`, y eso es lo que lo hace util. Un
+ * mensaje en rojo debajo del campo existe para quien lo ve; sin la asociacion,
+ * quien usa un lector de pantalla llega al campo, escucha "Año, cuadro de
+ * edicion" y sigue de largo sin enterarse de que esta mal. Con ella, el lector
+ * anuncia el motivo en el momento en que el foco entra.
+ *
+ * `aria-describedby` NO se declara cuando no hay error: apuntar a un id
+ * inexistente deja al lector buscando un elemento que no esta.
+ *
+ * SE MARCAN LOS OPCIONALES, no los obligatorios. La convencion del asterisco es
+ * la inversa y se lee mal cuando casi todo el formulario es obligatorio: doce
+ * asteriscos no informan nada, y "(opcional)" en los dos que lo son, si.
+ */
+export function Campo({
+  id,
+  etiqueta,
+  valor,
+  alCambiar,
+  error,
+  opcional,
+  tipo = 'text',
+  ayuda,
+  placeholder,
+}: {
+  id: string;
+  etiqueta: string;
+  valor: string;
+  alCambiar: (valor: string) => void;
+  error?: string;
+  opcional?: boolean;
+  tipo?: 'text' | 'number';
+  ayuda?: string;
+  placeholder?: string;
+}) {
+  const idDelError = `${id}-error`;
+
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium text-neutro-texto">
+        {etiqueta}
+        {opcional && <span className="ml-1 font-normal text-neutro-texto">(opcional)</span>}
+      </label>
+      <input
+        id={id}
+        type={tipo}
+        value={valor}
+        placeholder={placeholder}
+        onChange={(evento) => alCambiar(evento.target.value)}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? idDelError : undefined}
+        className={`mt-1 w-full rounded-md border bg-white px-3 py-1.5 text-sm ${
+          error ? 'border-estado-error' : 'border-neutro-borde'
+        }`}
+      />
+      {ayuda && !error && <p className="mt-1 text-xs text-neutro-texto">{ayuda}</p>}
+      {error && (
+        // `role="alert"` y no `status`: es una correccion que el usuario tiene
+        // que atender antes de seguir, no una confirmacion que puede esperar.
+        <p id={idDelError} role="alert" className="mt-1 text-xs text-estado-error">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ── 8. Migas ────────────────────────────────────────────────────────────────
 
 /**

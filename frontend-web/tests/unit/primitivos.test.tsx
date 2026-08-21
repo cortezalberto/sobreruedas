@@ -18,6 +18,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   Alerta,
   Boton,
+  Campo,
   Esqueleto,
   EstadoVacio,
   Etiqueta,
@@ -213,5 +214,62 @@ describe('Tabla', () => {
     );
 
     expect(screen.getByRole('columnheader', { name: 'Modelo' })).toHaveAttribute('scope', 'col');
+  });
+});
+
+describe('Campo', () => {
+  it('asocia la etiqueta al control con htmlFor', () => {
+    // Sin asociacion explicita un lector de pantalla anuncia "cuadro de edicion"
+    // y nada mas. `getByLabelText` falla si la asociacion no existe, asi que
+    // este test es exactamente la garantia que hace falta.
+    render(<Campo id="color" etiqueta="Color" valor="" alCambiar={() => {}} />);
+
+    expect(screen.getByLabelText('Color')).toBeInTheDocument();
+  });
+
+  it('avisa del error con role=alert y lo ata al control', () => {
+    // `aria-describedby` es lo que hace que el lector lea el error AL LLEGAR al
+    // campo. Sin eso el mensaje existe visualmente y no para quien no lo ve.
+    render(
+      <Campo
+        id="anio"
+        etiqueta="Año"
+        valor="1800"
+        alCambiar={() => {}}
+        error="El año va entre 1950 y 2027."
+      />,
+    );
+
+    const control = screen.getByLabelText('Año');
+    expect(control).toHaveAttribute('aria-invalid', 'true');
+    expect(control).toHaveAttribute('aria-describedby', 'anio-error');
+    expect(screen.getByRole('alert')).toHaveTextContent('El año va entre');
+  });
+
+  it('no declara aria-describedby cuando no hay error', () => {
+    // Apuntar a un id que no existe deja al lector buscando un elemento
+    // ausente, y algunos anuncian el hueco.
+    render(<Campo id="color" etiqueta="Color" valor="Gris" alCambiar={() => {}} />);
+
+    expect(screen.getByLabelText('Color')).not.toHaveAttribute('aria-describedby');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('avisa de cada tecla', () => {
+    const alCambiar = vi.fn();
+    render(<Campo id="color" etiqueta="Color" valor="" alCambiar={alCambiar} />);
+
+    fireEvent.change(screen.getByLabelText('Color'), { target: { value: 'Rojo' } });
+
+    expect(alCambiar).toHaveBeenCalledWith('Rojo');
+  });
+
+  it('marca los opcionales para que no parezcan obligatorios', () => {
+    // El asterisco de "requerido" es la convencion inversa y se lee mal cuando
+    // la mayoria de los campos lo son. Se marca la MINORIA.
+    render(<Campo id="chasis" etiqueta="Chasis" valor="" alCambiar={() => {}} opcional />);
+
+    expect(screen.getByLabelText(/Chasis/)).toBeInTheDocument();
+    expect(screen.getByText(/opcional/i)).toBeInTheDocument();
   });
 });
