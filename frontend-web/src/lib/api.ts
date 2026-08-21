@@ -293,3 +293,60 @@ export async function obtenerMarcasPorId(): Promise<ReadonlyMap<string, string>>
   const marcas = await obtenerMarcas();
   return new Map(marcas.map((marca) => [marca.id, marca.name]));
 }
+
+// ── Sucursales ──────────────────────────────────────────────────────────────
+
+/**
+ * Una sucursal de la agencia del token.
+ *
+ * `tenant_id` viene en la salida a proposito y no es una fuga: el cliente solo
+ * recibe lo suyo, que es lo que garantiza la politica RLS. Lo que nunca se
+ * acepta es en la ENTRADA (regla dura 1).
+ */
+export interface Sucursal {
+  id: string;
+  tenant_id: string;
+  name: string;
+  city: string;
+  province: string;
+  address: string | null;
+  phone: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+function esSucursal(valor: unknown): valor is Sucursal {
+  if (typeof valor !== 'object' || valor === null) return false;
+  const s = valor as Record<string, unknown>;
+
+  return (
+    typeof s.id === 'string' &&
+    typeof s.tenant_id === 'string' &&
+    typeof s.name === 'string' &&
+    typeof s.city === 'string' &&
+    typeof s.province === 'string' &&
+    typeof s.is_active === 'boolean' &&
+    typeof s.created_at === 'string' &&
+    (s.address === null || typeof s.address === 'string') &&
+    (s.phone === null || typeof s.phone === 'string')
+  );
+}
+
+/**
+ * Las sucursales ACTIVAS de la agencia del token.
+ *
+ * El filtro de `is_active` es de esta funcion y no del backend, que devuelve
+ * todas: una sucursal dada de baja sigue existiendo —soft delete universal,
+ * principio 3— y hace falta para mostrar el historial de un vehiculo que
+ * estuvo ahi. Lo que no se puede es RECIBIR un vehiculo nuevo en ella, y este
+ * listado alimenta justamente ese desplegable.
+ */
+export async function obtenerSucursales(token: string): Promise<Sucursal[]> {
+  const datos = await pedirConToken('/api/v1/branches', token);
+
+  if (!Array.isArray(datos) || !datos.every(esSucursal)) {
+    throw new TypeError('El listado de sucursales no tiene la forma esperada');
+  }
+
+  return datos.filter((sucursal) => sucursal.is_active);
+}

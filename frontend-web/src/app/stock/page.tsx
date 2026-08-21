@@ -16,6 +16,8 @@
  * en el proceso de Next, así que el token no viaja al navegador por este camino
  * y CORS no interviene.
  */
+import Link from 'next/link';
+
 import { auth } from '@/auth';
 import { CambiarEstado } from '@/components/CambiarEstado';
 import { Alerta, Etiqueta, EstadoVacio, Tabla } from '@/components/ui';
@@ -141,7 +143,22 @@ export default async function StockPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <h1 className="mb-2 text-2xl font-semibold tracking-tight">Stock</h1>
+      <div className="mb-2 flex items-baseline justify-between gap-4">
+        <h1 className="text-2xl font-semibold tracking-tight">Stock</h1>
+        {/* Un `Link` y no un `Boton` con `router.push`: es navegación, y un
+            enlace real se puede abrir en otra pestaña, tabular y previsualizar.
+            Envolverla en un botón rompe las tres cosas sin dar nada a cambio.
+
+            SE OFRECE A TODOS LOS ROLES. Esconderlo según el rol sería una
+            segunda copia de la matriz de permisos en el cliente; quien no pueda
+            cargar recibe un 403 del backend, que es la única autoridad. */}
+        <Link
+          href="/stock/nuevo"
+          className="rounded-md bg-marca px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+        >
+          Cargar vehículo
+        </Link>
+      </div>
       <p className="mb-6 text-sm text-neutro-texto">
         {vehiculos.length === 1 ? '1 vehículo' : `${vehiculos.length} vehículos`} de tu agencia.
         {!muestraElCosto && ' El precio de costo no está disponible para tu rol.'}
@@ -150,7 +167,7 @@ export default async function StockPage() {
       {vehiculos.length === 0 ? (
         <EstadoVacio
           titulo="Todavía no hay vehículos"
-          descripcion="Cuando cargues el primero, o importes una planilla, aparecen acá."
+          descripcion="Cargá el primero desde el botón de arriba, o importá una planilla."
         />
       ) : (
         <Tabla descripcion="Vehículos de la agencia" columnas={columnas}>
