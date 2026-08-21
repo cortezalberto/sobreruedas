@@ -35,7 +35,9 @@ from app.core.validadores_ar import CuitInvalido, normalizar_cuit
 
 __all__ = [
     "SucursalCrear",
+    "SucursalEditar",
     "SucursalSalida",
+    "TenantConfigurar",
     "TenantCrear",
     "TenantSalida",
 ]
@@ -197,3 +199,40 @@ class ModeloSalida(_Salida):
     body_type: str
     year_from: int
     year_to: int | None
+
+
+class TenantConfigurar(_EntradaEstricta):
+    """`PATCH /api/v1/tenant/me` — C-05 tarea 5.10.
+
+    ⚠️ NO ESTAN `cuit` NI `slug`, y no es un olvido: son IDENTIDAD, no
+    configuracion. El CUIT identifica a la agencia ante AFIP y el `slug` es su
+    direccion publica — cambiarlos por un `PATCH` de configuracion rompe las
+    publicaciones ya emitidas y la facturacion, en silencio. Si algun dia hay
+    que cambiarlos, es una operacion con su propio nombre y su propia
+    autorizacion.
+
+    Tampoco estan `plan_id` ni `status`: el plan lo cambia la facturacion y el
+    estado lo cambia la plataforma. Ninguno de los dos es algo que una agencia
+    se ajuste a si misma.
+    """
+
+    name: _NOMBRE | None = None
+    billing_email: _EMAIL | None = None
+    timezone: str | None = Field(default=None, min_length=1, max_length=64)
+    locale: str | None = Field(default=None, min_length=2, max_length=10)
+
+
+class SucursalEditar(_EntradaEstricta):
+    """`PATCH /api/v1/branches/{id}`.
+
+    `tenant_id` no esta ni puede estar — lo pone el contexto, nunca el cuerpo
+    (regla dura 1). `is_active` tampoco: dar de baja una sucursal tiene su
+    propio endpoint, y mezclarlo aca dejaria que un cliente la cierre creyendo
+    que le corrige el telefono.
+    """
+
+    name: _NOMBRE | None = None
+    city: Annotated[str, Field(min_length=1, max_length=120)] | None = None
+    province: Annotated[str, Field(min_length=1, max_length=120)] | None = None
+    address: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=40)

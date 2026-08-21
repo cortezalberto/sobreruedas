@@ -151,6 +151,41 @@ class TenancyService:
         await self._grabar()
         return sucursal
 
+    async def configurar_agencia(self, tenant_id: uuid.UUID, datos: object) -> Tenant:
+        """Ajusta lo que una agencia puede ajustarse a si misma — tarea 5.10.
+
+        Lo que NO entra por aca lo decide el schema, no este metodo: `cuit` y
+        `slug` son identidad, y `plan_id` y `status` los mueven la facturacion y
+        la plataforma. Que la restriccion viva en el schema y no en un `if` es
+        lo que hace que mandarlos de 422 en vez de ignorarlos en silencio.
+        """
+        agencia = await self._agencia_viva(tenant_id)
+
+        for campo, valor in datos.model_dump(exclude_unset=True).items():  # type: ignore[attr-defined]
+            setattr(agencia, campo, valor)
+
+        await self._grabar()
+        return agencia
+
+    async def actualizar_sucursal(
+        self, tenant_id: uuid.UUID, sucursal_id: uuid.UUID, datos: object
+    ) -> Branch:
+        """Edita una sucursal DE ESTA AGENCIA.
+
+        El `tenant_id` va en la consulta y no solo en la politica RLS: son las
+        tres capas de la regla dura 1, y la de aplicacion es la unica que
+        produce un 404 con sentido en vez de "cero filas afectadas".
+        """
+        sucursal = await self._sucursales.obtener(tenant_id, sucursal_id)
+        if sucursal is None:
+            raise DomainError("la sucursal no existe", code="sucursal_inexistente")
+
+        for campo, valor in datos.model_dump(exclude_unset=True).items():  # type: ignore[attr-defined]
+            setattr(sucursal, campo, valor)
+
+        await self._grabar()
+        return sucursal
+
     async def dar_de_baja_sucursal(self, tenant_id: uuid.UUID, sucursal_id: uuid.UUID) -> Branch:
         """Baja recuperable de una sucursal. Libera cuota del plan.
 

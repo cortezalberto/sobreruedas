@@ -45,7 +45,13 @@ from app.core.errors import DomainError
 from app.core.rbac import Espacio, require_permission
 from app.db.dependencias import SesionDeTenant
 from app.modules.tenancy.repository import BranchRepository, TenantRepository
-from app.modules.tenancy.schemas import SucursalCrear, SucursalSalida, TenantSalida
+from app.modules.tenancy.schemas import (
+    SucursalCrear,
+    SucursalEditar,
+    SucursalSalida,
+    TenantConfigurar,
+    TenantSalida,
+)
 from app.modules.tenancy.service import TenancyService
 
 __all__ = ["router"]
@@ -165,3 +171,52 @@ def _no_encontrada() -> HTTPException:
     Distinguirlas confirmaria que cierto id existe en otro tenant.
     """
     return HTTPException(status_code=404, detail="no existe")
+
+
+@router.patch(
+    "/tenant/me",
+    response_model=TenantSalida,
+    summary="Configurar la agencia",
+    description=(
+        "Ajusta lo que una agencia puede ajustarse a si misma. **No acepta `cuit` ni "
+        "`slug`**: son identidad, no configuracion — cambiarlos rompe la facturacion y "
+        "las publicaciones ya emitidas."
+    ),
+    dependencies=[Depends(require_permission("tenants:update"))],
+)
+async def configurar_agencia(datos: TenantConfigurar, sesion: SesionDeTenant) -> TenantSalida:
+    """El tenant sale de la SESION, que lo saco del token — regla dura 1.
+
+    No hay `PATCH /tenants/{id}`: el unico tenant que alguien puede configurar
+    es el suyo, y un endpoint que aceptara un id invitaria a probar con el de
+    otro. Mismo criterio que `GET /tenant/me`.
+    """
+    agencia = await TenancyService(sesion).configurar_agencia(_tenant(sesion), datos)
+    return TenantSalida.model_validate(agencia)
+
+
+@router.patch(
+    "/branches/{sucursal_id}",
+    response_model=SucursalSalida,
+    summary="Editar una sucursal",
+    description=(
+        "No acepta `is_active`: dar de baja tiene su propio endpoint, y mezclarlo aca "
+        "dejaria que un cliente cierre una sucursal creyendo que le corrige el telefono."
+    ),
+    dependencies=[Depends(require_permission("branches:update"))],
+)
+async def editar_sucursal(
+    sucursal_id: uuid.UUID, datos: SucursalEditar, sesion: SesionDeTenant
+) -> SucursalSalida:
+    # Misma traduccion que en la baja, y por lo mismo: `DomainError` responde
+    # 422 —correcto para "la regla dice que no"— y aca el problema es un id que
+    # no existe. Un 422 mandaria a revisar el cuerpo, que esta bien.
+    try:
+        sucursal = await TenancyService(sesion).actualizar_sucursal(
+            _tenant(sesion), sucursal_id, datos
+        )
+    except DomainError as fallo:
+        if fallo.code == "sucursal_inexistente":
+            raise _no_encontrada() from fallo
+        raise
+    return SucursalSalida.model_validate(sucursal)
