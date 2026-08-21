@@ -120,6 +120,12 @@ class Sujeto:
     user_id: str
     tenant_id: uuid.UUID
     role: str
+    # OPCIONAL A PROPOSITO, aunque hoy siempre venga. El claim `email` lo aporta
+    # el client scope homonimo, que es un DEFAULT del realm y no una garantia
+    # del protocolo: un cliente configurado sin ese scope emite tokens sin
+    # `email`. Tiparlo `str` obligaria a inventar un valor cuando falta, y el
+    # valor inventado terminaria pisando el del espejo (`D-1`).
+    email: str | None = None
 
 
 async def _traer_por_http(url: str) -> dict[str, Any]:
@@ -279,10 +285,16 @@ async def validar_token(
     if not isinstance(sub, str) or not sub or not isinstance(rol, str) or not rol:
         raise NoAutenticado
 
+    # El email NO se exige en `require`: su ausencia no invalida el token, solo
+    # significa que no hay con que corregir el espejo (`D-1`). Un token sin
+    # `email` sigue identificando a alguien.
+    email = claims.get("email")
+
     return Sujeto(
         user_id=sub,
         tenant_id=_uuid_del_claim(claims, CLAIM_TENANT),
         role=rol,
+        email=email if isinstance(email, str) and email else None,
     )
 
 

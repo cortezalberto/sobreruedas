@@ -47,6 +47,32 @@ class UserRepository:
             await self._sesion.execute(self._vivos(sa.select(User)).where(User.id == user_id))
         ).scalar_one_or_none()
 
+    async def corregir_email(self, persona: User, email_del_token: str | None) -> bool:
+        """`D-1`: si el email del token difiere del espejo, gana el token.
+
+        Devuelve si hubo correccion, que sirve para no escribir de mas: el caso
+        normal es que coincidan, y un UPDATE incondicional en cada lectura del
+        perfil escribiria una fila por request sin cambiar un solo dato.
+
+        ⚠️ CORRIGE EL EMAIL Y NADA MAS. Rol, agencia y sucursales son dominio de
+        NEGOCIO —Keycloak no sabe que es una sucursal— y el token trae el rol
+        que la persona tenia cuando se emitio. Arrastrarlo aca desharia una
+        degradacion de permisos sola en el proximo request, con la fuente
+        equivocada mandando sobre la buena.
+
+        ⚠️ UN TOKEN SIN `email` NO BORRA EL DEL ESPEJO. El claim viene del client
+        scope homonimo, que es un default del realm y no una garantia: si falta,
+        no hay con que corregir. Pisarlo con `None` cambiaria un espejo
+        desactualizado —el problema que `D-1` resuelve— por uno vacio, que es
+        peor.
+        """
+        if not email_del_token or email_del_token == persona.email:
+            return False
+
+        persona.email = email_del_token
+        await self._sesion.flush()
+        return True
+
     async def listar(self, *, incluir_dadas_de_baja: bool = False) -> Sequence[User]:
         """El padron de la agencia.
 

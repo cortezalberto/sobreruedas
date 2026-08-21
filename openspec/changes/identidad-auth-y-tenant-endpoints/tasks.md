@@ -43,13 +43,13 @@
 
 ## 3. Sincronización con Keycloak
 
-- [ ] 3.1 `infra/keycloak/realm-deruedas.json` versionado e importado al arrancar (`D-9`)
-- [ ] 3.2 Test sobre el JSON: **`Direct Access Grants` desactivado**. Es lo que hace cumplible a `ADR-026` — con ese flujo, usuario y contraseña se cambian por un token y el "nunca manejamos contraseñas" pasa a depender de que a nadie se le ocurra usarlo
-- [ ] 3.3 Test sobre el JSON: PKCE obligatorio, los *mappers* de `tenant_id` y `role` como claims planos (`ADR-021`), y la vida de los tokens (15 min / 7 días)
-- [ ] 3.4 Cliente de administración de Keycloak: crear usuario, deshabilitar, disparar *required action*
-- [ ] 3.5 Test: el cliente **nunca** envía una contraseña en ninguna de sus llamadas
-- [ ] 3.6 Implementar la corrección del espejo: si el email del token difiere del local, **gana el token** (`D-1`)
-- [ ] 3.7 Test: corregir el email **no** toca rol, agencia ni sucursales
+- [x] 3.1 `infra/local/keycloak/deruedas-dev-realm.json` versionado e importado al arrancar (`D-9`). **La ruta no es la que `D-9` escribió**: la separación `local/` vs `vps/` ya existía en `infra/` y dice más que la ruta plana. Se acepta la real y se corrige el diseño
+- [x] 3.2 Test sobre el JSON: **`Direct Access Grants` desactivado**. Es lo que hace cumplible a `ADR-026` — con ese flujo, usuario y contraseña se cambian por un token y el "nunca manejamos contraseñas" pasa a depender de que a nadie se le ocurra usarlo
+- [x] 3.3 Test sobre el JSON: PKCE obligatorio, los *mappers* de `tenant_id` y `role` como claims planos (`ADR-021`), y la vida de los tokens (15 min / 7 días)
+- [x] 3.4 Cliente de administración de Keycloak: crear usuario, deshabilitar, disparar *required action*
+- [x] 3.5 Test: el cliente **nunca** envía una contraseña en ninguna de sus llamadas
+- [x] 3.6 Implementar la corrección del espejo: si el email del token difiere del local, **gana el token** (`D-1`)
+- [x] 3.7 Test: corregir el email **no** toca rol, agencia ni sucursales
 
 ## 4. Servicio de usuarios
 

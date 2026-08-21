@@ -66,6 +66,18 @@ async def mi_perfil(sujeto: SujetoActual, sesion: SesionDeTenant) -> PerfilPropi
             detail="no hay un perfil local para esta identidad",
         )
 
+    # `D-1`: Keycloak es dueño del email y acá es donde el espejo se pone al día.
+    #
+    # El diseño decía "en cada request, `get_current_user` compara". No se hace
+    # ahí: `get_current_user` solo verifica la firma y no toca la base, así que
+    # cumplirlo al pie le agregaría una sesión y un SELECT a CADA request del
+    # sistema —incluidas las que no miran `users`—. Este endpoint ya tiene la
+    # fila en la mano, así que el mismo efecto cuesta cero.
+    #
+    # Lo que se pierde, y queda dicho: el espejo de alguien que nunca abre su
+    # perfil sigue viejo para un listado ajeno.
+    await repositorio.corregir_email(persona, sujeto.email)
+
     sucursales = await repositorio.sucursales_de(persona.id)
 
     return PerfilPropio(
