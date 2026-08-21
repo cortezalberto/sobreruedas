@@ -157,14 +157,12 @@ async def test_no_se_puede_editar_la_sucursal_de_otra_agencia(
         headers=_cabecera(proveedor, tenant),
     )
 
-    # 404 traducido por el router. El servicio levanta `DomainError`, que
-    # responde 422 — correcto para "la regla dice que no" y equivocado para
-    # "ese id no existe": un 422 manda a revisar el cuerpo, y el cuerpo esta
-    # bien. La traduccion vive en el router porque el codigo HTTP es asunto de
-    # la puerta, y al servicio lo usan tambien C-10 y los tests, que no hablan
-    # HTTP.
+    # 404 con codigo PROPIO, no el `http_404` generico: `SucursalNoEncontrada`
+    # declara su `status_code`, igual que `VehiculoNoEncontrado` y
+    # `UsuarioNoEncontrado`. El codigo nombra la causa, que es lo que el
+    # frontend lee para elegir el mensaje.
     assert respuesta.status_code == 404
-    assert respuesta.json()["code"] == "http_404"
+    assert respuesta.json()["code"] == "sucursal_inexistente"
 
     async with sesion_de_propietario() as sesion:
         nombre = (

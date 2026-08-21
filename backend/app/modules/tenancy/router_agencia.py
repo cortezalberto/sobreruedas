@@ -208,15 +208,9 @@ async def configurar_agencia(datos: TenantConfigurar, sesion: SesionDeTenant) ->
 async def editar_sucursal(
     sucursal_id: uuid.UUID, datos: SucursalEditar, sesion: SesionDeTenant
 ) -> SucursalSalida:
-    # Misma traduccion que en la baja, y por lo mismo: `DomainError` responde
-    # 422 —correcto para "la regla dice que no"— y aca el problema es un id que
-    # no existe. Un 422 mandaria a revisar el cuerpo, que esta bien.
-    try:
-        sucursal = await TenancyService(sesion).actualizar_sucursal(
-            _tenant(sesion), sucursal_id, datos
-        )
-    except DomainError as fallo:
-        if fallo.code == "sucursal_inexistente":
-            raise _no_encontrada() from fallo
-        raise
+    # SIN `try/except`: `actualizar_sucursal` levanta `SucursalNoEncontrada`,
+    # que ya responde 404. La baja de al lado si traduce, y ahi tiene sentido
+    # —puede levantar mas de un `DomainError`—; aca el unico posible es ese, asi
+    # que el `raise` de reenvio seria una rama que ninguna entrada alcanza.
+    sucursal = await TenancyService(sesion).actualizar_sucursal(_tenant(sesion), sucursal_id, datos)
     return SucursalSalida.model_validate(sucursal)

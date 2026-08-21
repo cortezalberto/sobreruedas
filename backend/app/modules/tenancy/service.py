@@ -40,7 +40,7 @@ from app.modules.tenancy.models import Branch, Plan, Tenant
 from app.modules.tenancy.repository import BranchRepository, TenantRepository
 from app.modules.tenancy.schemas import SucursalCrear, TenantCrear
 
-__all__ = ["TenancyService"]
+__all__ = ["SucursalNoEncontrada", "TenancyService"]
 
 # Nombre de la constraint -> (codigo estable, mensaje). El codigo es lo que el
 # cliente usa para reaccionar; el mensaje es para humanos y NO repite el valor
@@ -49,6 +49,26 @@ _CHOQUES: dict[str, tuple[str, str]] = {
     "tenants_cuit_key": ("cuit_duplicado", "ya existe una agencia con ese CUIT"),
     "tenants_slug_key": ("slug_duplicado", "ya existe una agencia con ese identificador"),
 }
+
+
+class SucursalNoEncontrada(DomainError):
+    """No existe, o es de otra agencia. Las dos dan 404.
+
+    ⚠️ RESPONDE 404 DESDE LA EXCEPCION, sin que el router traduzca. La baja de
+    sucursal si traduce, y ahi tiene sentido: puede levantar mas de un
+    `DomainError` y hay que distinguirlos. Aca el unico posible es este, asi que
+    un `try/except` con un `raise` de reenvio seria una RAMA INALCANZABLE —
+    codigo que ningun test puede cubrir porque ninguna entrada lo alcanza.
+
+    Mismo criterio que `VehiculoNoEncontrado` y `UsuarioNoEncontrado`:
+    distinguir "no existe" de "no es tuya" le confirmaria a un tenant que cierto
+    id existe en otra agencia.
+    """
+
+    status_code = 404
+
+    def __init__(self, detail: str = "la sucursal no existe") -> None:
+        super().__init__(detail, code="sucursal_inexistente")
 
 
 class TenancyService:
@@ -178,7 +198,7 @@ class TenancyService:
         """
         sucursal = await self._sucursales.obtener(tenant_id, sucursal_id)
         if sucursal is None:
-            raise DomainError("la sucursal no existe", code="sucursal_inexistente")
+            raise SucursalNoEncontrada
 
         for campo, valor in datos.model_dump(exclude_unset=True).items():  # type: ignore[attr-defined]
             setattr(sucursal, campo, valor)
