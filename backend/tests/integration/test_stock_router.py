@@ -297,6 +297,11 @@ def test_el_dominio_duplicado_se_rechaza(
     )
 
     assert repetido.status_code == 422
+    # El 422 solo no alcanza: lo comparte con `validation_error`, que significa
+    # "un campo esta mal" y manda al usuario a corregir otra cosa. El `code` es
+    # lo que el frontend lee para elegir el mensaje, asi que es lo que hay que
+    # fijar aca — no el estado, que es el mismo para media docena de rechazos.
+    assert repetido.json()["code"] == "vehicle_duplicate"
 
 
 def test_el_mismo_dominio_en_dos_agencias_no_choca(

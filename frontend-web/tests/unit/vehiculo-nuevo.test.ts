@@ -280,6 +280,28 @@ describe('traducir el rechazo del backend', () => {
     expect(mensajeDeAlta('not_authenticated', 401)).toMatch(/sesión/i);
   });
 
+  it('entiende el código propio del duplicado, sin importar el estado', () => {
+    // `vehicle_duplicate` es un código ESPECIFICO: no necesita el 422 para
+    // desambiguarse, porque nombra la regla incumplida (`RN-ST-01`) en vez de
+    // decir "alguna regla de negocio". Se traduce por el código a secas.
+    expect(mensajeDeAlta('vehicle_duplicate', 422)).toMatch(/dominio/i);
+  });
+
+  it('sigue entendiendo el código viejo mientras dure la ventana de despliegue', () => {
+    // ⚠️ ESTE TEST NO SOBRA, Y NO SE BORRA HASTA QUE EL BACKEND NUEVO ESTE
+    // DESPLEGADO. El frontend y el backend no salen en el mismo instante: entre
+    // un despliegue y el otro hay una ventana en la que este frontend habla con
+    // el backend viejo, que todavia manda `domain_error`. Si solo entendiera el
+    // codigo nuevo, en esa ventana el duplicado —el rechazo MAS FRECUENTE del
+    // alta— degradaria a "El backend rechazó el alta (422)".
+    //
+    // Es el mismo criterio de expand → migrar → contract que la regla dura 13
+    // le aplica a las migraciones, aplicado a un contrato de API: primero se
+    // aceptan los dos, despues cambia el emisor, y recien al final se saca el
+    // viejo.
+    expect(mensajeDeAlta('domain_error', 422)).toMatch(/dominio/i);
+  });
+
   it('devuelve null ante un código que no conocemos', () => {
     // Devolver null y no un mensaje inventado: quien llama arma el fallback con
     // el estado HTTP, que al menos es cierto. Un mensaje traducido de más

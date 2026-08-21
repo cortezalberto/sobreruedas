@@ -2,9 +2,14 @@
 
 POR QUE EXISTEN ESTAS COPIAS
 ─────────────────────────────
-`frontend-web/src/lib/vehiculo-nuevo.ts` copia seis cosas de `VehiculoCrear`:
-los tres catalogos cerrados (combustible, transmision, carroceria), el año
-minimo, los dos largos maximos y los formatos de dominio y chasis.
+`frontend-web/src/lib/vehiculo-nuevo.ts` copia siete cosas del modulo de stock:
+de `VehiculoCrear`, los tres catalogos cerrados (combustible, transmision,
+carroceria), el año minimo, los dos largos maximos y los formatos de dominio y
+chasis; de `service.py`, el `code` de `VehiculoDuplicado`.
+
+La septima no es una regla de validacion sino un identificador de rechazo, y se
+vigila por el mismo motivo: es un valor que existe en dos lados y que nada
+sincroniza.
 
 Se copian por la misma division que `ADR-034` fija para las transiciones —y que
 `test_transiciones_espejadas.py` ya vigila—: QUE combustibles existen es
@@ -51,6 +56,7 @@ from app.modules.stock.schemas import (
     Transmision,
     VehiculoCrear,
 )
+from app.modules.stock.service import VehiculoDuplicado
 
 ESPEJO = Path(__file__).resolve().parents[3] / "frontend-web" / "src" / "lib" / "vehiculo-nuevo.ts"
 
@@ -62,6 +68,9 @@ _CONSTANTE = re.compile(r"export const (\w+) = (\d+);")
 
 # `const DOMINIO_VIEJO = /^[A-Z]{3}[0-9]{3}$/;`
 _REGEX = re.compile(r"const (\w+) = /(.+?)/[a-z]*;")
+
+# `export const DUPLICADO = 'vehicle_duplicate';`
+_CONSTANTE_TEXTO = re.compile(r"export const (\w+) = '([^']+)';")
 
 
 def _fuente() -> str:
@@ -90,6 +99,20 @@ def _regexes() -> dict[str, str]:
     return {
         coincidencia.group(1): coincidencia.group(2) for coincidencia in _REGEX.finditer(_fuente())
     }
+
+
+def _texto(nombre: str) -> str:
+    """El valor de una constante de texto del frontend.
+
+    ⚠️ LEVANTA SI NO LA ENCUENTRA, y ese es el contrapeso incorporado. Si
+    devolviera `None` o `""`, un renombre —o un reformateo que le rompa el `re`—
+    dejaria la comparacion enfrentando dos vacios y el guardian pasaria en verde
+    justo cuando deberia gritar.
+    """
+    for coincidencia in _CONSTANTE_TEXTO.finditer(_fuente()):
+        if coincidencia.group(1) == nombre:
+            return coincidencia.group(2)
+    raise AssertionError(f"el frontend ya no declara `export const {nombre}`")
 
 
 def _largo_maximo(campo: str) -> int:
@@ -221,3 +244,35 @@ def test_el_formulario_no_copia_la_matriz_de_permisos() -> None:
 
         for rol in ("manager", "salesperson", "admin_staff", "super_admin"):
             assert rol not in codigo, f"{archivo.name} decide permisos: menciona '{rol}'"
+
+
+# ── El codigo del duplicado ─────────────────────────────────────────────────
+#
+# Septima cosa copiada, y la unica que NO es una regla de validacion: es el
+# identificador con que el backend nombra un rechazo. Se agrego el 21-ago-2026,
+# cuando `VehiculoDuplicado` dejo de heredar el `domain_error` generico.
+
+
+def test_el_duplicado_tiene_codigo_propio() -> None:
+    """`VehiculoDuplicado` nombra su regla en vez de decir "alguna regla".
+
+    Heredaba `domain_error`, el generico de `DomainError`, y el frontend lo
+    traducia a "dominio repetido" POR DESCARTE: era el unico `DomainError` que
+    el alta podia levantar. Andaba, y se rompia solo el dia que apareciera un
+    segundo —el usuario leeria que repitio un dominio cuando el problema fuera
+    otro, sin que nada se pusiera rojo—.
+
+    `RN-ST-01` tiene nombre; el codigo lo dice.
+    """
+    assert VehiculoDuplicado("da igual el texto").code == "vehicle_duplicate"
+
+
+def test_el_codigo_del_duplicado_es_el_mismo_de_los_dos_lados() -> None:
+    """El septimo espejo, con el mismo tratamiento que los otros seis.
+
+    Un `code` es un contrato: si el backend lo renombra y el frontend no se
+    entera, el mensaje bueno deja de salir y aparece el fallback generico. Nada
+    se pone rojo — es exactamente la deriva muda que este archivo existe para
+    evitar.
+    """
+    assert _texto("DUPLICADO") == VehiculoDuplicado("x").code

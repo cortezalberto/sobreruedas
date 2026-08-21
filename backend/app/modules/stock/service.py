@@ -51,7 +51,22 @@ class VehiculoNoEncontrado(DomainError):
 
 
 class VehiculoDuplicado(DomainError):
-    """`RN-ST-01`: el dominio ya esta cargado en esta agencia."""
+    """`RN-ST-01`: el dominio ya esta cargado en esta agencia.
+
+    ⚠️ EL `code` SE DECLARA, no se hereda. `DomainError` trae `domain_error`,
+    que dice "alguna regla de negocio se incumplio" y no cual. Con el generico,
+    el frontend traducia este rechazo a "dominio repetido" POR DESCARTE: era el
+    unico `DomainError` que el alta podia levantar. Andaba, y venia con fecha de
+    vencimiento — el dia que el alta levantara un segundo, el usuario leeria que
+    repitio un dominio cuando el problema fuese otro, y ningun test se pondria
+    rojo porque los dos casos devuelven el mismo codigo.
+
+    `test_alta_espejada.py` vigila que este valor sea el mismo que el frontend
+    espera, igual que vigila los enums y los formatos.
+    """
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail, code="vehicle_duplicate")
 
 
 class TransicionInvalida(DomainError):
