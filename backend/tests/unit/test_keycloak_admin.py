@@ -458,7 +458,9 @@ async def test_si_falla_cerrar_sesion_se_levanta() -> None:
 
 
 @pytest.mark.asyncio
-async def test_la_dependencia_arma_el_cliente_desde_la_configuracion_y_lo_cierra() -> None:
+async def test_la_dependencia_arma_el_cliente_desde_la_configuracion_y_lo_cierra(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """`cliente_de_keycloak` es una dependencia, no un singleton de modulo.
 
     Asi los tests del endpoint pueden sustituirla con `dependency_overrides` en
@@ -466,14 +468,14 @@ async def test_la_dependencia_arma_el_cliente_desde_la_configuracion_y_lo_cierra
     Keycloak — que seria probar el sistema de otro.
 
     ⚠️ SE VERIFICA QUE CIERRE EL `AsyncClient`. Es un generador: si el `yield`
-    no estuviera dentro del `async with`, cada peticion filtraria una conexion
-    y el sintoma recien aparece bajo carga.
+    no estuviera dentro del `async with`, cada peticion filtraria una conexion,
+    y ese sintoma recien aparece bajo carga.
     """
     from types import SimpleNamespace
 
     from pydantic import SecretStr
 
-    from app.modules.users import router as modulo
+    from app.modules.users.router import cliente_de_keycloak
 
     falsos = SimpleNamespace(
         keycloak=SimpleNamespace(
@@ -483,18 +485,17 @@ async def test_la_dependencia_arma_el_cliente_desde_la_configuracion_y_lo_cierra
             client_secret=SecretStr("da-igual"),
         )
     )
+    # Por ruta en texto y no por atributo: `router.__all__` exporta solo
+    # `router`, asi que `mypy .` —que en este proyecto cubre tambien los
+    # tests— rechaza el acceso directo a `modulo.get_settings`.
+    monkeypatch.setattr("app.modules.users.router.get_settings", lambda: falsos)
 
-    generador = modulo.cliente_de_keycloak()
-    original = modulo.get_settings
-    modulo.get_settings = lambda: falsos  # type: ignore[assignment,return-value]
-    try:
-        admin = await generador.__anext__()
-        assert isinstance(admin, ClienteDeKeycloak)
-        assert not admin._cliente.is_closed
+    generador = cliente_de_keycloak()
+    admin = await generador.__anext__()
+    assert isinstance(admin, ClienteDeKeycloak)
+    assert not admin._cliente.is_closed
 
-        with pytest.raises(StopAsyncIteration):
-            await generador.__anext__()
-    finally:
-        modulo.get_settings = original  # type: ignore[assignment]
+    with pytest.raises(StopAsyncIteration):
+        await generador.__anext__()
 
     assert admin._cliente.is_closed, "la dependencia dejo el `AsyncClient` abierto"

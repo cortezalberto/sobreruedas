@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
@@ -418,12 +419,15 @@ async def test_logout_cierra_la_sesion_en_keycloak_y_no_guarda_nada_local(
     sub = await _persona(tenant)
 
     doble = KeycloakDeSalida()
-    cliente.app.dependency_overrides[cliente_de_keycloak] = lambda: doble
+    # `TestClient.app` esta tipado como un callable ASGI generico, asi que el
+    # acceso a `dependency_overrides` necesita el `cast` para `mypy .`.
+    app = cast(FastAPI, cliente.app)
+    app.dependency_overrides[cliente_de_keycloak] = lambda: doble
 
     try:
         respuesta = cliente.post("/api/v1/auth/logout", headers=_cabecera(proveedor, tenant, sub))
     finally:
-        cliente.app.dependency_overrides.pop(cliente_de_keycloak, None)
+        app.dependency_overrides.pop(cliente_de_keycloak, None)
 
     assert respuesta.status_code == 204, respuesta.text
     assert doble.cerradas == [str(sub)]
@@ -450,11 +454,14 @@ async def test_tras_el_logout_el_access_token_ya_emitido_sigue_valido(
     cabecera = _cabecera(proveedor, tenant, sub)
 
     doble = KeycloakDeSalida()
-    cliente.app.dependency_overrides[cliente_de_keycloak] = lambda: doble
+    # `TestClient.app` esta tipado como un callable ASGI generico, asi que el
+    # acceso a `dependency_overrides` necesita el `cast` para `mypy .`.
+    app = cast(FastAPI, cliente.app)
+    app.dependency_overrides[cliente_de_keycloak] = lambda: doble
     try:
         assert cliente.post("/api/v1/auth/logout", headers=cabecera).status_code == 204
     finally:
-        cliente.app.dependency_overrides.pop(cliente_de_keycloak, None)
+        app.dependency_overrides.pop(cliente_de_keycloak, None)
 
     # El mismo token, despues del logout.
     assert cliente.get("/api/v1/auth/me", headers=cabecera).status_code == 200
