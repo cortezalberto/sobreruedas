@@ -82,10 +82,19 @@ Dar de baja MUST conservar la fila y su historial, y MUST NOT liberar su email p
 - **THEN** su fila y su historial se conservan
 - **AND** libera cupo del plan
 
-#### Scenario: El email no se libera con la baja
+#### Scenario: El email se libera con la baja, y volver reutiliza la identidad
 
-- **WHEN** se intenta invitar a alguien con el email de una persona dada de baja en esa agencia
-- **THEN** la invitación se rechaza por duplicado
+> **Corregido el 21-ago-2026 — este escenario decía lo contrario.** Pedía que la
+> invitación se rechazara por duplicado. Tres cosas dicen que no: el índice de
+> unicidad es parcial por `deleted_at` **por una decisión del bloque 1 con su razón
+> escrita** (*"si no lo fuera, el email de alguien que se fue quedaría tomado para
+> siempre y la reincorporación sería imposible"*), `make seed` depende de que quede
+> libre, y la reincorporación de un empleado es un caso real del negocio.
+
+- **WHEN** se invita a alguien con el email de una persona dada de baja en esa agencia
+- **THEN** la invitación se acepta
+- **AND** se reutiliza su identidad en el proveedor en vez de crear otra
+- **AND** conserva sus asignaciones de sucursal anteriores
 
 #### Scenario: La baja no borra la identidad en el proveedor
 

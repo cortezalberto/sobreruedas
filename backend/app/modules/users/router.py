@@ -33,6 +33,7 @@ from app.db.dependencias import SesionDeTenant
 from app.modules.users.keycloak import ClienteDeKeycloak
 from app.modules.users.repository import UserRepository
 from app.modules.users.schemas import PerfilPropio, SucursalAsignada
+from app.modules.users.service import UserService
 
 __all__ = ["router"]
 
@@ -153,3 +154,36 @@ async def cerrar_sesion(sujeto: SujetoActual, keycloak: KeycloakAdmin) -> Respon
     """
     await keycloak.cerrar_sesion(sujeto.user_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/accept-invitation",
+    response_model=PerfilPropio,
+    summary="Aceptar la invitacion",
+    description=(
+        "Activa el espejo local. **No recibe un token de invitacion ni una contrasena** "
+        "(`ADR-035`): tener un access token valido de Keycloak ya prueba que la persona "
+        "fijo su contrasena y se autentico, que es lo que aceptar significa en este flujo."
+    ),
+    dependencies=[Depends(require_permission("auth:read_me"))],
+)
+async def aceptar_invitacion(
+    sujeto: SujetoActual, sesion: SesionDeTenant, keycloak: KeycloakAdmin
+) -> PerfilPropio:
+    """`ADR-035`, que desvia de `ADR-026` §4 en un punto: es AUTENTICADO.
+
+    El ADR original lo queria publico, llamado con un token de invitacion
+    nuestro. Ningun documento definia de donde salia ese token, y emitirlo
+    contradecia el proposito declarado de `ADR-026` — que el sistema quede sin
+    "logica de reseteo propia que auditar". Un token de invitacion ES una
+    credencial propia.
+
+    ⚠️ NO VINCULA NADA, y eso tampoco es un recorte. `ADR-026` decia "activa el
+    espejo y lo vincula al sujeto"; el vinculo YA EXISTE por construccion,
+    porque `users.id` es el `sub` de Keycloak. No hay columna que llenar.
+
+    Idempotente a proposito: el doble clic sobre el mail va a pasar.
+    """
+    servicio = UserService(sesion, _tenant(sesion), keycloak)
+    await servicio.aceptar_invitacion(uuid.UUID(sujeto.user_id))
+    return await mi_perfil(sujeto, sesion)

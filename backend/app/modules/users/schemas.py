@@ -18,15 +18,21 @@ from __future__ import annotations
 
 import uuid
 from enum import StrEnum
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
+    "AsignacionDeSucursal",
+    "AsignarSucursales",
     "EstadoDeUsuario",
     "PerfilPropio",
     "RolDeUsuario",
     "SucursalAsignada",
+    "UsuarioCompleto",
     "UsuarioEditarPerfil",
+    "UsuarioInvitar",
+    "UsuarioPublico",
 ]
 
 
@@ -43,6 +49,17 @@ class EstadoDeUsuario(StrEnum):
     ACTIVO = "active"
     INACTIVO = "inactive"
     SUSPENDIDO = "suspended"
+
+
+# Chequeo de FORMA y nada mas — el MISMO criterio que `tenancy/schemas.py`, y
+# por la misma razon: `EmailStr` arrastraria `email-validator`, que seria la
+# primera dependencia del proyecto solo para esto, y lo que compra es
+# conformidad con RFC 5322 — que no es lo que hace falta. Una direccion puede
+# ser valida segun el RFC y no existir.
+#
+# Aca ademas hay una segunda prueba, y es la de verdad: Keycloak manda el mail
+# de la invitacion. Una direccion que no existe se descubre ahi, no en un regex.
+_EMAIL = Annotated[str, Field(min_length=5, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")]
 
 
 class _EntradaEstricta(BaseModel):
@@ -105,3 +122,72 @@ class UsuarioEditarPerfil(_EntradaEstricta):
     phone: str | None = Field(default=None, max_length=40)
     avatar_url: str | None = Field(default=None, max_length=500)
     notification_preferences: dict[str, bool] | None = None
+
+
+class UsuarioInvitar(_EntradaEstricta):
+    """`POST /api/v1/users/invitations` — `D-5`.
+
+    ⚠️ NO RECIBE CONTRASEÑA NI `tenant_id`, y las dos ausencias son estructura.
+    La contraseña la fija la persona en Keycloak (`ADR-026`); el `tenant_id`
+    sale del token y nunca del cuerpo (regla dura 1) — aceptarlo seria darle a
+    quien invita la posibilidad de invitar a OTRA agencia.
+
+    Tampoco recibe `status`: quien invita no elige en que estado nace la
+    persona. Nace `invited` y la activa el flujo, no el cliente.
+    """
+
+    email: _EMAIL
+    full_name: str = Field(min_length=1, max_length=180)
+    role: RolDeUsuario
+
+
+class AsignacionDeSucursal(_EntradaEstricta):
+    """Una sucursal y si es la principal.
+
+    A lo sumo una principal por persona; lo garantiza el indice
+    `ux_user_branches_principal` y lo hace usable el servicio, que desmarca la
+    anterior antes de marcar la nueva.
+    """
+
+    branch_id: uuid.UUID
+    is_primary: bool = False
+
+
+class AsignarSucursales(_EntradaEstricta):
+    """El conjunto COMPLETO de sucursales de una persona.
+
+    Reemplaza, no agrega: mandar una lista parcial creyendo que suma es un error
+    facil, y la unica forma de que no sea ambiguo es que el verbo lo diga. Por
+    eso es `PUT` y no `POST`.
+    """
+
+    branches: list[AsignacionDeSucursal] = Field(default_factory=list)
+
+
+class UsuarioPublico(_Salida):
+    """`[id, nombre, rol, sucursales]` — lo que ve un `salesperson` o un
+    `admin_staff` de sus compañeros, segun `CAMPOS_PUBLICOS_DE_USUARIO`.
+
+    ⚠️ NO TRAE `email`, `phone` NI `status`. Un vendedor necesita saber a quien
+    asignarle un lead; no necesita el telefono de todos ni quien esta
+    suspendido. Que el listado del padron sea distinto segun quien pregunta es
+    la misma decision que `RN-ST-12` toma sobre el costo de un vehiculo.
+    """
+
+    id: uuid.UUID
+    full_name: str
+    role: RolDeUsuario
+    branches: list[SucursalAsignada] = Field(default_factory=list)
+
+
+class UsuarioCompleto(UsuarioPublico):
+    """Lo que ve un `manager`: el padron entero.
+
+    Hereda de `UsuarioPublico` a proposito — asi es imposible que un campo
+    publico exista aca y no alla, que es como los dos schemas se despegan.
+    """
+
+    email: str
+    phone: str | None = None
+    avatar_url: str | None = None
+    status: EstadoDeUsuario

@@ -1,0 +1,1964 @@
+# GENERADO POR `make openapi` — NO EDITAR A MANO.
+# Fuente: los routers de `backend/app/`. Ver `tools/exportar-openapi.py`.
+components:
+  schemas:
+    AsignacionDeSucursal:
+      additionalProperties: false
+      description: 'Una sucursal y si es la principal.
+
+
+        A lo sumo una principal por persona; lo garantiza el indice
+
+        `ux_user_branches_principal` y lo hace usable el servicio, que desmarca la
+
+        anterior antes de marcar la nueva.'
+      properties:
+        branch_id:
+          format: uuid
+          title: Branch Id
+          type: string
+        is_primary:
+          default: false
+          title: Is Primary
+          type: boolean
+      required:
+      - branch_id
+      title: AsignacionDeSucursal
+      type: object
+    AsignarSucursales:
+      additionalProperties: false
+      description: 'El conjunto COMPLETO de sucursales de una persona.
+
+
+        Reemplaza, no agrega: mandar una lista parcial creyendo que suma es un error
+
+        facil, y la unica forma de que no sea ambiguo es que el verbo lo diga. Por
+
+        eso es `PUT` y no `POST`.'
+      properties:
+        branches:
+          items:
+            $ref: '#/components/schemas/AsignacionDeSucursal'
+          title: Branches
+          type: array
+      title: AsignarSucursales
+      type: object
+    Body_importar_api_v1_vehicles_import_post:
+      properties:
+        archivo:
+          contentMediaType: application/octet-stream
+          description: CSV exportado de Excel
+          title: Archivo
+          type: string
+      required:
+      - archivo
+      title: Body_importar_api_v1_vehicles_import_post
+      type: object
+    Carroceria:
+      enum:
+      - sedan
+      - hatchback
+      - suv
+      - pickup
+      - van
+      - coupe
+      - wagon
+      - other
+      title: Carroceria
+      type: string
+    Combustible:
+      enum:
+      - gasoline
+      - diesel
+      - hybrid
+      - electric
+      - gnc
+      - flex
+      title: Combustible
+      type: string
+    EstadoDeUsuario:
+      enum:
+      - invited
+      - active
+      - inactive
+      - suspended
+      title: EstadoDeUsuario
+      type: string
+    EstadoDeVehiculo:
+      description: 'Los SEIS estados — `ADR-031` cierra `IN-11`.
+
+
+        `Pausado` no esta y no es un olvido: es el estado de la PUBLICACION, no del
+
+        vehiculo. Un aviso se pausa, un auto no.'
+      enum:
+      - in_preparation
+      - available
+      - reserved
+      - sold
+      - in_workshop
+      - archived
+      title: EstadoDeVehiculo
+      type: string
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          title: Detail
+          type: array
+      title: HTTPValidationError
+      type: object
+    ImportacionSalida:
+      description: 'Lo que devuelve `GET /imports/{id}` en cada vuelta del polling.
+
+
+        Lleva `errors` COMPLETO y no un recuento: el usuario baja el reporte, corrige
+
+        la planilla y la vuelve a subir. Un contador diciendo "12 errores" sin decir
+
+        cuales obligaria a un segundo endpoint para algo que ya esta en la fila.
+
+
+        ⚠️ Un JSONB de 5.000 errores son cientos de KB devueltos **cada dos
+
+        segundos** mientras el frontend hace polling. Hoy se acepta: el caso
+
+        frecuente es cero o pocas decenas de errores, y la alternativa —paginar el
+
+        reporte— agrega un endpoint y estado en el cliente para un caso que casi no
+
+        ocurre. Si aparece, el arreglo es devolver `errors` solo cuando el estado
+        ya
+
+        es terminal.'
+      properties:
+        completed_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Completed At
+        created_at:
+          format: date-time
+          title: Created At
+          type: string
+        error_rows:
+          title: Error Rows
+          type: integer
+        errors:
+          items:
+            additionalProperties: true
+            type: object
+          title: Errors
+          type: array
+        failure_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Failure Reason
+        id:
+          format: uuid
+          title: Id
+          type: string
+        source_filename:
+          title: Source Filename
+          type: string
+        started_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Started At
+        status:
+          title: Status
+          type: string
+        tenant_id:
+          format: uuid
+          title: Tenant Id
+          type: string
+        total_rows:
+          title: Total Rows
+          type: integer
+        type:
+          title: Type
+          type: string
+        valid_rows:
+          title: Valid Rows
+          type: integer
+      required:
+      - id
+      - tenant_id
+      - type
+      - source_filename
+      - status
+      - total_rows
+      - valid_rows
+      - error_rows
+      - started_at
+      - completed_at
+      - errors
+      - failure_reason
+      - created_at
+      title: ImportacionSalida
+      type: object
+    MarcaSalida:
+      description: 'Una marca del catalogo. Lista blanca, igual que `PlanSalida`.
+
+
+        `is_active` no viaja: decide QUE se publica y no es informacion de la marca.'
+      properties:
+        id:
+          format: uuid
+          title: Id
+          type: string
+        name:
+          title: Name
+          type: string
+        origin_country:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Origin Country
+        slug:
+          title: Slug
+          type: string
+      required:
+      - id
+      - name
+      - slug
+      - origin_country
+      title: MarcaSalida
+      type: object
+    ModeloSalida:
+      description: 'Un modelo del catalogo.
+
+
+        `year_to` es `None` cuando el modelo se sigue vendiendo. Se deja explicito
+
+        en el contrato porque el cliente tiene que distinguir "vigente" de "no
+
+        sabemos", y son la misma ausencia de valor con significados opuestos.'
+      properties:
+        body_type:
+          title: Body Type
+          type: string
+        brand_id:
+          format: uuid
+          title: Brand Id
+          type: string
+        id:
+          format: uuid
+          title: Id
+          type: string
+        name:
+          title: Name
+          type: string
+        year_from:
+          title: Year From
+          type: integer
+        year_to:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Year To
+      required:
+      - id
+      - brand_id
+      - name
+      - body_type
+      - year_from
+      - year_to
+      title: ModeloSalida
+      type: object
+    PerfilPropio:
+      description: 'La respuesta de `GET /api/v1/auth/me` — `design.md` `D-4`.
+
+
+        Trae **lo que el token no dice**: nombre, estado y sucursales. El `sub`, el
+
+        `tenant_id` y el `role` ya viajan en el token (`ADR-021`) y se devuelven
+
+        igual — no por redundancia, sino para que el frontend tenga UNA sola fuente
+        y
+
+        no tenga que decodificar el JWT para armar su estado.
+
+
+        ⚠️ No trae nada de MFA. Es un hecho de Keycloak (`D-2`): sale del claim o
+        de
+
+        una consulta puntual, no de una columna nuestra que envejece.'
+      properties:
+        avatar_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Avatar Url
+        branches:
+          items:
+            $ref: '#/components/schemas/SucursalAsignada'
+          title: Branches
+          type: array
+        email:
+          title: Email
+          type: string
+        full_name:
+          title: Full Name
+          type: string
+        id:
+          format: uuid
+          title: Id
+          type: string
+        phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phone
+        role:
+          $ref: '#/components/schemas/RolDeUsuario'
+        status:
+          $ref: '#/components/schemas/EstadoDeUsuario'
+        tenant_id:
+          format: uuid
+          title: Tenant Id
+          type: string
+      required:
+      - id
+      - tenant_id
+      - email
+      - full_name
+      - role
+      - status
+      title: PerfilPropio
+      type: object
+    PlanSalida:
+      description: 'Un plan del catalogo comercial, tal como lo consume la grilla
+        de precios.
+
+
+        Lista blanca explicita, no un volcado del modelo: `is_active` decide QUE se
+
+        publica y no es informacion del plan, y `created_at` es de la fila, no del
+
+        producto.
+
+
+        `max_*` viaja como entero y el `0` significa SIN TECHO (`spec-tecnica` 3.3,
+
+        `Plan.SIN_TECHO`). No se traduce a `null`: "no hay tope" y "el campo no vino"
+
+        son cosas distintas, y el cliente que las confunda muestra "0 vehiculos" en
+
+        el plan mas caro del producto.'
+      properties:
+        code:
+          title: Code
+          type: string
+        id:
+          format: uuid
+          title: Id
+          type: string
+        max_branches:
+          title: Max Branches
+          type: integer
+        max_users:
+          title: Max Users
+          type: integer
+        max_vehicles:
+          title: Max Vehicles
+          type: integer
+        max_whatsapp_messages_month:
+          title: Max Whatsapp Messages Month
+          type: integer
+        modules:
+          items:
+            type: string
+          title: Modules
+          type: array
+        name:
+          title: Name
+          type: string
+        price_ars:
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Price Ars
+          type: string
+      required:
+      - id
+      - code
+      - name
+      - price_ars
+      - max_users
+      - max_vehicles
+      - max_branches
+      - max_whatsapp_messages_month
+      - modules
+      title: PlanSalida
+      type: object
+    RolDeUsuario:
+      description: 'Los tres de `ADR-017`. `super_admin` no esta: vive en otra tabla.'
+      enum:
+      - manager
+      - salesperson
+      - admin_staff
+      title: RolDeUsuario
+      type: string
+    SucursalAsignada:
+      description: 'Una sucursal del usuario, con si es la principal.
+
+
+        `is_primary` viaja aunque el frontend pueda deducirlo comparando contra otro
+
+        campo: deducir una relacion que el backend ya conoce es la clase de logica
+
+        que despues difiere entre la web y el movil.'
+      properties:
+        id:
+          format: uuid
+          title: Id
+          type: string
+        is_primary:
+          title: Is Primary
+          type: boolean
+        name:
+          title: Name
+          type: string
+      required:
+      - id
+      - name
+      - is_primary
+      title: SucursalAsignada
+      type: object
+    SucursalCrear:
+      additionalProperties: false
+      description: 'Alta de una sucursal.
+
+
+        `tenant_id` no esta ni puede estar: lo pone el servicio desde el contexto.'
+      properties:
+        address:
+          anyOf:
+          - maxLength: 255
+            type: string
+          - type: 'null'
+          title: Address
+        business_hours:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Business Hours
+        city:
+          maxLength: 120
+          minLength: 1
+          title: City
+          type: string
+        name:
+          maxLength: 120
+          minLength: 1
+          title: Name
+          type: string
+        phone:
+          anyOf:
+          - maxLength: 40
+            type: string
+          - type: 'null'
+          title: Phone
+        province:
+          maxLength: 120
+          minLength: 1
+          title: Province
+          type: string
+      required:
+      - name
+      - city
+      - province
+      title: SucursalCrear
+      type: object
+    SucursalEditar:
+      additionalProperties: false
+      description: '`PATCH /api/v1/branches/{id}`.
+
+
+        `tenant_id` no esta ni puede estar — lo pone el contexto, nunca el cuerpo
+
+        (regla dura 1). `is_active` tampoco: dar de baja una sucursal tiene su
+
+        propio endpoint, y mezclarlo aca dejaria que un cliente la cierre creyendo
+
+        que le corrige el telefono.'
+      properties:
+        address:
+          anyOf:
+          - maxLength: 255
+            type: string
+          - type: 'null'
+          title: Address
+        city:
+          anyOf:
+          - maxLength: 120
+            minLength: 1
+            type: string
+          - type: 'null'
+          title: City
+        name:
+          anyOf:
+          - maxLength: 120
+            minLength: 1
+            type: string
+          - type: 'null'
+          title: Name
+        phone:
+          anyOf:
+          - maxLength: 40
+            type: string
+          - type: 'null'
+          title: Phone
+        province:
+          anyOf:
+          - maxLength: 120
+            minLength: 1
+            type: string
+          - type: 'null'
+          title: Province
+      title: SucursalEditar
+      type: object
+    SucursalSalida:
+      description: 'Salida de una sucursal.
+
+
+        Incluye `tenant_id` a proposito: en SALIDA no es un riesgo —el cliente solo
+
+        recibe lo suyo, que es lo que garantiza la politica RLS— y le sirve para
+
+        correlacionar. Lo que nunca se acepta es en la ENTRADA.'
+      properties:
+        address:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Address
+        city:
+          title: City
+          type: string
+        created_at:
+          format: date-time
+          title: Created At
+          type: string
+        id:
+          format: uuid
+          title: Id
+          type: string
+        is_active:
+          title: Is Active
+          type: boolean
+        name:
+          title: Name
+          type: string
+        phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phone
+        province:
+          title: Province
+          type: string
+        tenant_id:
+          format: uuid
+          title: Tenant Id
+          type: string
+      required:
+      - id
+      - tenant_id
+      - name
+      - city
+      - province
+      - address
+      - phone
+      - is_active
+      - created_at
+      title: SucursalSalida
+      type: object
+    TenantConfigurar:
+      additionalProperties: false
+      description: '`PATCH /api/v1/tenant/me` — C-05 tarea 5.10.
+
+
+        ⚠️ NO ESTAN `cuit` NI `slug`, y no es un olvido: son IDENTIDAD, no
+
+        configuracion. El CUIT identifica a la agencia ante AFIP y el `slug` es su
+
+        direccion publica — cambiarlos por un `PATCH` de configuracion rompe las
+
+        publicaciones ya emitidas y la facturacion, en silencio. Si algun dia hay
+
+        que cambiarlos, es una operacion con su propio nombre y su propia
+
+        autorizacion.
+
+
+        Tampoco estan `plan_id` ni `status`: el plan lo cambia la facturacion y el
+
+        estado lo cambia la plataforma. Ninguno de los dos es algo que una agencia
+
+        se ajuste a si misma.'
+      properties:
+        billing_email:
+          anyOf:
+          - maxLength: 254
+            minLength: 5
+            pattern: ^[^@\s]+@[^@\s]+\.[^@\s]+$
+            type: string
+          - type: 'null'
+          title: Billing Email
+        locale:
+          anyOf:
+          - maxLength: 10
+            minLength: 2
+            type: string
+          - type: 'null'
+          title: Locale
+        name:
+          anyOf:
+          - maxLength: 120
+            minLength: 1
+            type: string
+          - type: 'null'
+          title: Name
+        timezone:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            type: string
+          - type: 'null'
+          title: Timezone
+      title: TenantConfigurar
+      type: object
+    TenantSalida:
+      properties:
+        billing_email:
+          title: Billing Email
+          type: string
+        created_at:
+          format: date-time
+          title: Created At
+          type: string
+        cuit:
+          title: Cuit
+          type: string
+        id:
+          format: uuid
+          title: Id
+          type: string
+        locale:
+          title: Locale
+          type: string
+        name:
+          title: Name
+          type: string
+        plan_id:
+          anyOf:
+          - format: uuid
+            type: string
+          - type: 'null'
+          title: Plan Id
+        slug:
+          title: Slug
+          type: string
+        status:
+          title: Status
+          type: string
+        timezone:
+          title: Timezone
+          type: string
+      required:
+      - id
+      - name
+      - slug
+      - cuit
+      - billing_email
+      - status
+      - plan_id
+      - timezone
+      - locale
+      - created_at
+      title: TenantSalida
+      type: object
+    Transmision:
+      enum:
+      - manual
+      - automatic
+      - cvt
+      - dsg
+      title: Transmision
+      type: string
+    UsuarioCompleto:
+      description: 'Lo que ve un `manager`: el padron entero.
+
+
+        Hereda de `UsuarioPublico` a proposito — asi es imposible que un campo
+
+        publico exista aca y no alla, que es como los dos schemas se despegan.'
+      properties:
+        avatar_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Avatar Url
+        branches:
+          items:
+            $ref: '#/components/schemas/SucursalAsignada'
+          title: Branches
+          type: array
+        email:
+          title: Email
+          type: string
+        full_name:
+          title: Full Name
+          type: string
+        id:
+          format: uuid
+          title: Id
+          type: string
+        phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phone
+        role:
+          $ref: '#/components/schemas/RolDeUsuario'
+        status:
+          $ref: '#/components/schemas/EstadoDeUsuario'
+      required:
+      - id
+      - full_name
+      - role
+      - email
+      - status
+      title: UsuarioCompleto
+      type: object
+    UsuarioEditarPerfil:
+      additionalProperties: false
+      description: '`[perfil]` de `ADR-024` §6 — lo unico que alguien puede editarse
+        a si mismo.
+
+
+        NO estan, y no es un olvido: `role`, `status`, `tenant_id`, `email` y la
+
+        asignacion de sucursales son privilegiados. `email` en particular porque es
+
+        el identificador contra Keycloak (`ADR-007`), y escribirlo desde la API
+
+        abriria un camino sobre la identidad que la regla dura 2 mantiene afuera.
+
+
+        Que este schema y `CAMPOS_DE_PERFIL` de `rbac.py` digan lo mismo lo verifica
+
+        un test: son dos declaraciones de la misma celda del ADR.'
+      properties:
+        avatar_url:
+          anyOf:
+          - maxLength: 500
+            type: string
+          - type: 'null'
+          title: Avatar Url
+        full_name:
+          anyOf:
+          - maxLength: 180
+            minLength: 1
+            type: string
+          - type: 'null'
+          title: Full Name
+        notification_preferences:
+          anyOf:
+          - additionalProperties:
+              type: boolean
+            type: object
+          - type: 'null'
+          title: Notification Preferences
+        phone:
+          anyOf:
+          - maxLength: 40
+            type: string
+          - type: 'null'
+          title: Phone
+      title: UsuarioEditarPerfil
+      type: object
+    UsuarioInvitar:
+      additionalProperties: false
+      description: '`POST /api/v1/users/invitations` — `D-5`.
+
+
+        ⚠️ NO RECIBE CONTRASEÑA NI `tenant_id`, y las dos ausencias son estructura.
+
+        La contraseña la fija la persona en Keycloak (`ADR-026`); el `tenant_id`
+
+        sale del token y nunca del cuerpo (regla dura 1) — aceptarlo seria darle a
+
+        quien invita la posibilidad de invitar a OTRA agencia.
+
+
+        Tampoco recibe `status`: quien invita no elige en que estado nace la
+
+        persona. Nace `invited` y la activa el flujo, no el cliente.'
+      properties:
+        email:
+          maxLength: 254
+          minLength: 5
+          pattern: ^[^@\s]+@[^@\s]+\.[^@\s]+$
+          title: Email
+          type: string
+        full_name:
+          maxLength: 180
+          minLength: 1
+          title: Full Name
+          type: string
+        role:
+          $ref: '#/components/schemas/RolDeUsuario'
+      required:
+      - email
+      - full_name
+      - role
+      title: UsuarioInvitar
+      type: object
+    ValidationError:
+      properties:
+        ctx:
+          title: Context
+          type: object
+        input:
+          title: Input
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          title: Location
+          type: array
+        msg:
+          title: Message
+          type: string
+        type:
+          title: Error Type
+          type: string
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+      type: object
+    VehiculoCambioDeEstado:
+      additionalProperties: false
+      description: '`POST /vehicles/{id}/status`.
+
+
+        La razon es obligatoria al vender (`RN-ST-06`). No se valida acá que la
+
+        transicion sea legal: eso necesita el estado ACTUAL, que el schema no
+
+        conoce — lo hace el servicio con `es_transicion_valida`.'
+      properties:
+        reason:
+          anyOf:
+          - maxLength: 500
+            minLength: 1
+            type: string
+          - type: 'null'
+          title: Reason
+        status:
+          $ref: '#/components/schemas/EstadoDeVehiculo'
+      required:
+      - status
+      title: VehiculoCambioDeEstado
+      type: object
+    VehiculoCrear:
+      additionalProperties: false
+      description: 'Alta de un vehiculo.
+
+
+        ⚠️ `domain_plate` es OPCIONAL — `ADR-031` cierra `IN-07`. Un 0 km sin
+
+        patentar y un usado recien recibido en permuta no tienen dominio todavia,
+        y
+
+        con el campo obligatorio una agencia no podria cargarlos.
+
+
+        Lo que si se exige es que venga **al menos uno** de dominio o chasis: un
+
+        vehiculo sin ninguna forma de identificarse no se puede distinguir de otro.'
+      properties:
+        acquired_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Acquired At
+        acquisition_cost_ars:
+          anyOf:
+          - exclusiveMinimum: 0.0
+            type: number
+          - pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,16}|(?=[\d.]{1,19}0*$)\d{0,16}\.\d{0,2}0*$)
+            type: string
+          - type: 'null'
+          title: Acquisition Cost Ars
+        body_type:
+          $ref: '#/components/schemas/Carroceria'
+        branch_id:
+          format: uuid
+          title: Branch Id
+          type: string
+        brand_id:
+          format: uuid
+          title: Brand Id
+          type: string
+        chassis_number:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Chassis Number
+        color:
+          maxLength: 60
+          minLength: 1
+          title: Color
+          type: string
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        domain_plate:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Domain Plate
+        engine_number:
+          anyOf:
+          - maxLength: 30
+            type: string
+          - type: 'null'
+          title: Engine Number
+        features:
+          items:
+            type: string
+          title: Features
+          type: array
+        fuel_type:
+          $ref: '#/components/schemas/Combustible'
+        mileage_km:
+          minimum: 0.0
+          title: Mileage Km
+          type: integer
+        model_id:
+          format: uuid
+          title: Model Id
+          type: string
+        price_ars:
+          anyOf:
+          - exclusiveMinimum: 0.0
+            type: number
+          - pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,16}|(?=[\d.]{1,19}0*$)\d{0,16}\.\d{0,2}0*$)
+            type: string
+          title: Price Ars
+        price_usd:
+          anyOf:
+          - exclusiveMinimum: 0.0
+            type: number
+          - pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,16}|(?=[\d.]{1,19}0*$)\d{0,16}\.\d{0,2}0*$)
+            type: string
+          - type: 'null'
+          title: Price Usd
+        transmission:
+          $ref: '#/components/schemas/Transmision'
+        version_id:
+          anyOf:
+          - format: uuid
+            type: string
+          - type: 'null'
+          title: Version Id
+        year:
+          minimum: 1950.0
+          title: Year
+          type: integer
+      required:
+      - branch_id
+      - brand_id
+      - model_id
+      - year
+      - mileage_km
+      - color
+      - fuel_type
+      - transmission
+      - body_type
+      - price_ars
+      title: VehiculoCrear
+      type: object
+    VehiculoSalida:
+      description: 'Lo que ve CUALQUIER rol con acceso al vehiculo.
+
+
+        ⚠️ `acquisition_cost_ars` NO ESTA ACA, y es el punto de que existan dos
+
+        schemas de salida. `RN-ST-12` dice que el precio de costo solo lo ven
+
+        `manager` y `admin_staff`, y que **nunca se publica**.
+
+
+        Se resuelve con dos schemas y no con un campo opcional que el servicio
+
+        borra: un campo que a veces viaja depende de que alguien se acuerde de
+
+        borrarlo en cada camino de salida, y basta un `model_dump()` olvidado para
+
+        filtrar el margen de la agencia. Con dos tipos, el que no lo tiene no puede
+
+        filtrarlo — lo garantiza el tipo, no la disciplina.'
+      properties:
+        acquired_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Acquired At
+        assigned_user_id:
+          anyOf:
+          - format: uuid
+            type: string
+          - type: 'null'
+          title: Assigned User Id
+        body_type:
+          $ref: '#/components/schemas/Carroceria'
+        branch_id:
+          format: uuid
+          title: Branch Id
+          type: string
+        brand_id:
+          format: uuid
+          title: Brand Id
+          type: string
+        chassis_number:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Chassis Number
+        color:
+          title: Color
+          type: string
+        created_at:
+          format: date-time
+          title: Created At
+          type: string
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        domain_plate:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Domain Plate
+        features:
+          items:
+            type: string
+          title: Features
+          type: array
+        fuel_type:
+          $ref: '#/components/schemas/Combustible'
+        id:
+          format: uuid
+          title: Id
+          type: string
+        mileage_km:
+          title: Mileage Km
+          type: integer
+        model_id:
+          format: uuid
+          title: Model Id
+          type: string
+        price_ars:
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+          title: Price Ars
+          type: string
+        price_usd:
+          anyOf:
+          - pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+            type: string
+          - type: 'null'
+          title: Price Usd
+        sold_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Sold At
+        status:
+          $ref: '#/components/schemas/EstadoDeVehiculo'
+        tenant_id:
+          format: uuid
+          title: Tenant Id
+          type: string
+        transmission:
+          $ref: '#/components/schemas/Transmision'
+        version_id:
+          anyOf:
+          - format: uuid
+            type: string
+          - type: 'null'
+          title: Version Id
+        year:
+          title: Year
+          type: integer
+      required:
+      - id
+      - tenant_id
+      - branch_id
+      - assigned_user_id
+      - domain_plate
+      - chassis_number
+      - brand_id
+      - model_id
+      - version_id
+      - year
+      - mileage_km
+      - color
+      - fuel_type
+      - transmission
+      - body_type
+      - price_ars
+      - price_usd
+      - status
+      - description
+      - features
+      - acquired_at
+      - sold_at
+      - created_at
+      title: VehiculoSalida
+      type: object
+info:
+  description: API del SaaS multi-tenant para agencias de vehiculos.
+  title: deRuedas Gestion API
+  version: 0.1.0
+openapi: 3.1.0
+paths:
+  /api/v1/auth/accept-invitation:
+    post:
+      description: 'Activa el espejo local. **No recibe un token de invitacion ni
+        una contrasena** (`ADR-035`): tener un access token valido de Keycloak ya
+        prueba que la persona fijo su contrasena y se autentico, que es lo que aceptar
+        significa en este flujo.'
+      operationId: aceptar_invitacion_api_v1_auth_accept_invitation_post
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerfilPropio'
+          description: Successful Response
+      summary: Aceptar la invitacion
+      tags:
+      - identidad
+  /api/v1/auth/logout:
+    post:
+      description: 'Invalida la sesion en Keycloak. **El access token ya emitido sigue
+        siendo valido hasta que venza** (hasta 15 minutos): es el comportamiento estandar
+        de OIDC con tokens de vida corta, y esta asumido en `design.md` D-4.'
+      operationId: cerrar_sesion_api_v1_auth_logout_post
+      responses:
+        '204':
+          description: Successful Response
+      summary: Cerrar sesion
+      tags:
+      - identidad
+  /api/v1/auth/me:
+    get:
+      description: 'No recibe id: la identidad es la del token y no hay otra que pedir.
+        Devuelve lo que el token no dice — nombre, estado y sucursales.'
+      operationId: mi_perfil_api_v1_auth_me_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerfilPropio'
+          description: Successful Response
+      summary: Quien soy
+      tags:
+      - identidad
+  /api/v1/branches:
+    get:
+      operationId: listar_sucursales_api_v1_branches_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/SucursalSalida'
+                title: Response Listar Sucursales Api V1 Branches Get
+                type: array
+          description: Successful Response
+      summary: Sucursales
+      tags:
+      - agencia
+    post:
+      description: 'Verifica la cuota del plan **antes** de crear. Si la agencia llego
+        a su techo responde **402**, no 403: ningun cambio de rol lo resuelve.'
+      operationId: crear_sucursal_api_v1_branches_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SucursalCrear'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SucursalSalida'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Abrir una sucursal
+      tags:
+      - agencia
+  /api/v1/branches/{sucursal_id}:
+    get:
+      operationId: obtener_sucursal_api_v1_branches__sucursal_id__get
+      parameters:
+      - in: path
+        name: sucursal_id
+        required: true
+        schema:
+          format: uuid
+          title: Sucursal Id
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SucursalSalida'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Una sucursal
+      tags:
+      - agencia
+    patch:
+      description: 'No acepta `is_active`: dar de baja tiene su propio endpoint, y
+        mezclarlo aca dejaria que un cliente cierre una sucursal creyendo que le corrige
+        el telefono.'
+      operationId: editar_sucursal_api_v1_branches__sucursal_id__patch
+      parameters:
+      - in: path
+        name: sucursal_id
+        required: true
+        schema:
+          format: uuid
+          title: Sucursal Id
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SucursalEditar'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SucursalSalida'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Editar una sucursal
+      tags:
+      - agencia
+  /api/v1/branches/{sucursal_id}/deactivate:
+    post:
+      description: 'Baja recuperable: libera cuota del plan y la fila sobrevive.'
+      operationId: dar_de_baja_sucursal_api_v1_branches__sucursal_id__deactivate_post
+      parameters:
+      - in: path
+        name: sucursal_id
+        required: true
+        schema:
+          format: uuid
+          title: Sucursal Id
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SucursalSalida'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Dar de baja una sucursal
+      tags:
+      - agencia
+  /api/v1/catalog/brands:
+    get:
+      description: Catalogo cross-tenant de marcas, en orden alfabetico.
+      operationId: listar_marcas_api_v1_catalog_brands_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/MarcaSalida'
+                title: Response Listar Marcas Api V1 Catalog Brands Get
+                type: array
+          description: Successful Response
+      summary: Marcas del catalogo
+      tags:
+      - planes
+  /api/v1/catalog/brands/{marca_id}/models:
+    get:
+      description: Los modelos de una marca, del mas nuevo al mas viejo. `year_to`
+        en `null` significa que el modelo se sigue vendiendo.
+      operationId: listar_modelos_api_v1_catalog_brands__marca_id__models_get
+      parameters:
+      - in: path
+        name: marca_id
+        required: true
+        schema:
+          format: uuid
+          title: Marca Id
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ModeloSalida'
+                title: Response Listar Modelos Api V1 Catalog Brands  Marca Id  Models
+                  Get
+                type: array
+          description: Successful Response
+        '404':
+          description: La marca no existe o no esta publicada
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Modelos de una marca
+      tags:
+      - planes
+  /api/v1/imports:
+    get:
+      operationId: listar_importaciones_api_v1_imports_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ImportacionSalida'
+                title: Response Listar Importaciones Api V1 Imports Get
+                type: array
+          description: Successful Response
+      summary: Importaciones de la agencia
+      tags:
+      - stock
+  /api/v1/imports/{importacion_id}:
+    get:
+      description: El frontend consulta cada 2 s hasta que `status` sea `completed`
+        o `failed`. `errors` trae el reporte por fila para corregir la planilla.
+      operationId: obtener_importacion_api_v1_imports__importacion_id__get
+      parameters:
+      - in: path
+        name: importacion_id
+        required: true
+        schema:
+          format: uuid
+          title: Importacion Id
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportacionSalida'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Progreso de una importacion
+      tags:
+      - stock
+  /api/v1/plans:
+    get:
+      description: La grilla comercial, del plan mas barato al mas caro. En los limites,
+        `0` significa **sin techo**, no cero permitidos.
+      operationId: listar_planes_api_v1_plans_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/PlanSalida'
+                title: Response Listar Planes Api V1 Plans Get
+                type: array
+          description: Successful Response
+      summary: Catalogo de planes
+      tags:
+      - planes
+  /api/v1/tenant/me:
+    get:
+      description: 'No recibe id: la agencia es la del token y no hay otra que pedir.'
+      operationId: mi_agencia_api_v1_tenant_me_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantSalida'
+          description: Successful Response
+      summary: La agencia del token
+      tags:
+      - agencia
+    patch:
+      description: 'Ajusta lo que una agencia puede ajustarse a si misma. **No acepta
+        `cuit` ni `slug`**: son identidad, no configuracion — cambiarlos rompe la
+        facturacion y las publicaciones ya emitidas.'
+      operationId: configurar_agencia_api_v1_tenant_me_patch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantConfigurar'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantSalida'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Configurar la agencia
+      tags:
+      - agencia
+  /api/v1/users:
+    get:
+      description: 'Lo que devuelve depende de quien pregunta (`ADR-024` §6).
+
+
+        Un `manager` ve el padron entero; un `salesperson` ve
+
+        `[id, nombre, rol, sucursales]`. Necesita saber a quien asignarle un lead;
+
+        no necesita el telefono de todos ni quien esta suspendido.'
+      operationId: listar_usuarios_api_v1_users_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+      summary: El padron de la agencia
+      tags:
+      - usuarios
+  /api/v1/users/invitations:
+    post:
+      description: Crea la cuenta en Keycloak y el espejo local en estado `invited`.
+        **No recibe contrasena** (`ADR-026`) ni `tenant_id` (regla dura 1).
+      operationId: invitar_usuario_api_v1_users_invitations_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioInvitar'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsuarioCompleto'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Invitar a alguien
+      tags:
+      - usuarios
+  /api/v1/users/{user_id}:
+    delete:
+      description: Soft delete. Libera cupo del plan y libera el email; en Keycloak
+        **deshabilita, no borra** (`D-6`).
+      operationId: dar_de_baja_usuario_api_v1_users__user_id__delete
+      parameters:
+      - in: path
+        name: user_id
+        required: true
+        schema:
+          format: uuid
+          title: User Id
+          type: string
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Dar de baja
+      tags:
+      - usuarios
+    get:
+      operationId: obtener_usuario_api_v1_users__user_id__get
+      parameters:
+      - in: path
+        name: user_id
+        required: true
+        schema:
+          format: uuid
+          title: User Id
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Una persona
+      tags:
+      - usuarios
+    patch:
+      description: '`[perfil]` de `ADR-024` §6.
+
+
+        ⚠️ EL ALCANCE ES LO QUE FRENA A UN VENDEDOR DE EDITAR A OTRO. Para
+
+        `salesperson` y `admin_staff` la celda es `SELF`; para `manager`, `ALL`. El
+
+        schema ya impide tocar `role`, `status`, `email` o sucursales — no estan en
+
+        `UsuarioEditarPerfil` y el modelo es `extra="forbid"`.'
+      operationId: actualizar_usuario_api_v1_users__user_id__patch
+      parameters:
+      - in: path
+        name: user_id
+        required: true
+        schema:
+          format: uuid
+          title: User Id
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioEditarPerfil'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Editar el perfil
+      tags:
+      - usuarios
+  /api/v1/users/{user_id}/branches:
+    put:
+      description: 'Reemplaza el conjunto completo. `PUT` y no `POST` porque no suma:
+        reemplaza.'
+      operationId: asignar_sucursales_api_v1_users__user_id__branches_put
+      parameters:
+      - in: path
+        name: user_id
+        required: true
+        schema:
+          format: uuid
+          title: User Id
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AsignarSucursales'
+        required: true
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Asignar sucursales
+      tags:
+      - usuarios
+  /api/v1/users/{user_id}/deactivation:
+    post:
+      description: No puede entrar y **sigue ocupando licencia** del plan (`D-6`).
+      operationId: desactivar_usuario_api_v1_users__user_id__deactivation_post
+      parameters:
+      - in: path
+        name: user_id
+        required: true
+        schema:
+          format: uuid
+          title: User Id
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsuarioCompleto'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Suspender
+      tags:
+      - usuarios
+  /api/v1/vehicles:
+    get:
+      operationId: listar_vehiculos_api_v1_vehicles_get
+      parameters:
+      - in: query
+        name: status
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/EstadoDeVehiculo'
+          - type: 'null'
+          title: Status
+      - in: query
+        name: brand_id
+        required: false
+        schema:
+          anyOf:
+          - format: uuid
+            type: string
+          - type: 'null'
+          title: Brand Id
+      - in: query
+        name: model_id
+        required: false
+        schema:
+          anyOf:
+          - format: uuid
+            type: string
+          - type: 'null'
+          title: Model Id
+      - in: query
+        name: branch_id
+        required: false
+        schema:
+          anyOf:
+          - format: uuid
+            type: string
+          - type: 'null'
+          title: Branch Id
+      - in: query
+        name: year_from
+        required: false
+        schema:
+          anyOf:
+          - minimum: 1950
+            type: integer
+          - type: 'null'
+          title: Year From
+      - in: query
+        name: year_to
+        required: false
+        schema:
+          anyOf:
+          - minimum: 1950
+            type: integer
+          - type: 'null'
+          title: Year To
+      - in: query
+        name: price_from
+        required: false
+        schema:
+          anyOf:
+          - minimum: 0.0
+            type: number
+          - pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+            type: string
+          - type: 'null'
+          title: Price From
+      - in: query
+        name: price_to
+        required: false
+        schema:
+          anyOf:
+          - minimum: 0.0
+            type: number
+          - pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
+            type: string
+          - type: 'null'
+          title: Price To
+      - in: query
+        name: q
+        required: false
+        schema:
+          anyOf:
+          - maxLength: 120
+            minLength: 2
+            type: string
+          - type: 'null'
+          title: Q
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Listar el stock
+      tags:
+      - stock
+    post:
+      operationId: crear_vehiculo_api_v1_vehicles_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehiculoCrear'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehiculoSalida'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Cargar un vehiculo
+      tags:
+      - stock
+  /api/v1/vehicles/import:
+    post:
+      description: Acepta el CSV, lo encola y devuelve la corrida en `pending`. El
+        progreso se sigue con `GET /imports/{id}`. Maximo **10 MB** y **5.000 filas**
+        (`RN-ST-13`).
+      operationId: importar_api_v1_vehicles_import_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_importar_api_v1_vehicles_import_post'
+        required: true
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportacionSalida'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Importar stock desde una planilla
+      tags:
+      - stock
+  /api/v1/vehicles/import/template:
+    get:
+      description: La planilla vacia con una fila de ejemplo. Se descarga, se completa
+        en Excel y se sube a `POST /vehicles/import`.
+      operationId: plantilla_de_importacion_api_v1_vehicles_import_template_get
+      responses:
+        '200':
+          content:
+            text/csv: {}
+            text/plain:
+              schema:
+                type: string
+          description: Successful Response
+      summary: Plantilla CSV de importacion
+      tags:
+      - stock
+  /api/v1/vehicles/{vehiculo_id}:
+    delete:
+      description: 'Borrado logico: la fila sobrevive con `deleted_at` (regla dura
+        3).'
+      operationId: dar_de_baja_api_v1_vehicles__vehiculo_id__delete
+      parameters:
+      - in: path
+        name: vehiculo_id
+        required: true
+        schema:
+          format: uuid
+          title: Vehiculo Id
+          type: string
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Dar de baja
+      tags:
+      - stock
+    get:
+      operationId: obtener_vehiculo_api_v1_vehicles__vehiculo_id__get
+      parameters:
+      - in: path
+        name: vehiculo_id
+        required: true
+        schema:
+          format: uuid
+          title: Vehiculo Id
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Un vehiculo
+      tags:
+      - stock
+  /api/v1/vehicles/{vehiculo_id}/status:
+    post:
+      description: Solo las transiciones de `RN-ST-05`. Vender exige razon.
+      operationId: cambiar_estado_api_v1_vehicles__vehiculo_id__status_post
+      parameters:
+      - in: path
+        name: vehiculo_id
+        required: true
+        schema:
+          format: uuid
+          title: Vehiculo Id
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehiculoCambioDeEstado'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehiculoSalida'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Cambiar el estado
+      tags:
+      - stock
+  /health:
+    get:
+      description: 'Responde mientras el proceso viva. NO consulta dependencias.
+
+
+        Es a proposito: si consultara la base, una caida de PostgreSQL haria
+
+        que Kubernetes reiniciara el pod en loop, sin arreglar nada y
+
+        agregandole carga a una base que ya esta sufriendo.'
+      operationId: health_health_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Health Health Get
+                type: object
+          description: Successful Response
+      summary: Sonda de vida
+      tags:
+      - salud
+  /ready:
+    get:
+      description: Verifica las dependencias necesarias para atender trafico.
+      operationId: ready_ready_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+      summary: Sonda de disponibilidad
+      tags:
+      - salud

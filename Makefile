@@ -105,6 +105,9 @@ else
 PYTEST_HOST ?= python3
 endif
 
+openapi:  ## Regenera docs/openapi.yaml desde los routers
+	@$(PYTEST_HOST) tools/exportar-openapi.py
+
 test-tools:  ## Tests de los verificadores de tools/ (corren en el host)
 	@$(PYTEST_HOST) -m pytest tools/tests -q
 

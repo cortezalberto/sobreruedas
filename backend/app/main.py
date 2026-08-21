@@ -33,6 +33,7 @@ from app.modules.stock.router_importacion import router as importacion_router
 from app.modules.tenancy.router import router as tenancy_router
 from app.modules.tenancy.router_agencia import router as agencia_router
 from app.modules.users.router import router as users_router
+from app.modules.users.router_usuarios import router as usuarios_router
 
 VERSION = "0.1.0"
 
@@ -162,6 +163,10 @@ def create_app() -> FastAPI:
     # Identidad: `GET /auth/me`. Va despues de agencia porque su prefijo
     # (`/api/v1/auth`) no se solapa con ninguno de los anteriores.
     app.include_router(users_router)
+    # `/api/v1/users` — el padron. Va DESPUES de `/auth` a proposito: el de
+    # arriba es el unico con endpoints que no exigen el padron, y leer el
+    # orden de registro como el orden de dependencia ahorra una sorpresa.
+    app.include_router(usuarios_router)
 
     @app.get("/health", tags=["salud"], summary="Sonda de vida")
     async def health() -> dict[str, Any]:

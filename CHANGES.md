@@ -343,7 +343,7 @@ Tres observaciones sobre la cadena:
 | 1 | **C-01** foundation-setup | — | — |
 | 2 | **C-02** core-backend-primitives | — | **C-07** design-system-y-shell-web |
 | 3 | **C-04** tenancy-planes-y-limites | **C-03** observabilidad-y-auditoria | **C-13** catalogo-de-vehiculos |
-| 4 | **C-05** identidad-auth-y-tenant-endpoints | — ⚠️ | — ⚠️ |
+| 4 | **C-05** identidad-auth-y-tenant-endpoints | ✅ 60/60 | ✅ **GATE 3 abierto** |
 | 5 | **C-14** vehiculos-modelo-y-servicios | **C-06** storage-y-notificaciones | **C-08** auth-frontend-y-api-client |
 | 6 | **C-15** vehiculos-api | **C-09** admin-tenants-backoffice | **C-10** onboarding-wizard |
 | 7 | **C-17** importacion-csv-de-stock | **C-16** fotos-de-vehiculos | **C-12** usuarios-invitaciones-y-settings |
@@ -488,7 +488,13 @@ Tres observaciones sobre la cadena:
   - `knowledge-base/01_vision_y_objetivos.md` §Alcance del MVP
 
 ### [C-05] `identidad-auth-y-tenant-endpoints`
-- **Estado**: 📝 **especificado, sin implementar**. ✅ `E-001` **ratificada el 20-ago-2026** — la traba documental cayó. Lo que ahora frena a C-05 es la tarea **0.2**: el bloque 6 de C-02 (`core/rbac.py`) está destrabado pero **sin implementar**, y los endpoints de este change lo invocan.
+- **Estado**: ✅ **implementado — **60/60 tareas** al 21-ago-2026. GATE 3 abierto: C-06, C-08 y C-09 quedan desbloqueados.**
+  - Bloques **1 a 7 completos**. Backend **870 tests** (unitarios + integración), cobertura **99.17 % líneas / 97.74 % ramas**, `ruff` / `black` / `mypy .` limpios, `openspec validate --strict` verde.
+  - **Auditoría de escenarios**: los **30** declarados en las dos capabilities tienen test, y cada nombre fue verificado contra el código. Tabla en [`verificacion.md`](openspec/changes/identidad-auth-y-tenant-endpoints/verificacion.md).
+  - **Un ADR nuevo salió de la implementación**: [`ADR-035`](docs/adr/ADR-035-aceptar-la-invitacion-sin-token-propio.md) — `accept-invitation` no emite un token propio. `ADR-026` §4 lo pedía público *"con un token de invitación"* y ningún documento definía de dónde salía ese token; emitirlo contradecía el propósito del propio ADR, que existe para que el sistema no tenga *"lógica de reseteo propia que auditar"*. Tener un access token válido de Keycloak ya prueba que la persona aceptó.
+  - **Dos artefactos decían lo contrario de lo que corresponde y se corrigieron con su razón escrita**: la tarea `4.8` y el escenario *"El email no se libera con la baja"*. El índice `ux_users_tenant_email` es parcial por `deleted_at` por una decisión del bloque 1 **con su razón documentada** —la reincorporación de un empleado sería imposible—, y `make seed` depende de ese comportamiento.
+  - ⚠️ **Dos cosas quedan fuera y están escritas**: el rol de aplicación puede leer `super_admins` (revocarlo es una migración y **C-09 necesita esa tabla**: con qué rol es arquitectura del espacio administrativo), y **desasignar** una sucursal no existe —`user_branches` no tiene `deleted_at`, y quitarla conservando el histórico que `D-7` exige necesita migración y decisión—.
+  - ⏳ **Sin verificar**: el formulario del frontend con sesión real. El contrato de los endpoints se ejercitó de punta a punta con tokens válidos; la pantalla requiere entrar por Keycloak, y eso lo hace una persona.
   - ✅ **Change creado con los cuatro artefactos**: proposal, design (`D-1`…`D-9`), **2 delta specs** (`identity/user-management` 6 requisitos/21 escenarios, `identity/session` 4/9) y **60 tareas**. `openspec validate --strict` verde.
   - ⛔ **NO se escribió una línea de código, y fue deliberado.** `E-001` nombraba la *"migración inicial de `users`"* entre lo que bloqueaba. ✅ **Se ratificó el 20-ago sin cambios al texto**, así que el catálogo quedó firme en sus 3 valores y el escenario temido —quitar un valor del enum, destructivo y prohibido en un paso por la regla dura 13— **no puede ocurrir**. La espera valió: implementar antes habría sido apostar.
   - ⚠️ **Hallazgo: `mfa_secret` es el segundo `password_hash`.** `spec-tecnica` §3.3 le da a `users` una columna `mfa_secret varchar(255)` justo al lado de la de contraseña. Es una credencial: `plan-seguridad` §112 pone la MFA del lado de Keycloak y [`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) ya retiró los endpoints `/auth/mfa/*`. **`IN-06` documentó la contradicción de la contraseña y pasó de largo por la de al lado.** Tampoco se crea `mfa_enabled`: es un hecho de Keycloak y copiarlo agrega un espejo que envejece en silencio. Ver `design.md` `D-2`.
