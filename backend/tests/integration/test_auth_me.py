@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
+from datetime import timedelta
 from typing import Any, cast
 
 import pytest
@@ -74,6 +75,7 @@ async def _persona(
     nombre: str = "Persona Demo",
     rol: str = "manager",
     sucursal: uuid.UUID | None = None,
+    estado: str = "active",
 ) -> uuid.UUID:
     """Una fila en el espejo. Andamiaje: la invitacion es del bloque 4."""
     uid = sub or uuid.uuid4()
@@ -81,9 +83,9 @@ async def _persona(
         await sesion.execute(
             text(
                 "INSERT INTO users (id, tenant_id, email, full_name, role, status) "
-                "VALUES (:id, :t, :e, :n, :r, 'active')"
+                "VALUES (:id, :t, :e, :n, :r, :s)"
             ),
-            {"id": uid, "t": tenant, "e": email, "n": nombre, "r": rol},
+            {"id": uid, "t": tenant, "e": email, "n": nombre, "r": rol, "s": estado},
         )
         if sucursal is not None:
             await sesion.execute(
@@ -465,3 +467,78 @@ async def test_tras_el_logout_el_access_token_ya_emitido_sigue_valido(
 
     # El mismo token, despues del logout.
     assert cliente.get("/api/v1/auth/me", headers=cabecera).status_code == 200
+
+
+# ── 5.7 y 5.8 · Aceptar la invitacion ────────────────────────────────────────
+
+
+async def _estado(uid: uuid.UUID) -> str:
+    async with sesion_de_propietario() as sesion:
+        fila = await sesion.execute(text("SELECT status FROM users WHERE id = :id"), {"id": uid})
+        estado: str = fila.scalar_one()
+        return estado
+
+
+async def test_aceptar_la_invitacion_activa_el_espejo(
+    cliente: TestClient, proveedor: EmisorDePrueba
+) -> None:
+    """`ADR-035`: no hay token de invitacion propio.
+
+    Tener un access token valido de Keycloak YA prueba que la persona acepto —
+    para tenerlo tuvo que fijar su contraseña y autenticarse, que es lo que
+    "aceptar" significa en este flujo. Un segundo token que pruebe lo mismo
+    seria una credencial nuestra mas, justo lo que `ADR-026` existe para evitar.
+    """
+    tenant, _ = await agencia_con_sucursal()
+    sub = await _persona(tenant, estado="invited")
+
+    respuesta = cliente.post(
+        "/api/v1/auth/accept-invitation", headers=_cabecera(proveedor, tenant, sub)
+    )
+
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json()["status"] == "active"
+    assert await _estado(sub) == "active"
+
+
+async def test_un_token_vencido_no_activa_nada_y_el_espejo_queda_en_invited(
+    cliente: TestClient, proveedor: EmisorDePrueba
+) -> None:
+    """Tarea 5.8. Lo cumple la validacion de token que YA existe.
+
+    Ese es el punto de `ADR-035`: sin token propio no hay una segunda logica de
+    expiracion que escribir, mantener y auditar. Un token vencido da 401 por el
+    mismo camino que cualquier otra peticion, y el espejo no se toca.
+    """
+    tenant, _ = await agencia_con_sucursal()
+    sub = await _persona(tenant, estado="invited")
+
+    vencido = proveedor.firmar(
+        tenant_id=tenant, sub=str(sub), role="manager", vence_en=timedelta(minutes=-1)
+    )
+    respuesta = cliente.post(
+        "/api/v1/auth/accept-invitation", headers={"Authorization": f"Bearer {vencido}"}
+    )
+
+    assert respuesta.status_code == 401
+    assert respuesta.json()["code"] == "not_authenticated"
+    assert await _estado(sub) == "invited", "un token vencido cambio el estado"
+
+
+async def test_aceptar_dos_veces_devuelve_lo_mismo(
+    cliente: TestClient, proveedor: EmisorDePrueba
+) -> None:
+    """El doble clic sobre el mail de invitacion, que va a pasar.
+
+    Si la segunda vez levantara, la persona veria un error habiendo hecho todo
+    bien.
+    """
+    tenant, _ = await agencia_con_sucursal()
+    sub = await _persona(tenant, estado="invited")
+    cabecera = _cabecera(proveedor, tenant, sub)
+
+    assert cliente.post("/api/v1/auth/accept-invitation", headers=cabecera).status_code == 200
+    segunda = cliente.post("/api/v1/auth/accept-invitation", headers=cabecera)
+
+    assert segunda.status_code == 200
+    assert segunda.json()["status"] == "active"
