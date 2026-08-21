@@ -157,21 +157,30 @@ class UserService:
     async def asignar_sucursales(
         self, user_id: uuid.UUID, asignaciones: list[tuple[uuid.UUID, bool]]
     ) -> None:
-        """Reemplaza el conjunto de sucursales de una persona.
+        """Agrega o actualiza las sucursales de una persona. **No borra ninguna.**
 
-        ⚠️ SE BORRA Y SE REESCRIBE, y eso NO contradice a `D-7`. Lo que esa
-        decision protege es el historico frente a la BAJA: cuando alguien se va,
-        sus asignaciones se conservan. Reasignar es otra cosa — es corregir
-        donde trabaja hoy, y ahi el conjunto viejo es un dato equivocado, no un
-        historico.
+        ⚠️ LA PRIMERA VERSION BORRABA Y REESCRIBIA, Y ESTABA MAL POR DOS LADOS.
+        Lo encontro el rol de aplicacion: `mitutu` tiene `SELECT`, `INSERT` y
+        `UPDATE` sobre `user_branches` y **no tiene `DELETE`** — no es un grant
+        olvidado, es la regla dura 3 (soft delete universal) hecha cumplir por
+        la base. El test pasaba porque usaba la sesion del PROPIETARIO, que si
+        puede; el primer camino que llego por la API se choco con el permiso.
 
-        ⚠️ LA PRINCIPAL SE DESMARCA ANTES DE MARCAR LA NUEVA. La base tiene
-        `ux_user_branches_principal UNIQUE (user_id) WHERE is_primary`, pero una
-        constraint RECHAZA — no desmarca. Sin este borrado previo, cambiarle a
-        alguien la sucursal principal reventaria con un `duplicate key` que
-        ademas no le explica nada a quien lo ve. El indice es la red que
-        garantiza el invariante; esto es lo que hace que la operacion normal
-        funcione.
+        Y `D-7` decia lo mismo desde el diseño: `user_branches` se conserva,
+        porque saber en que sucursal trabajaba alguien es parte del historico.
+        Borrar la fila al reasignar tiraba justamente ese dato.
+
+        ⚠️ LAS PRINCIPALES SE DESMARCAN ANTES, TODAS. La base tiene
+        `ux_user_branches_principal UNIQUE (user_id) WHERE is_primary`, y una
+        constraint RECHAZA — no desmarca. Sin este `UPDATE` previo, mover la
+        principal revienta con un `duplicate key` que no le explica nada a quien
+        lo ve.
+
+        ⚠️ DESASIGNAR NO EXISTE TODAVIA, y es deliberado no improvisarlo:
+        `user_branches` no tiene `deleted_at`, asi que quitarle una sucursal a
+        alguien conservando el historico necesita una migracion y una decision
+        sobre que significa "ya no trabaja ahi" contra "nunca trabajo ahi".
+        Queda anotado, no resuelto a medias.
         """
         persona = await self._viva(user_id)
 
@@ -184,20 +193,44 @@ class UserService:
                 raise DomainError("la sucursal no existe en esta agencia", code="branch_not_found")
 
         await self._sesion.execute(
-            sa.delete(UserBranch).where(
-                UserBranch.user_id == persona.id, UserBranch.tenant_id == self._tenant_id
+            sa.update(UserBranch)
+            .where(UserBranch.user_id == persona.id, UserBranch.tenant_id == self._tenant_id)
+            .values(is_primary=False)
+        )
+        await self._sesion.flush()
+
+        ya_asignadas = set(
+            (
+                await self._sesion.execute(
+                    sa.select(UserBranch.branch_id).where(
+                        UserBranch.user_id == persona.id,
+                        UserBranch.tenant_id == self._tenant_id,
+                    )
+                )
             )
+            .scalars()
+            .all()
         )
 
         for sucursal_id, principal in asignaciones:
-            self._sesion.add(
-                UserBranch(
-                    user_id=persona.id,
-                    branch_id=sucursal_id,
-                    tenant_id=self._tenant_id,
-                    is_primary=principal,
+            if sucursal_id in ya_asignadas:
+                await self._sesion.execute(
+                    sa.update(UserBranch)
+                    .where(
+                        UserBranch.user_id == persona.id,
+                        UserBranch.branch_id == sucursal_id,
+                    )
+                    .values(is_primary=principal)
                 )
-            )
+            else:
+                self._sesion.add(
+                    UserBranch(
+                        user_id=persona.id,
+                        branch_id=sucursal_id,
+                        tenant_id=self._tenant_id,
+                        is_primary=principal,
+                    )
+                )
 
         await self._sesion.flush()
 

@@ -79,9 +79,9 @@
 - [x] 5.6 Test que documenta la consecuencia asumida: tras el logout, el access token ya emitido **sigue siendo válido hasta vencer**
 - [x] 5.7 `POST /api/v1/auth/accept-invitation` — **público**, no recibe contraseña (`ADR-026` §4)
 - [x] 5.8 Test: token de invitación inválido o vencido se rechaza y deja el estado en `invited`
-- [ ] 5.9 Endpoints de `users`: listar, invitar, ver, actualizar, desactivar, dar de baja, asignar sucursales
+- [x] 5.9 Endpoints de `users`: listar, invitar, ver, actualizar, desactivar, dar de baja, asignar sucursales
 - [ ] 5.10 Endpoints de `tenancy`: el router que C-04 no escribió — configuración de la agencia y CRUD de sucursales
-- [ ] 5.11 Aplicar `require_permission` transcribiendo **literalmente** las celdas de `ADR-024` §6 para `users`, `branches` y `tenant`
+- [x] 5.11 Aplicar `require_permission` transcribiendo **literalmente** las celdas de `ADR-024` §6 para `users`, `branches` y `tenant`
 - [ ] 5.12 ⚠️ Escribir `docs/openapi.yaml` **sin los 6 endpoints retirados** por `ADR-026` §3. Si aparecen, C-08 genera un cliente que llama a rutas inexistentes y el error sale recién en runtime
 
 ## 6. Aislamiento multi-tenant — `T-027`, quality gate bloqueante
