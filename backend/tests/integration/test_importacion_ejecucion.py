@@ -38,7 +38,13 @@ from app.modules.stock.importacion_servicio import (
 )
 from app.modules.stock.models import Vehicle
 
-from .soporte import DSN_APLICACION, URL_REDIS, reponer_entorno, sesion_de_propietario
+from .soporte import (
+    DSN_APLICACION,
+    URL_REDIS,
+    agencia_con_sucursal,
+    reponer_entorno,
+    sesion_de_propietario,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -67,26 +73,8 @@ async def agencia(base_migrada: None) -> tuple[uuid.UUID, str, str]:
     Devuelve los NOMBRES de marca y modelo, no sus ids: es lo que va en la
     planilla, que la llena una persona.
     """
-    tenant_id, branch_id = uuid.uuid4(), uuid.uuid4()
+    tenant_id, _ = await agencia_con_sucursal()
     async with sesion_de_propietario() as sesion:
-        await sesion.execute(
-            text(
-                "INSERT INTO tenants (id, name, slug, cuit, billing_email, status) "
-                "VALUES (:id, 'Agencia', :s, :c, 'f@example.com', 'active')"
-            ),
-            {
-                "id": tenant_id,
-                "s": f"ag-{tenant_id.hex[:8]}",
-                "c": f"30{tenant_id.int % 10**9:09d}0"[:11],
-            },
-        )
-        await sesion.execute(
-            text(
-                "INSERT INTO branches (id, tenant_id, name, city, province) "
-                "VALUES (:id, :t, 'Casa central', 'Mendoza', 'Mendoza')"
-            ),
-            {"id": branch_id, "t": tenant_id},
-        )
         marca, modelo = (
             await sesion.execute(
                 text(
@@ -95,7 +83,6 @@ async def agencia(base_migrada: None) -> tuple[uuid.UUID, str, str]:
                 )
             )
         ).one()
-
     return tenant_id, str(marca), str(modelo)
 
 
@@ -401,7 +388,8 @@ async def test_la_cuota_del_plan_se_verifica_contra_el_total_y_no_fila_por_fila(
     que el catalogo tiene exactamente los tres sembrados.
     """
     reponer_entorno(monkeypatch, dsn=DSN_APLICACION)
-    tenant_id, branch_id, plan_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    plan_id = uuid.uuid4()
+    codigo = f"prueba-{plan_id.hex[:8]}"
 
     async with sesion_de_propietario() as sesion:
         await sesion.execute(
@@ -410,26 +398,7 @@ async def test_la_cuota_del_plan_se_verifica_contra_el_total_y_no_fila_por_fila(
                 "max_branches, max_whatsapp_messages_month, modules) "
                 "VALUES (:id, :c, 'De prueba', 1000, 5, 2, 5, 100, '[]'::jsonb)"
             ),
-            {"id": plan_id, "c": f"prueba-{plan_id.hex[:8]}"},
-        )
-        await sesion.execute(
-            text(
-                "INSERT INTO tenants (id, name, slug, cuit, billing_email, status, plan_id) "
-                "VALUES (:id, 'Agencia', :s, :c, 'f@example.com', 'active', :p)"
-            ),
-            {
-                "id": tenant_id,
-                "s": f"ag-{tenant_id.hex[:8]}",
-                "c": f"30{tenant_id.int % 10**9:09d}0"[:11],
-                "p": plan_id,
-            },
-        )
-        await sesion.execute(
-            text(
-                "INSERT INTO branches (id, tenant_id, name, city, province) "
-                "VALUES (:id, :t, 'Casa central', 'Mendoza', 'Mendoza')"
-            ),
-            {"id": branch_id, "t": tenant_id},
+            {"id": plan_id, "c": codigo},
         )
         marca, modelo = (
             await sesion.execute(
@@ -439,6 +408,8 @@ async def test_la_cuota_del_plan_se_verifica_contra_el_total_y_no_fila_por_fila(
                 )
             )
         ).one()
+
+    tenant_id, _ = await agencia_con_sucursal(plan=codigo)
 
     try:
         armador = Planilla(str(marca), str(modelo))

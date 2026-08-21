@@ -38,7 +38,7 @@ from app.modules.stock.service import (
     VehiculoNoEncontrado,
 )
 
-from .soporte import DSN_APLICACION, sesion_de_propietario
+from .soporte import DSN_APLICACION, agencia_con_sucursal, sesion_de_propietario
 
 pytestmark = pytest.mark.integration
 
@@ -50,27 +50,8 @@ async def escenario(base_migrada: None) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID
     El tenant y la sucursal se crean con el rol PROPIETARIO: son precondicion,
     no lo que se prueba, y `tenants` no tiene politica RLS.
     """
-    tenant_id, branch_id = uuid.uuid4(), uuid.uuid4()
+    tenant_id, branch_id = await agencia_con_sucursal()
     async with sesion_de_propietario() as sesion:
-        await sesion.execute(
-            text(
-                "INSERT INTO tenants (id, name, slug, cuit, billing_email, status) "
-                "VALUES (:id, :n, :s, :c, 'f@example.com', 'active')"
-            ),
-            {
-                "id": tenant_id,
-                "n": "Agencia",
-                "s": f"ag-{tenant_id.hex[:8]}",
-                "c": f"30{tenant_id.int % 10**9:09d}0"[:11],
-            },
-        )
-        await sesion.execute(
-            text(
-                "INSERT INTO branches (id, tenant_id, name, city, province) "
-                "VALUES (:id, :t, 'Central', 'Mendoza', 'Mendoza')"
-            ),
-            {"id": branch_id, "t": tenant_id},
-        )
         marca, modelo = (
             await sesion.execute(text("SELECT brand_id, id FROM vehicle_models LIMIT 1"))
         ).one()

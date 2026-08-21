@@ -43,7 +43,7 @@ from app.modules.tenancy.router_agencia import (
 from app.modules.tenancy.schemas import SucursalCrear
 from app.modules.tenancy.service import TenancyService
 
-from .soporte import DSN_APLICACION, sesion_de_propietario
+from .soporte import DSN_APLICACION, agencia_con_sucursal, sesion_de_propietario
 
 pytestmark = pytest.mark.integration
 
@@ -60,40 +60,11 @@ async def _sesion(tenant_id: uuid.UUID) -> AsyncIterator[AsyncSession]:
         yield sesion
 
 
-async def _agencia(*, plan: str | None = None) -> tuple[uuid.UUID, uuid.UUID]:
-    tenant_id, branch_id = uuid.uuid4(), uuid.uuid4()
-    async with sesion_de_propietario() as sesion:
-        plan_id = None
-        if plan is not None:
-            plan_id = await sesion.scalar(text("SELECT id FROM plans WHERE code = :c"), {"c": plan})
-        await sesion.execute(
-            text(
-                "INSERT INTO tenants (id, name, slug, cuit, billing_email, status, plan_id) "
-                "VALUES (:id, :n, :s, :c, 'f@example.com', 'active', :p)"
-            ),
-            {
-                "id": tenant_id,
-                "n": f"Agencia {tenant_id.hex[:6]}",
-                "s": f"agencia-{tenant_id.hex[:8]}",
-                "c": f"30{tenant_id.int % 10**9:09d}0"[:11],
-                "p": plan_id,
-            },
-        )
-        await sesion.execute(
-            text(
-                "INSERT INTO branches (id, tenant_id, name, city, province) "
-                "VALUES (:id, :t, 'Casa central', 'Mendoza', 'Mendoza')"
-            ),
-            {"id": branch_id, "t": tenant_id},
-        )
-    return tenant_id, branch_id
-
-
 _ALTA = SucursalCrear(name="Sucursal Norte", city="Godoy Cruz", province="Mendoza")
 
 
 async def test_mi_agencia_lee_el_tenant_de_la_sesion(base_migrada: None) -> None:
-    tenant_id, _ = await _agencia()
+    tenant_id, _ = await agencia_con_sucursal()
 
     async with _sesion(tenant_id) as sesion:
         agencia = await mi_agencia(sesion)
@@ -112,7 +83,7 @@ async def test_mi_agencia_levanta_404_si_el_tenant_no_esta(base_migrada: None) -
 
 
 async def test_listar_y_obtener_devuelven_lo_de_la_agencia(base_migrada: None) -> None:
-    tenant_id, sucursal_id = await _agencia()
+    tenant_id, sucursal_id = await agencia_con_sucursal()
 
     async with _sesion(tenant_id) as sesion:
         listadas = await listar_sucursales(sesion)
@@ -123,8 +94,8 @@ async def test_listar_y_obtener_devuelven_lo_de_la_agencia(base_migrada: None) -
 
 
 async def test_obtener_levanta_404_con_un_id_que_no_es_de_la_agencia(base_migrada: None) -> None:
-    tenant_id, _ = await _agencia()
-    _, sucursal_ajena = await _agencia()
+    tenant_id, _ = await agencia_con_sucursal()
+    _, sucursal_ajena = await agencia_con_sucursal()
 
     async with _sesion(tenant_id) as sesion:
         with pytest.raises(HTTPException) as fallo:
@@ -134,7 +105,7 @@ async def test_obtener_levanta_404_con_un_id_que_no_es_de_la_agencia(base_migrad
 
 
 async def test_crear_pone_la_sucursal_en_la_agencia_de_la_sesion(base_migrada: None) -> None:
-    tenant_id, _ = await _agencia()
+    tenant_id, _ = await agencia_con_sucursal()
 
     async with _sesion(tenant_id) as sesion:
         creada = await crear_sucursal(_ALTA, sesion)
@@ -149,7 +120,7 @@ async def test_crear_levanta_402_al_tocar_el_techo_del_plan(base_migrada: None) 
     convierte en 402 con `resource`/`limit`/`used`. Envolverlo aca lo
     degradaria a un 422 sin esos tres campos.
     """
-    tenant_id, _ = await _agencia(plan="starter")
+    tenant_id, _ = await agencia_con_sucursal(plan="starter")
 
     async with _sesion(tenant_id) as sesion:
         with pytest.raises(PlanQuotaExceeded) as fallo:
@@ -159,7 +130,7 @@ async def test_crear_levanta_402_al_tocar_el_techo_del_plan(base_migrada: None) 
 
 
 async def test_dar_de_baja_marca_la_fila_sin_borrarla(base_migrada: None) -> None:
-    tenant_id, sucursal_id = await _agencia()
+    tenant_id, sucursal_id = await agencia_con_sucursal()
 
     async with _sesion(tenant_id) as sesion:
         dada_de_baja = await dar_de_baja_sucursal(sucursal_id, sesion)
@@ -187,7 +158,7 @@ async def test_dar_de_baja_traduce_solo_su_propio_error_a_404(base_migrada: None
     siendo real y lo que se sustituye es una regla de dominio, para llegar a
     una rama que los datos no alcanzan.
     """
-    tenant_id, sucursal_id = await _agencia()
+    tenant_id, sucursal_id = await agencia_con_sucursal()
 
     async with _sesion(tenant_id) as sesion:
         with pytest.raises(HTTPException) as traducido:

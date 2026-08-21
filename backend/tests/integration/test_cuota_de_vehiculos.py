@@ -33,7 +33,7 @@ from app.db.session import sesion_de_tenant
 from app.modules.stock.schemas import FiltrosDeBusqueda, VehiculoCrear
 from app.modules.stock.service import StockService
 
-from .soporte import DSN_APLICACION, sesion_de_propietario
+from .soporte import DSN_APLICACION, agencia_con_sucursal, sesion_de_propietario
 
 pytestmark = pytest.mark.integration
 
@@ -95,8 +95,13 @@ async def _crear(maximo: int) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
 
     Starter permite 80 vehiculos y probar el techo exigiria cargar 80 filas por
     test. Un plan de dos hace la misma afirmacion en dos INSERTs.
+
+    El plan se crea aparte y la agencia se pide por su CODIGO: `agencia_con_sucursal`
+    resuelve el id contra `plans`, que es justo lo que hace falta aca — el id del
+    plan lo elige este test, pero la agencia no necesita saberlo.
     """
-    tenant_id, branch_id, plan_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    plan_id = uuid.uuid4()
+    codigo = f"prueba-{plan_id.hex[:8]}"
     async with sesion_de_propietario() as sesion:
         await sesion.execute(
             text(
@@ -104,27 +109,10 @@ async def _crear(maximo: int) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
                 "max_branches, max_whatsapp_messages_month, modules) "
                 "VALUES (:id, :c, 'De prueba', 1000, 5, :m, 5, 100, '[]'::jsonb)"
             ),
-            {"id": plan_id, "c": f"prueba-{plan_id.hex[:8]}", "m": maximo},
+            {"id": plan_id, "c": codigo, "m": maximo},
         )
-        await sesion.execute(
-            text(
-                "INSERT INTO tenants (id, name, slug, cuit, billing_email, status, plan_id) "
-                "VALUES (:id, 'Agencia', :s, :c, 'f@example.com', 'active', :p)"
-            ),
-            {
-                "id": tenant_id,
-                "s": f"ag-{tenant_id.hex[:8]}",
-                "c": f"30{tenant_id.int % 10**9:09d}0"[:11],
-                "p": plan_id,
-            },
-        )
-        await sesion.execute(
-            text(
-                "INSERT INTO branches (id, tenant_id, name, city, province) "
-                "VALUES (:id, :t, 'Central', 'Mendoza', 'Mendoza')"
-            ),
-            {"id": branch_id, "t": tenant_id},
-        )
+
+    tenant_id, branch_id = await agencia_con_sucursal(plan=codigo)
     return tenant_id, branch_id, plan_id
 
 
