@@ -82,16 +82,16 @@
 - [x] 5.9 Endpoints de `users`: listar, invitar, ver, actualizar, desactivar, dar de baja, asignar sucursales
 - [x] 5.10 Endpoints de `tenancy`: el router que C-04 no escribió — configuración de la agencia y CRUD de sucursales
 - [x] 5.11 Aplicar `require_permission` transcribiendo **literalmente** las celdas de `ADR-024` §6 para `users`, `branches` y `tenant`
-- [ ] 5.12 ⚠️ Escribir `docs/openapi.yaml` **sin los 6 endpoints retirados** por `ADR-026` §3. Si aparecen, C-08 genera un cliente que llama a rutas inexistentes y el error sale recién en runtime
+- [x] 5.12 ⚠️ Escribir `docs/openapi.yaml` **sin los 6 endpoints retirados** por `ADR-026` §3. Si aparecen, C-08 genera un cliente que llama a rutas inexistentes y el error sale recién en runtime
 
 ## 6. Aislamiento multi-tenant — `T-027`, quality gate bloqueante
 
 - [x] 6.1 En `test_users_repositorio.py`
-- [ ] 6.2 Test: sin contexto, cero filas
-- [ ] 6.3 Test: crear una persona atribuida a otra agencia se rechaza — exigir `InsufficientPrivilegeError`, no `Exception` a secas
+- [x] 6.2 Test: sin contexto, cero filas
+- [x] 6.3 Test: crear una persona atribuida a otra agencia se rechaza — exigir `InsufficientPrivilegeError`, no `Exception` a secas
 - [x] 6.4 Se cuentan las filas de las dos agencias antes de afirmar que no se alcanzan. Sin esto los tests de aislamiento serían verdes sobre una base vacía
 - [x] 6.5 El perfil no lista la sucursal de la otra agencia. Es el agujero clásico: las dos puntas protegidas y el vínculo no
-- [ ] 6.6 Test: un rol de tenant nunca alcanza el espacio administrativo (`ADR-024` §2)
+- [x] 6.6 Test: un rol de tenant nunca alcanza el espacio administrativo (`ADR-024` §2)
 
 ## 7. Cierre
 
