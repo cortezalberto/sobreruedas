@@ -42,7 +42,13 @@ def main() -> int:
         os.environ.setdefault(clave, valor)
 
     sys.path.insert(0, str(BACKEND))
-    from app.main import create_app
+
+    # `type: ignore` con motivo: `mypy` no puede seguir un `sys.path` armado
+    # en tiempo de ejecucion, y ese `insert` de arriba es justamente lo que
+    # hace importable a `app`. La alternativa —declarar `backend` como
+    # paquete del proyecto raiz— cambiaria la forma del repo para que un
+    # script de exportacion no necesite una linea.
+    from app.main import create_app  # type: ignore[import-not-found]
 
     esquema = create_app().openapi()
 
