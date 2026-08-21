@@ -29,7 +29,7 @@ from sqlalchemy import text
 
 from app.core.errors import DomainError, PlanQuotaExceeded
 from app.modules.users.keycloak import ErrorDeKeycloak
-from app.modules.users.service import UserService
+from app.modules.users.service import UserService, UsuarioNoEncontrado
 
 from .soporte import agencia_con_sucursal, sesion_de_propietario
 
@@ -382,3 +382,76 @@ async def test_aceptar_dos_veces_no_rompe_ni_cambia_nada() -> None:
         otra_vez = await servicio.aceptar_invitacion(persona.id)
 
     assert otra_vez.status == "active"
+
+
+# ── 4.6 (la otra mitad) · Desactivar ────────────────────────────────────────
+
+
+async def test_desactivar_suspende_aca_y_tambien_en_keycloak() -> None:
+    """`D-6`: no puede entrar, sigue siendo empleado, sigue ocupando cupo.
+
+    ⚠️ TAMBIEN SE DESHABILITA EN KEYCLOAK, y sin eso la suspension seria una
+    marca decorativa: la persona podria seguir autenticandose y obteniendo
+    tokens validos, y lo unico que la frenaria seria nuestra aplicacion
+    mirando una columna. Cualquier otro consumidor del mismo Keycloak la
+    dejaria pasar.
+    """
+    tenant, _ = await agencia_con_sucursal(plan="pro")
+    keycloak = KeycloakFalso()
+
+    async with sesion_de_propietario() as sesion:
+        servicio = UserService(sesion, tenant, keycloak)  # type: ignore[arg-type]
+        persona = await servicio.invitar(email="suspende@demo.test", nombre="X", rol="manager")
+        suspendida = await servicio.desactivar(persona.id)
+
+    assert suspendida.status == "inactive"
+    assert suspendida.deleted_at is None, "desactivar dio de baja, y son cosas distintas"
+    assert str(persona.id) in keycloak.deshabilitados
+
+
+async def test_desactivar_no_libera_cupo_y_dar_de_baja_si() -> None:
+    """La consecuencia de `D-6` sobre la facturacion, medida contra el plan real.
+
+    `starter` topea en 2. Con una suspendida el cupo sigue lleno; recien la baja
+    hace lugar. Es lo que separa "no puede entrar" de "ya no trabaja aca".
+    """
+    tenant, _ = await agencia_con_sucursal(plan="starter")
+    keycloak = KeycloakFalso()
+
+    async with sesion_de_propietario() as sesion:
+        servicio = UserService(sesion, tenant, keycloak)  # type: ignore[arg-type]
+        una = await servicio.invitar(email="u1@demo.test", nombre="U1", rol="manager")
+        await servicio.invitar(email="u2@demo.test", nombre="U2", rol="salesperson")
+
+        await servicio.desactivar(una.id)
+        with pytest.raises(PlanQuotaExceeded):
+            await servicio.invitar(email="u3@demo.test", nombre="U3", rol="salesperson")
+
+        await servicio.dar_de_baja(una.id)
+        await servicio.invitar(email="u3@demo.test", nombre="U3", rol="salesperson")
+
+    assert await _filas(tenant, "u3@demo.test") == 1
+
+
+async def test_operar_sobre_alguien_de_otra_agencia_da_404_y_no_confirma_que_existe() -> None:
+    """Distinguir "no existe" de "no es tuyo" le confirmaria a un tenant que
+    cierto id existe en otra agencia — una fuga por el codigo de estado, sin
+    devolver un solo dato. Las dos dan 404, y las tres operaciones igual.
+    """
+    tenant, _ = await agencia_con_sucursal(plan="pro")
+    otra, _ = await agencia_con_sucursal(plan="pro")
+    keycloak = KeycloakFalso()
+
+    async with sesion_de_propietario() as sesion:
+        de_otra = await UserService(sesion, otra, keycloak).invitar(  # type: ignore[arg-type]
+            email="deotra@demo.test", nombre="De Otra", rol="manager"
+        )
+
+    async with sesion_de_propietario() as sesion:
+        servicio = UserService(sesion, tenant, keycloak)  # type: ignore[arg-type]
+
+        for operacion in (servicio.desactivar, servicio.dar_de_baja, servicio.aceptar_invitacion):
+            with pytest.raises(UsuarioNoEncontrado) as fallo:
+                await operacion(de_otra.id)
+            assert fallo.value.status_code == 404
+            assert fallo.value.code == "user_not_found"

@@ -165,6 +165,26 @@ class ClienteDeKeycloak:
         if respuesta.status_code not in (httpx.codes.OK, httpx.codes.NO_CONTENT):
             raise ErrorDeKeycloak("deshabilitar el usuario", respuesta)
 
+    async def cerrar_sesion(self, sub: str) -> None:
+        """*End-session*: mata las sesiones de la persona, sin tocar su cuenta.
+
+        `D-4`. Cerrar sesion y suspender comparten verbo en el habla y no en el
+        sistema: si esto mandara `enabled: false`, salir de la aplicacion
+        dejaria a alguien sin poder volver a entrar nunca.
+
+        ⚠️ CONSECUENCIA ASUMIDA Y EXPLICITA. El access token YA EMITIDO sigue
+        siendo valido contra la API hasta que venza — hasta 15 minutos. Es el
+        comportamiento estandar de OIDC con tokens de vida corta, y no se
+        compensa con una denylist propia: seria reimplementar parte del
+        protocolo. Cerrarlo de verdad exige introspeccion en cada request, o
+        sea una llamada de red en el camino caliente de TODA peticion.
+        """
+        respuesta = await self._cliente.post(
+            f"{self._usuarios()}/{sub}/logout", headers=await self._cabecera()
+        )
+        if respuesta.status_code not in (httpx.codes.OK, httpx.codes.NO_CONTENT):
+            raise ErrorDeKeycloak("cerrar la sesion", respuesta)
+
     async def rehabilitar(self, sub: str) -> None:
         """La otra mitad de `D-6`, y la que hace posible la reincorporacion.
 

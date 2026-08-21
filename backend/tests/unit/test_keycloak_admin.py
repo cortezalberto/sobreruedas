@@ -421,3 +421,80 @@ async def test_si_falla_rehabilitar_se_levanta() -> None:
         await _cliente(espia).rehabilitar(SUB)
 
     assert fallo.value.operacion == "rehabilitar el usuario"
+
+
+@pytest.mark.asyncio
+async def test_cerrar_sesion_no_toca_al_usuario_solo_a_sus_sesiones() -> None:
+    """`D-4`: el logout invalida la sesion EN KEYCLOAK y no guarda nada local.
+
+    ⚠️ NO DEBE DESHABILITAR LA CUENTA. Cerrar sesion y suspender a alguien son
+    dos cosas distintas que comparten verbo en el habla y no en el sistema: si
+    esto mandara `enabled: false`, salir de la aplicacion dejaria a la persona
+    sin poder volver a entrar nunca. El endpoint de logout de Keycloak mata las
+    sesiones y no toca al usuario.
+    """
+    espia = Espia()
+    await _cliente(espia).cerrar_sesion(SUB)
+
+    logouts = [p for p in espia.peticiones if p.url.path.endswith(f"/{SUB}/logout")]
+    assert logouts, "no se llamo al endpoint de logout de Keycloak"
+    assert logouts[0].method == "POST"
+
+    for cuerpo in espia.cuerpos():
+        assert "enabled" not in cuerpo, "el logout esta tocando el estado de la cuenta"
+
+
+@pytest.mark.asyncio
+async def test_si_falla_cerrar_sesion_se_levanta() -> None:
+    espia = EspiaQueFalla(httpx.codes.NOT_FOUND)
+
+    with pytest.raises(ErrorDeKeycloak) as fallo:
+        await _cliente(espia).cerrar_sesion(SUB)
+
+    assert fallo.value.operacion == "cerrar la sesion"
+
+
+# ── La dependencia que arma el cliente ──────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_la_dependencia_arma_el_cliente_desde_la_configuracion_y_lo_cierra() -> None:
+    """`cliente_de_keycloak` es una dependencia, no un singleton de modulo.
+
+    Asi los tests del endpoint pueden sustituirla con `dependency_overrides` en
+    vez de levantar un Keycloak entero para probar que el logout llama a
+    Keycloak — que seria probar el sistema de otro.
+
+    ⚠️ SE VERIFICA QUE CIERRE EL `AsyncClient`. Es un generador: si el `yield`
+    no estuviera dentro del `async with`, cada peticion filtraria una conexion
+    y el sintoma recien aparece bajo carga.
+    """
+    from types import SimpleNamespace
+
+    from pydantic import SecretStr
+
+    from app.modules.users import router as modulo
+
+    falsos = SimpleNamespace(
+        keycloak=SimpleNamespace(
+            url="http://keycloak:8080",
+            realm="deruedas-dev",
+            client_id="backend",
+            client_secret=SecretStr("da-igual"),
+        )
+    )
+
+    generador = modulo.cliente_de_keycloak()
+    original = modulo.get_settings
+    modulo.get_settings = lambda: falsos  # type: ignore[assignment,return-value]
+    try:
+        admin = await generador.__anext__()
+        assert isinstance(admin, ClienteDeKeycloak)
+        assert not admin._cliente.is_closed
+
+        with pytest.raises(StopAsyncIteration):
+            await generador.__anext__()
+    finally:
+        modulo.get_settings = original  # type: ignore[assignment]
+
+    assert admin._cliente.is_closed, "la dependencia dejo el `AsyncClient` abierto"

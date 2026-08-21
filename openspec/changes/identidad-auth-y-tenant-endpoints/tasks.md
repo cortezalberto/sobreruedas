@@ -75,8 +75,8 @@
 - [x] 5.3 401 con código `not_authenticated`, distinguible del 403 por código y no solo por estado
 - [x] 5.4 Los dos casos. Cero sucursales es el estado **normal** de alguien recién invitado: devolver 500 ahí convertiría eso en una caída.
       Además: la respuesta no trae ninguna clave de MFA ni de credencial, ni siquiera como `null`
-- [ ] 5.5 `POST /api/v1/auth/logout` — *end-session* en Keycloak, **sin denylist propia** (`D-4`)
-- [ ] 5.6 Test que documenta la consecuencia asumida: tras el logout, el access token ya emitido **sigue siendo válido hasta vencer**
+- [x] 5.5 `POST /api/v1/auth/logout` — *end-session* en Keycloak, **sin denylist propia** (`D-4`)
+- [x] 5.6 Test que documenta la consecuencia asumida: tras el logout, el access token ya emitido **sigue siendo válido hasta vencer**
 - [ ] 5.7 `POST /api/v1/auth/accept-invitation` — **público**, no recibe contraseña (`ADR-026` §4)
 - [ ] 5.8 Test: token de invitación inválido o vencido se rechaza y deja el estado en `invited`
 - [ ] 5.9 Endpoints de `users`: listar, invitar, ver, actualizar, desactivar, dar de baja, asignar sucursales

@@ -392,3 +392,69 @@ async def test_un_token_sin_email_no_borra_el_del_espejo(
     assert respuesta.status_code == 200, respuesta.text
     assert respuesta.json()["email"] == "unico@demo.test"
     assert await _email_local(sub) == "unico@demo.test"
+
+
+# ── 5.5 y 5.6 · El logout ────────────────────────────────────────────────────
+
+
+class KeycloakDeSalida:
+    """Registra los cierres de sesion pedidos. No toca cuentas."""
+
+    def __init__(self) -> None:
+        self.cerradas: list[str] = []
+
+    async def cerrar_sesion(self, sub: str) -> None:
+        self.cerradas.append(sub)
+
+
+async def test_logout_cierra_la_sesion_en_keycloak_y_no_guarda_nada_local(
+    cliente: TestClient, proveedor: EmisorDePrueba
+) -> None:
+    """`D-4`. No hay denylist nuestra: mantenerla seria reimplementar OIDC."""
+    from app.main import create_app  # noqa: F401  (documenta de donde sale la app)
+    from app.modules.users.router import cliente_de_keycloak
+
+    tenant, _ = await agencia_con_sucursal()
+    sub = await _persona(tenant)
+
+    doble = KeycloakDeSalida()
+    cliente.app.dependency_overrides[cliente_de_keycloak] = lambda: doble
+
+    try:
+        respuesta = cliente.post("/api/v1/auth/logout", headers=_cabecera(proveedor, tenant, sub))
+    finally:
+        cliente.app.dependency_overrides.pop(cliente_de_keycloak, None)
+
+    assert respuesta.status_code == 204, respuesta.text
+    assert doble.cerradas == [str(sub)]
+
+
+async def test_tras_el_logout_el_access_token_ya_emitido_sigue_valido(
+    cliente: TestClient, proveedor: EmisorDePrueba
+) -> None:
+    """Tarea 5.6 — el test que DOCUMENTA una consecuencia asumida, no un defecto.
+
+    `D-4` lo dice con todas las letras: entre el logout y el vencimiento pueden
+    pasar hasta 15 minutos en los que ese token sigue sirviendo. Es el
+    comportamiento estandar de OIDC con tokens de vida corta.
+
+    ⚠️ SI ESTE TEST EMPIEZA A FALLAR, NO SE "ARREGLA" — significa que alguien
+    agrego revocacion inmediata, y entonces lo que hay que revisar es si se
+    hizo por introspeccion (el mecanismo identificado) o por una denylist
+    propia, que es lo que la decision descarto.
+    """
+    from app.modules.users.router import cliente_de_keycloak
+
+    tenant, _ = await agencia_con_sucursal()
+    sub = await _persona(tenant)
+    cabecera = _cabecera(proveedor, tenant, sub)
+
+    doble = KeycloakDeSalida()
+    cliente.app.dependency_overrides[cliente_de_keycloak] = lambda: doble
+    try:
+        assert cliente.post("/api/v1/auth/logout", headers=cabecera).status_code == 204
+    finally:
+        cliente.app.dependency_overrides.pop(cliente_de_keycloak, None)
+
+    # El mismo token, despues del logout.
+    assert cliente.get("/api/v1/auth/me", headers=cabecera).status_code == 200
