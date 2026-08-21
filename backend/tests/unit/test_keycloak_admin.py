@@ -33,7 +33,7 @@ from typing import Any
 import httpx
 import pytest
 
-from app.modules.users.keycloak import ClienteDeKeycloak
+from app.modules.users.keycloak import ClienteDeKeycloak, ErrorDeKeycloak
 
 TENANT = uuid.UUID("11111111-1111-1111-1111-111111111111")
 SUB = "9d1f0c4e-0000-4000-8000-000000000001"
@@ -258,3 +258,131 @@ async def test_ninguna_llamada_lleva_una_contrasenia_de_persona() -> None:
     # Contrapeso: si el dia de mañana todas las llamadas cayeran en la excepcion
     # del token, el `for` de arriba no miraria nada y el test pasaria en verde.
     assert revisadas >= 3, f"solo se revisaron {revisadas} llamadas, y son tres operaciones"
+
+
+# ── Los caminos de error ────────────────────────────────────────────────────
+#
+# No son relleno de cobertura: `D-5` ordena las escrituras —primero Keycloak,
+# despues local— para que un fallo de Keycloak ocurra ANTES de tocar la base y
+# no deje a nadie invitado sin cuenta. Ese orden solo sirve si el fallo se
+# LEVANTA. Un cliente que se traga un 409 y devuelve un `sub` vacio convierte la
+# proteccion de `D-5` en nada.
+
+
+class EspiaQueFalla(Espia):
+    """Responde el estado que se le pida a todo lo que no sea el token."""
+
+    def __init__(self, estado: int, *, cuerpo_del_201: bool = False) -> None:
+        super().__init__()
+        self._estado = estado
+        self._cuerpo_del_201 = cuerpo_del_201
+
+    def _responder(self, peticion: httpx.Request) -> httpx.Response:
+        self.peticiones.append(peticion)
+
+        if peticion.url.path.endswith("/protocol/openid-connect/token"):
+            if self._estado == httpx.codes.UNAUTHORIZED:
+                return httpx.Response(401, json={"error": "invalid_client"})
+            return httpx.Response(200, json={"access_token": "token-de-servicio"})
+
+        if self._cuerpo_del_201:
+            # Un 201 SIN `Location` — el caso que dejaria el espejo sin vinculo.
+            return httpx.Response(201)
+
+        return httpx.Response(self._estado)
+
+
+@pytest.mark.asyncio
+async def test_si_keycloak_no_da_el_token_de_servicio_se_levanta() -> None:
+    espia = EspiaQueFalla(httpx.codes.UNAUTHORIZED)
+
+    with pytest.raises(ErrorDeKeycloak) as fallo:
+        await _cliente(espia).crear_usuario(
+            email="x@y.test", nombre="X", tenant_id=TENANT, rol="manager"
+        )
+
+    assert fallo.value.status_code == 401
+    assert "token de servicio" in str(fallo.value)
+
+
+@pytest.mark.asyncio
+async def test_si_el_email_ya_existe_en_keycloak_se_levanta_y_no_se_devuelve_sub() -> None:
+    """El 409 es el caso REAL: reinvitar a alguien que ya tiene cuenta.
+
+    `D-5` cuenta con esto — un fallo de Keycloak deja una cuenta huerfana que la
+    reinvitacion reutiliza por email. Lo que no puede pasar es que el cliente
+    devuelva un `sub` inventado y el espejo local se grabe apuntando a nada.
+    """
+    espia = EspiaQueFalla(httpx.codes.CONFLICT)
+
+    with pytest.raises(ErrorDeKeycloak) as fallo:
+        await _cliente(espia).crear_usuario(
+            email="repetido@y.test", nombre="X", tenant_id=TENANT, rol="manager"
+        )
+
+    assert fallo.value.status_code == 409
+    # ⚠️ SE EXIGE LA OPERACION, NO SOLO EL ESTADO, y esto lo encontro una
+    # mutacion: con el `raise` del alta desactivado, el codigo seguia de largo,
+    # no encontraba `Location` y levantaba `ErrorDeKeycloak` IGUAL —por "leer el
+    # id", con el mismo 409 adentro—. El test pasaba por accidente y no probaba
+    # lo que decia probar.
+    assert fallo.value.operacion == "crear el usuario"
+
+
+@pytest.mark.asyncio
+async def test_un_201_sin_location_no_devuelve_un_sub_vacio() -> None:
+    """El fallo mas traicionero de todos, y por eso tiene test propio.
+
+    Keycloak contesta 201 —la cuenta EXISTE— pero sin decir su id. Sin este
+    control, `rsplit` devolveria cadena vacia, el espejo local se grabaria con
+    `keycloak_sub = ""`, y nadie se enteraria hasta el primer login de esa
+    persona, que fallaria sin explicar por que.
+    """
+    espia = EspiaQueFalla(httpx.codes.CREATED, cuerpo_del_201=True)
+
+    with pytest.raises(ErrorDeKeycloak) as fallo:
+        await _cliente(espia).crear_usuario(
+            email="x@y.test", nombre="X", tenant_id=TENANT, rol="manager"
+        )
+
+    assert "leer el id" in str(fallo.value)
+
+
+@pytest.mark.asyncio
+async def test_si_falla_deshabilitar_se_levanta() -> None:
+    espia = EspiaQueFalla(httpx.codes.NOT_FOUND)
+
+    with pytest.raises(ErrorDeKeycloak) as fallo:
+        await _cliente(espia).deshabilitar(SUB)
+
+    assert fallo.value.status_code == 404
+    assert fallo.value.operacion == "deshabilitar el usuario"
+
+
+@pytest.mark.asyncio
+async def test_si_falla_la_required_action_se_levanta() -> None:
+    """Si esto se tragara el error, la persona quedaria invitada y sin mail.
+
+    Nunca recibiria el pedido de fijar su contraseña, su cuenta seguiria
+    deshabilitada, y del lado nuestro figuraria como `invited` — esperando algo
+    que nadie le mando.
+    """
+    espia = EspiaQueFalla(httpx.codes.INTERNAL_SERVER_ERROR)
+
+    with pytest.raises(ErrorDeKeycloak) as fallo:
+        await _cliente(espia).pedir_que_fije_contrasenia(SUB)
+
+    assert fallo.value.status_code == 500
+
+
+@pytest.mark.asyncio
+async def test_el_context_manager_cierra_el_cliente_http() -> None:
+    """Sin esto, cada invitacion filtra una conexion."""
+    espia = Espia()
+    cliente = _cliente(espia)
+
+    async with cliente as abierto:
+        assert abierto is cliente
+        await abierto.deshabilitar(SUB)
+
+    assert cliente._cliente.is_closed, "el cliente httpx quedo abierto"
