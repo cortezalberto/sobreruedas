@@ -56,17 +56,31 @@ DSN_PROPIETARIO = os.getenv(
 # consumer groups es lo que se prueba, y un doble probaria el doble.
 URL_REDIS = os.getenv("TEST_REDIS_URL", "redis://redis:6379/0")
 
-# El MinIO de esta corrida. SE LEE AL IMPORTAR, y ese detalle es el que hace que
-# funcione: `entorno_limpio` (autouse, conftest raiz) borra toda variable con
-# prefijo `S3_` antes de CADA test, y para entonces este modulo ya se importo.
+# El MinIO y el SMTP de esta corrida.
 #
-# Son las credenciales de verdad y no un placeholder, a diferencia de las que
-# repone `reponer_entorno`: los tests de storage escriben en el bucket. Los otros
-# no tocan S3 y solo necesitan que la configuracion valide.
-S3_ENDPOINT = os.getenv("S3_ENDPOINT", "http://minio:9000")
-S3_BUCKET = os.getenv("S3_BUCKET", "deruedas-media")
-S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY", "minioadmin")
-S3_SECRET_KEY = os.getenv("S3_SECRET_KEY", "minioadmin")
+# PREFIJO `TEST_`, COMO LOS DSN Y REDIS, Y NO ES COSMETICO. Son dos razones que
+# se suman:
+#
+#   1. `entorno_limpio` (autouse, conftest raiz) borra toda variable con prefijo
+#      `S3_` o `SMTP_` antes de CADA test. Un `TEST_` no lo alcanza.
+#   2. **El pytest del CI corre en el RUNNER, no adentro del compose.** Ahi
+#      `minio` y `mailhog` no resuelven: los servicios se alcanzan por sus
+#      puertos publicados. El default con nombre de servicio sirve para correr
+#      la suite DENTRO del contenedor, y el workflow lo pisa con `localhost`.
+#
+# Se aprendio rompiendo: la primera version leia `S3_ENDPOINT` y dio verde en
+# local —donde la suite corre dentro del compose— y diez fallos en CI con
+# `EndpointConnectionError` contra `http://minio:9000`.
+#
+# Las credenciales son las de verdad y no un placeholder, a diferencia de las
+# que repone `reponer_entorno`: los tests de storage escriben en el bucket.
+S3_ENDPOINT = os.getenv("TEST_S3_ENDPOINT", "http://minio:9000")
+S3_BUCKET = os.getenv("TEST_S3_BUCKET", "deruedas-media")
+S3_ACCESS_KEY = os.getenv("TEST_S3_ACCESS_KEY", "minioadmin")
+S3_SECRET_KEY = os.getenv("TEST_S3_SECRET_KEY", "minioadmin")
+
+# El SMTP de prueba. Mismo criterio que arriba.
+SMTP_HOST = os.getenv("TEST_SMTP_HOST", "mailhog:1025")
 
 # Alembic construye `Settings` a traves de env.py, asi que necesita el conjunto
 # minimo de variables obligatorias. En el runner del CI solo estan las TEST_*,

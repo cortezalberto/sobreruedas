@@ -33,7 +33,7 @@ from app.modules.notifications.service import NotificationService
 from app.modules.stock.schemas import EstadoDeVehiculo, VehiculoCambioDeEstado, VehiculoCrear
 from app.modules.stock.service import StockService
 
-from .soporte import DSN_APLICACION, agencia_con_sucursal, sesion_de_propietario
+from .soporte import DSN_APLICACION, SMTP_HOST, agencia_con_sucursal, sesion_de_propietario
 
 pytestmark = pytest.mark.integration
 
@@ -428,7 +428,7 @@ async def test_el_mail_sale_de_verdad_a_mailhog(monkeypatch: pytest.MonkeyPatch)
     from .soporte import reponer_entorno_de_s3
 
     reponer_entorno_de_s3(monkeypatch)
-    monkeypatch.setenv("SMTP_HOST", "mailhog:1025")
+    monkeypatch.setenv("SMTP_HOST", SMTP_HOST)
 
     from app.config import get_settings
 

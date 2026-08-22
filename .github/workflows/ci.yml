@@ -222,7 +222,7 @@ jobs:
       # codigo 1 aunque los cinco servicios estuvieran sanos y minio-init
       # hubiera salido con 0. Paso en la corrida 31902572855.
       - name: Levantar los servicios efimeros
-        run: docker compose -f docker-compose.test.yml up -d --wait postgres redis opensearch minio
+        run: docker compose -f docker-compose.test.yml up -d --wait postgres redis opensearch minio mailhog
 
       # `run --rm` en vez de dejarlo colgado del `up`: corre attached y
       # propaga el codigo de salida, asi un fallo creando el bucket rompe el
@@ -266,6 +266,12 @@ jobs:
           TEST_DATABASE_URL: postgresql+asyncpg://mitutu:mitutu@localhost:5433/deruedas_test
           TEST_DATABASE_OWNER_URL: postgresql+asyncpg://deruedas_test:deruedas_test@localhost:5433/deruedas_test
           TEST_REDIS_URL: redis://localhost:6380/0
+          # Mismo motivo que los tres de arriba: el pytest corre en el RUNNER y
+          # `minio` y `mailhog` no resuelven fuera de la red del compose. Sin
+          # estas dos, los tests de storage fallan con `EndpointConnectionError`
+          # contra `http://minio:9000` — que es exactamente como se descubrio.
+          TEST_S3_ENDPOINT: http://localhost:9002
+          TEST_SMTP_HOST: localhost:1026
         run: |
           python -m pytest -q \
             --cov=app \
@@ -544,7 +550,7 @@ jobs:
 
       - name: Levantar los servicios efimeros
         if: steps.cambios.outputs.correr == 'si'
-        run: docker compose -f docker-compose.test.yml up -d --wait postgres redis opensearch minio
+        run: docker compose -f docker-compose.test.yml up -d --wait postgres redis opensearch minio mailhog
 
       - name: Crear el bucket de MinIO
         if: steps.cambios.outputs.correr == 'si'
@@ -557,6 +563,13 @@ jobs:
           TEST_DATABASE_URL: postgresql+asyncpg://mitutu:mitutu@localhost:5433/deruedas_test
           TEST_DATABASE_OWNER_URL: postgresql+asyncpg://deruedas_test:deruedas_test@localhost:5433/deruedas_test
           TEST_REDIS_URL: redis://localhost:6380/0
+          # ⚠️ VAN ACA AUNQUE HOY LA SUITE DE LA BASE NO LAS USE. Este paso corre
+          # la suite ANTERIOR, y desde que C-06 entro a `main` esa suite incluye
+          # los tests de storage y de correo. Sin estas dos, el job empieza a
+          # fallar en el PR SIGUIENTE y por un motivo que no tiene nada que ver
+          # con las migraciones que estaria auditando.
+          TEST_S3_ENDPOINT: http://localhost:9002
+          TEST_SMTP_HOST: localhost:1026
         run: |
           if ! python -m pytest tests/integration -q; then
             echo "::error::La suite de la version ANTERIOR falla contra el esquema NUEVO."
