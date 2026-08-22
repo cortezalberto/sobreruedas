@@ -211,3 +211,49 @@ def test_las_dos_matrices_son_disjuntas_por_ROL() -> None:
     assert (
         "super_admin" not in roles_de_tenant
     ), "`super_admin` figura como rol de tenant, y `ADR-017` lo saco del enum a proposito"
+
+
+# ── `super_admins`: exenta de RLS no significa abierta ───────────────────────
+
+
+async def test_el_rol_de_aplicacion_no_puede_escribir_en_super_admins() -> None:
+    """La tabla de plataforma se lee y no se escribe desde el espacio de tenant.
+
+    ⚠️ POR QUE ESTO NO LO CUBRE RLS. `super_admins` esta en `EXENTAS_DE_RLS` a
+    proposito (`ADR-017`): no lleva `tenant_id`, asi que no hay contra que
+    aislarla. Lo que la protege es el GRANT, y el grant llego mal por omision —
+    el init de la base tiene un `ALTER DEFAULT PRIVILEGES ... GRANT SELECT,
+    INSERT, UPDATE`, asi que TODA tabla nueva nace con escritura. Las otras dos
+    exentas (`plans` y el catalogo) ya la tenian revocada por las migraciones
+    `009` y `010`; esta quedo afuera.
+
+    ⚠️ LA GRAVEDAD REAL, PARA NO EXAGERARLA NI MINIMIZARLA. Escribir aca **no
+    convierte a nadie en `super_admin`**: el rol se decide por el claim del
+    token, que firma Keycloak. Lo que estaba abierto era poder DAR DE BAJA a un
+    administrador de plataforma con un `UPDATE deleted_at` — integridad, no
+    escalada.
+
+    Se deja el `SELECT`: C-09 va a necesitar leerla, y revocarlo obligaria a
+    decidir hoy con que rol accede el espacio administrativo.
+    """
+    motor = create_async_engine(DSN_APLICACION)
+    try:
+        async with motor.connect() as conexion:
+            # Lectura: sigue permitida, y el test lo fija para que un REVOKE de
+            # mas no pase inadvertido.
+            await conexion.execute(text("SELECT count(*) FROM super_admins"))
+
+            for sentencia in (
+                "INSERT INTO super_admins (id, email, full_name) "
+                "VALUES (gen_random_uuid(), 'colado@deruedas.test', 'Colado')",
+                "UPDATE super_admins SET deleted_at = now()",
+                "DELETE FROM super_admins",
+            ):
+                with pytest.raises(DBAPIError) as fallo:
+                    await conexion.execute(text(sentencia))
+                assert (
+                    "permission denied" in str(fallo.value.orig).lower()
+                ), f"la base rechazo por otro motivo: {fallo.value.orig}"
+                await conexion.rollback()
+    finally:
+        await motor.dispose()
