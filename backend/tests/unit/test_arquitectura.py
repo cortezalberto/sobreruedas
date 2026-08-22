@@ -86,6 +86,21 @@ PERMITIDOS_CON_TENANT = (
     # Ademas la tarea abre varias transacciones cortas y no puede recibir una
     # sesion ya abierta: el commit por lote es lo que hace visible el progreso.
     "modules/stock/importacion_servicio.py",
+    # Outbox transaccional (`ADR-036`). Marca como publicadas las filas que ya
+    # salieron a Redis, y eso ocurre DESPUES del commit: la transaccion del
+    # endpoint no solo esta cerrada, esta terminada. No hay ninguna sesion que
+    # reusar, asi que abre la suya.
+    #
+    # Misma forma que `core/idempotency.py`, y la cadena sigue empezando en el
+    # claim: el tenant lo lee de `sesion.info["tenant_id"]`, que puso la
+    # dependency con el valor del token — no del sobre que esta drenando.
+    #
+    # ⚠️ Lo que este permiso NO habilita es un drenaje que BUSQUE filas
+    # pendientes. Eso obligaria a leer el outbox de todos los tenants y es
+    # justamente lo que `ADR-036` difiere hasta que exista un rol propio para el
+    # relay. Si aparece un `select(OutboxEvent)` sin tenant en esta lista, es una
+    # decision distinta y hay que verla en el diff.
+    "core/outbox.py",
 )
 
 PERMITIDOS_CATALOGO = (
