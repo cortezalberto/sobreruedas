@@ -71,8 +71,19 @@ function Fila({
     <tr className="border-b border-neutro-borde">
       <td className="py-2 pr-4 font-mono">
         {/* `ADR-031`: el dominio es opcional — un 0 km sin patentar no tiene.
-            Se cae al chasis antes de mostrar un guión. */}
-        {vehiculo.domain_plate ?? vehiculo.chassis_number ?? '—'}
+            Se cae al chasis antes de mostrar un guión.
+
+            EL ENLACE VA EN EL IDENTIFICADOR y no en una columna "Ver": es el
+            dato que nombra a la fila, así que es donde la mano va sola. Un
+            `Link` real —y no un `onClick`— se abre en otra pestaña, se tabula y
+            se previsualiza; envolver la fila entera en uno haría inalcanzables
+            los botones de cambio de estado que viven adentro. */}
+        <Link
+          href={`/stock/${vehiculo.id}`}
+          className="underline underline-offset-4 hover:text-marca"
+        >
+          {vehiculo.domain_plate ?? vehiculo.chassis_number ?? '—'}
+        </Link>
       </td>
       <td className="py-2 pr-4">{marca}</td>
       <td className="py-2 pr-4">{vehiculo.year}</td>

@@ -9,7 +9,8 @@
  * `Encabezado` con `<Sesion />` adentro—, así que queda escrito: lo que se
  * pueda probar solo, va donde se pueda probar solo.
  */
-import type { Vehiculo } from '@/lib/api';
+import { ErrorDeApi, type Vehiculo } from '@/lib/api';
+import type { Opcion } from '@/lib/vehiculo-nuevo';
 
 /**
  * Si el backend mandó el costo — que es lo mismo que "este rol puede verlo".
@@ -105,4 +106,79 @@ export const NOMBRE_DE_ESTADO: ReadonlyMap<string, string> = new Map([
  *  por qué una fila no hace nada. */
 export function nombreDeEstado(estado: string): string {
   return NOMBRE_DE_ESTADO.get(estado) ?? estado;
+}
+
+// ── La ficha ─────────────────────────────────────────────────────────────────
+
+/**
+ * El texto en castellano de un valor de catalogo cerrado.
+ *
+ * ⚠️ LOS CATALOGOS NO SE COPIAN ACA. `COMBUSTIBLES`, `TRANSMISIONES` y
+ * `CARROCERIAS` ya viven en `lib/vehiculo-nuevo.ts`, espejados de los `StrEnum`
+ * de `stock/schemas.py` y vigilados por `test_alta_espejada.py`. La ficha usa
+ * ESOS mismos arreglos: una segunda tabla de traducciones acá seria una segunda
+ * copia del mismo dominio, con un solo guardian mirando la primera — y el dia
+ * que el backend agregue un combustible, una de las dos se enteraria.
+ *
+ * Que vivan en un modulo llamado `vehiculo-nuevo` es incomodo y es a proposito:
+ * moverlos exigiria mover con ellos el guardian, que ademas cubre `ANIO_MINIMO`,
+ * los largos maximos y los formatos de dominio — todos si especificos del alta.
+ * Un import raro es visible; un guardian a medias no.
+ *
+ * Devuelve el codigo crudo si el valor no esta en el catalogo, por la misma
+ * razon que `nombreDeEstado`: un valor nuevo se ve feo pero se ve.
+ */
+export function textoDeCatalogo(catalogo: readonly Opcion[], valor: string): string {
+  return catalogo.find((opcion) => opcion.valor === valor)?.texto ?? valor;
+}
+
+/**
+ * Una fecha ISO del backend, en formato argentino.
+ *
+ * `null` da guion y no cadena vacia: una celda vacia se lee como un error de
+ * renderizado, y un guion dice "no hay dato" sin ambiguedad.
+ *
+ * ⚠️ SOLO LA FECHA, SIN LA HORA. `acquired_at`, `sold_at` y `created_at` son
+ * `datetime` en el backend, pero la hora de una compra o una venta no le sirve a
+ * nadie en la ficha y arrastra el problema de la zona horaria: el backend
+ * serializa en UTC y mostrarla cruda diria "23:30 del dia anterior" para una
+ * operacion de la tarde. Al recortar a la fecha se usa la zona de la agencia.
+ */
+export function formatearFecha(iso: string | null): string {
+  if (iso === null) return '—';
+
+  const fecha = new Date(iso);
+  // Una fecha invalida da `NaN` y `toLocaleDateString` devolveria "Invalid Date"
+  // en la pantalla. Se prefiere mostrar el crudo: al menos dice que llego algo.
+  if (Number.isNaN(fecha.getTime())) return iso;
+
+  return fecha.toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'America/Argentina/Buenos_Aires',
+  });
+}
+
+/**
+ * Si un error al pedir un vehiculo significa "aca no hay nada".
+ *
+ * SON DOS ESTADOS HTTP Y NO UNO, y el segundo es el que se escapa:
+ *
+ *   404 — el id es valido y no hay fila. Puede ser un id inventado, un vehiculo
+ *         dado de baja, o uno de OTRA agencia: la politica RLS hace que para
+ *         esta sesion no exista. Las tres son lo mismo desde acá, y es a
+ *         proposito — un 403 en la tercera confirmaria que el id es real.
+ *
+ *   422 — el id ni siquiera es un UUID. El endpoint lo declara `uuid.UUID`, asi
+ *         que FastAPI lo rechaza ANTES de tocar la base. `/stock/cualquier-cosa`
+ *         caia en el cartel de "el servicio no respondio", que es falso dos
+ *         veces: el servicio respondio, y respondio bien. Es el unico parametro
+ *         del endpoint, asi que un 422 acá no puede ser otra cosa.
+ *
+ * Vive en `lib/` y no en la pagina para poder probarse: la ficha importa
+ * `@/auth` y eso no se monta en jsdom.
+ */
+export function noHayTalVehiculo(error: unknown): boolean {
+  return error instanceof ErrorDeApi && (error.estado === 404 || error.estado === 422);
 }
