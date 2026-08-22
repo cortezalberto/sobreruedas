@@ -1,11 +1,11 @@
-"""Modulo de stock — C-14.
+"""Modulo de stock — C-14 y C-15.
 
-⚠️ TODAVIA NO HAY ROUTER, NI MODELOS ORM, NI SERVICIO. Solo los contratos.
+Schemas, modelo ORM, repositorio, servicio y router. Los contratos se
+escribieron por adelantado —un schema Pydantic no consulta la base ni decide
+quien ve que— y el resto llego cuando `rbac.py` existio.
 
-Se escribieron los schemas por adelantado porque no tocan aislamiento: un schema
-Pydantic no consulta la base ni decide quien ve que. Lo que falta para que esto
-sea un endpoint es `rbac.py` (bloque 6 de C-02), y eso espera a `E-001`.
-
-Cuando llegue, el trabajo es colgar `require_permission` y escribir el servicio
-contra estos contratos — no rediscutirlos.
+⚠️ **El change figura PARCIAL en `CHANGES.md`, y lo que falta esta ahi.** Tres
+schemas de este modulo no tienen consumidor y no es olvido de nadie: la rebanada
+de la demo (`ESC-003`) construyo la mitad visible y se detuvo. `VehiculoEditar`
+espera su `PATCH`, `HistorialDeEstado` espera su tabla, y el listado no pagina.
 """

@@ -525,7 +525,17 @@ Tres observaciones sobre la cadena:
   - `knowledge-base/11_testing_y_calidad.md` §Pruebas críticas de aislamiento multi-tenant, §Pruebas de autorización (RBAC)
 
 ### [C-06] `storage-y-notificaciones`
-- **Estado**: `[ ]` pendiente
+- **Estado**: 🟢 **implementado — 2/2 tareas** (22-ago-2026). Backend **520 unitarios** y **436 de integración**, cobertura **99.35 % líneas / 98.17 % ramas**.
+  - ✅ **`T-034` — object storage.** [`core/storage.py`](backend/app/core/storage.py) con `guardar`, `leer`, `borrar` y `url_firmada`. `boto3` en `asyncio.to_thread`, que es el SDK que `DD-08` nombra por su nombre como mitigación del lock-in. TTL de **5 min para fotos y 30 para documentos**, los dos de `DD-08`, como constantes con nombre y no como un entero libre en la firma.
+    - **El aislamiento acá no lo da PostgreSQL.** Un bucket es un diccionario plano de cadenas: no hay RLS debajo. La única defensa es la forma de la clave, así que **el adapter no acepta claves absolutas** — recibe el tenant al construirse y todo lo demás es relativo a su prefijo, con lista blanca por segmento. `../otro-tenant/x` no se puede construir.
+    - **24 tests contra MinIO real**, incluida la URL firmada **ejercida de verdad** con un `GET`: verificar que "tiene `X-Amz-Signature`" pasaría en verde con una firma inválida, que es justo lo que produce negociar la versión equivocada contra MinIO.
+  - ✅ **`T-035` — notificaciones.** Migración `018_notifications` con las columnas que fija `knowledge-base/04` §Notifications, las tres capas de aislamiento y **FK compuesta `(user_id, tenant_id)`** como en `015_user_branches` — con una FK simple, una notificación de esta agencia podría apuntar a un usuario de otra y pasar la política RLS igual.
+    - **Sin `title` ni `body`**: la fila guarda `type` + `payload` y el texto lo arma la plantilla al leer. Corregir una redacción deja de ser una migración.
+    - **Dos canales con garantías distintas**: in-app es **transaccional** (es el canal de registro); el email es **mejor-esfuerzo** y no se reintenta. Ponerlos al mismo nivel sería mentir sobre el segundo.
+    - **El consumidor es un registro, no una cadena de `if`**: cada módulo declara qué evento le interesa y a quién notifica. C-19, C-24, C-27 y C-28 le cuelgan los suyos sin tocar el archivo.
+  - ⚠️ **La única regla de negocio que este change inventó, y está escrita**: a quién se notifica por un evento de stock **no lo define ningún documento**. Los dos destinatarios que el corpus nombra son de otros changes. El manejador elige **la persona asignada al vehículo** —`vehicles.assigned_user_id` existe para nombrarla, y los dos casos documentados notifican al vendedor a cargo—; sin asignado, **no se notifica a nadie**.
+  - ⛔ **Sin endpoints HTTP, y no es un olvido**: **`ADR-024` no define ninguna celda de `notifications` en la matriz RBAC**, y `rbac.py` tampoco. Escribir `GET /notifications` obligaría a inventar quién puede leerlas — una decisión de autorización implícita, que el principio 5 declara no vinculante. La pantalla la necesita C-10; la celda hay que agregarla al ADR primero.
+  - ⛔ **Sin reintento del email.** Un mail que no salió, no salió: no queda fila ni cola. Se acepta porque la in-app es el canal de registro. **El día que haya un mail que no se pueda perder —recuperar una cuenta, un aviso de facturación— esto no alcanza.**
 - **Rango**: `T-034`, `T-035` (2 tareas)
 - **Scope**:
   - Adapter de object storage S3-compatible (ADR-008): `put`, `get`, `delete`, URLs prefirmadas, layout de claves por tenant
@@ -705,7 +715,13 @@ Tres observaciones sobre la cadena:
   - `knowledge-base/02_descripcion_general.md` §Multi-tenancy (ADR-006)
 
 ### [C-14] `vehiculos-modelo-y-servicios`
-- **Estado**: `[ ]` pendiente
+- **Estado**: 🟡 **parcial — la mitad está escrita y el índice decía `[ ]`.** Auditado contra el código el 22-ago-2026.
+  - ✅ **Lo construyó la rebanada de la demo** (`ESC-003`), sin pasar por el ciclo `propose`/`archive` —que esa escalación autorizó a saltear— y **nadie actualizó este índice**: migración `011_vehicles` con los tres enums, `VehicleRepository`, schemas, `StockService.crear` / `.cambiar_estado` / `.dar_de_baja`, la máquina de estados `TRANSICIONES_PERMITIDAS` (`RN-ST-05`) y los validadores argentinos de patente y chasis. `IN-07` resuelto por [`ADR-031`](docs/adr/ADR-031-dominio-opcional-y-los-seis-estados-del-vehiculo.md).
+  - ✅ **Eventos de dominio, 22-ago-2026** — `vehicle.created`, `vehicle.status_changed` (con `from`/`to`) y `vehicle.archived`, por **outbox transaccional** ([`ADR-036`](docs/adr/ADR-036-outbox-transaccional-para-eventos-de-dominio.md)). Es el **primer productor de eventos del sistema**: `core/events.py` existía desde `T-016` y no lo usaba ningún módulo de producción. Migración `017_outbox_events` con las tres capas.
+    - **El payload es mínimo y es una decisión de seguridad**: un evento no tiene quién pregunta, así que `acquisition_cost_ars` no viaja — si viajara, `RN-ST-12` se evaporaría por un stream de Redis sin que ningún test de permisos se enterara.
+    - ⚠️ **Sin recuperación automática.** Una fila que no se publicó queda con `published_at IS NULL` y **nadie la reintenta**: el relay necesita leer cruzando tenants, y ese rol no existe. `ADR-036` lo difiere junto a `super_admins` — es la misma pregunta sobre el espacio administrativo que C-09 tiene que contestar.
+  - ⛔ **Falta**: `vehicle.updated` (no hay `PATCH`, ver C-15) y la migración `vehicle_status_history` — el schema `HistorialDeEstado` está escrito y **la tabla no existe**. La KB la pide **append-only con `UPDATE`/`DELETE` revocados en la base** (§Patrones aplicados).
+  - ⏳ **Sin verificar**: `IN-11` (¿la reserva se libera sola a los 7 días?) sigue sin decidirse, y la máquina de estados ya está escrita sin esa regla.
 - **Rango**: `T-071`…`T-077`, `T-084`, `T-086` (9 tareas)
 - **Scope**:
   - Migración `vehicles` + enums asociados (`vehicle_status_enum`, condición, combustible, transmisión) — **`domain_plate` nullable o no sale de `IN-07`**
@@ -730,7 +746,15 @@ Tres observaciones sobre la cadena:
   - `knowledge-base/02_descripcion_general.md` §Comunicación entre módulos (eventos de dominio)
 
 ### [C-15] `vehiculos-api`
-- **Estado**: `[ ]` pendiente
+- **Estado**: 🟡 **parcial — cinco endpoints existen y el índice decía `[ ]`.** Auditado contra el código el 22-ago-2026.
+  - ✅ **Existen**: `GET /vehicles` (con filtros), `GET /vehicles/{id}`, `POST /vehicles`, `POST /vehicles/{id}/status`, `DELETE /vehicles/{id}`, más la importación masiva. Todos con `require_permission` y tests de integración de aislamiento.
+  - ✅ **La ficha del frontend los consume** desde el 22-ago-2026 — `GET /vehicles/{id}` estaba implementado y **ninguna pantalla lo llamaba**.
+  - ⛔ **Falta, y el síntoma son tres schemas transcriptos sin consumidor**:
+    - `PATCH /vehicles/{id}` — **`VehiculoEditar` está escrito y ningún endpoint lo usa**
+    - `GET /vehicles/{id}/history` — **`HistorialDeEstado` está escrito y la tabla no existe** (es C-14)
+    - **paginación por cursor** — el listado devuelve todo, sin `limit` ni `cursor`. ⚠️ Ojo: `app/core/pagination.py` ya existe y el stock no lo usa
+    - **`Idempotency-Key` en el `POST`** — `core/idempotency.py` existe y este endpoint no lo engancha
+  - 📌 **Lección, y por eso queda escrita acá**: cuando `ESC-003` autorizó saltear el ciclo de OpenSpec, el costo no fue el papeleo — fue que **el estado del proyecto dejó de ser legible**. Un change marcado pendiente con la mitad escrita hace que el próximo planifique contra una base falsa. Verificar el índice contra el código antes de elegir el siguiente frente es obligatorio, no prolijidad.
 - **Rango**: `T-078`…`T-083`, `T-085`, `T-087` (8 tareas)
 - **Scope**:
   - `POST /api/v1/vehicles` (con `Idempotency-Key`), `PATCH /api/v1/vehicles/{id}`, `DELETE /api/v1/vehicles/{id}` (archivar)

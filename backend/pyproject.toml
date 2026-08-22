@@ -58,6 +58,19 @@ dependencies = [
     # se instalan.
     "httpx>=0.27,<1",
 
+    # Object storage S3-compatible. C-06, `T-034`.
+    #
+    # `boto3` Y NO UN CLIENTE ASINCRONO, y no es comodidad: `DD-08` nombra el
+    # SDK por su nombre —"SDK generico S3 (`boto3`)"— justamente como la
+    # mitigacion del lock-in de proveedor. Cambiarlo por `aioboto3` seria
+    # apartarse de una decision del corpus para ganar lo que `asyncio.to_thread`
+    # ya da, y arrastrar `aiobotocore` de yapa.
+    #
+    # Y arrastrar importa mas de lo normal acá: `pip-audit` bloquea ante
+    # CUALQUIER vulnerabilidad porque no expone severidad (`ADR-027`), asi que
+    # cada paquete de mas es una chance de mas de dejar el pipeline en rojo.
+    "boto3>=1.34,<2",
+
     # Observabilidad. C-03, bloque 1.
     #
     # ⚠️ VAN JUNTAS Y SE AUDITAN JUNTAS. `pip-audit` bloquea ante cualquier
@@ -102,6 +115,10 @@ dev = [
     "ruff>=0.4,<1",
     "mypy>=1.10,<2",
     "black>=26.3.1,<27",
+    # `boto3` no trae anotaciones y `mypy --strict` lo trata como `Any`, que es
+    # exactamente el agujero que la regla dura 6 cierra. Los stubs son de
+    # DESARROLLO: no hacen falta en produccion y no engordan la imagen.
+    "boto3-stubs[s3]>=1.34,<2",
     # Fabricas de datos de prueba (T-033). Declarada desde C-02, sin fabricas
     # concretas todavia: la primera entidad de negocio es `users` y nace en
     # C-05. Ver el bloque 5 de openspec/changes/core-backend-primitives/tasks.md.

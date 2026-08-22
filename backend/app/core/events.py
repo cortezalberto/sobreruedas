@@ -160,21 +160,43 @@ async def publicar(
             f"el tipo de evento tiene que ser 'dominio.hecho' en minusculas, y llego {tipo!r}"
         )
 
-    sobre = Sobre(
-        event_id=uuid.uuid4(),
-        type=tipo,
-        version=version,
-        tenant_id=_tenant_valido(tenant_id),
-        occurred_at=datetime.now(UTC),
-        payload=payload,
+    return await publicar_sobre(
+        Sobre(
+            event_id=uuid.uuid4(),
+            type=tipo,
+            version=version,
+            tenant_id=_tenant_valido(tenant_id),
+            occurred_at=datetime.now(UTC),
+            payload=payload,
+        ),
+        cliente=cliente,
     )
 
+
+async def publicar_sobre(sobre: Sobre, *, cliente: Redis | None = None) -> Sobre:
+    """Manda al stream un sobre YA ARMADO, sin tocarle ni un campo.
+
+    Existe para el outbox (`ADR-036`), y la diferencia con `publicar` es la que
+    hace que el mecanismo sirva: el outbox arma el sobre al REGISTRAR, dentro de
+    la transaccion, y lo publica despues del commit. Si el publish le generara un
+    `event_id` nuevo —como hace `publicar`, que arma el sobre en el momento— el
+    identificador de la fila y el del stream no coincidirian, y la idempotencia
+    del consumidor, que empareja por `event_id`, no reconoceria una reentrega.
+
+    Tampoco recalcula `occurred_at`: un evento drenado tarde tiene que decir
+    cuando paso el hecho, no cuando salio.
+
+    ⚠️ NO REVALIDA EL TIPO. Quien arma el sobre ya paso por esa puerta: `publicar`
+    con su regex, y `registrar` con su chequeo temprano. Validar de nuevo acá
+    seria una segunda copia de la regla, y la que se olvide de actualizarse
+    despues es siempre la de mas adentro.
+    """
     redis = cliente or _cliente_por_defecto()
     # El `cast` es por los stubs de redis-py: declaran la clave del mapping
     # como `bytes | str | int | float`, y `Mapping` es invariante en la clave,
     # asi que un `dict[str, str]` --que es perfectamente valido en tiempo de
     # ejecucion-- no encaja. Se afirma lo que ya se sabe, no se afloja nada.
-    await redis.xadd(nombre_del_stream(tipo), cast("dict[Any, Any]", sobre.a_redis()))
+    await redis.xadd(nombre_del_stream(sobre.type), cast("dict[Any, Any]", sobre.a_redis()))
     return sobre
 
 

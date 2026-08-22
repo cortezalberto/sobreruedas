@@ -8,24 +8,33 @@ token, lo valida, saca el tenant del claim y abre la transaccion con el contexto
 puesto. No hay forma de escribir acá un endpoint que se olvide de alguno de los
 cuatro pasos.
 
-⚠️ LO QUE FALTA, Y NO ES UN OLVIDO
-───────────────────────────────────
-**No hay `require_permission`.** El bloque 6 de C-02 espera a `E-001`, asi que
-hoy CUALQUIER usuario autenticado de la agencia puede hacer todo lo de acá. El
-aislamiento entre agencias esta completo; la separacion de roles DENTRO de una
-agencia, no.
+LOS PERMISOS YA ESTAN COLGADOS
+───────────────────────────────
+Cada endpoint declara el suyo, y `rbac.py` es la unica copia de la matriz:
 
-Concretamente, cuando `rbac.py` exista hay que colgar:
+    vehicles:read           listar y obtener
+    vehicles:create         crear
+    vehicles:change_status  cambiar de estado
+    vehicles:archive        dar de baja
+    vehicles:import         importacion masiva
 
-    vehicles:read    en listar y obtener
-    vehicles:write   en crear, editar y cambiar de estado
-    vehicles:delete  en dar de baja
+⚠️ LOS NOMBRES NO SON LOS QUE ESTE ENCABEZADO ANUNCIABA. Hasta el 22-ago-2026
+decia `vehicles:write` para crear, editar y cambiar de estado, y `vehicles:delete`
+para la baja — y describia un router sin `require_permission`, que dejo de ser
+cierto cuando llego `rbac.py`. La implementacion ademas PARTIO la escritura:
+crear, cambiar de estado y archivar son celdas distintas de `ADR-024`, y
+`ADR-034` suma la transicion como tercer eje. Un permiso unico de escritura
+habria juntado tres decisiones que la matriz separa.
 
-Y lo mas importante — `RN-ST-12`: **`acquisition_cost_ars` no se devuelve a
-nadie todavia**. Estos endpoints responden con `VehiculoSalida`, que no declara
-el campo. Cuando haya roles, `manager` y `admin_staff` pasan a recibir
-`VehiculoSalidaConCosto` y el resto sigue con este. Denegar por defecto: mientras
-no se pueda distinguir quien pregunta, no lo ve nadie.
+Queda escrito y no borrado porque el plan viejo y el codigo no coincidian, y el
+que manda es el codigo.
+
+`RN-ST-12` — EL COSTO SI SE DEVUELVE, Y A QUIEN CORRESPONDE
+───────────────────────────────────────────────────────────
+Estos endpoints responden `VehiculoSalida` o `VehiculoSalidaConCosto` segun lo
+que diga la CONCESION, no el rol: `_salida` lo elige leyendo `concesion.campos`.
+Preguntar por el rol acá seria una segunda lectura de la matriz, y la segunda
+lectura es donde las dos se despegan.
 """
 
 from __future__ import annotations

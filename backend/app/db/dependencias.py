@@ -40,6 +40,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import SujetoActual
+from app.core.outbox import drenar
 from app.db.session import sesion_de_tenant
 
 __all__ = ["SesionDeTenant", "sesion_del_tenant_actual"]
@@ -68,6 +69,21 @@ async def sesion_del_tenant_actual(sujeto: SujetoActual) -> AsyncIterator[AsyncS
         # a otra peticion.
         sesion.info["tenant_id"] = sujeto.tenant_id
         yield sesion
+
+    # ── Fuera del `async with`: acá la transaccion YA commiteo ────────────────
+    #
+    # Es el unico punto del sistema donde eso es cierto y todavia se sabe de que
+    # tenant se trata, asi que es donde va el drenaje del outbox (`ADR-036`).
+    #
+    # QUE ESTE AFUERA ES LA GARANTIA, no un detalle de forma. Si el endpoint
+    # levanta, la excepcion atraviesa el context manager, la transaccion revierte
+    # y esta linea NO corre: la fila del outbox se fue con el rollback junto al
+    # cambio que la origino. No hay forma de publicar un evento por algo que no
+    # pasó.
+    #
+    # `drenar` no levanta aunque Redis este caido: la peticion ya termino bien y
+    # el usuario ya tiene su respuesta. Ver el encabezado de `core/outbox.py`.
+    await drenar(sesion)
 
 
 # El alias que va a usar cada endpoint con datos de una agencia:

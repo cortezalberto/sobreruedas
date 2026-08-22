@@ -56,6 +56,32 @@ DSN_PROPIETARIO = os.getenv(
 # consumer groups es lo que se prueba, y un doble probaria el doble.
 URL_REDIS = os.getenv("TEST_REDIS_URL", "redis://redis:6379/0")
 
+# El MinIO y el SMTP de esta corrida.
+#
+# PREFIJO `TEST_`, COMO LOS DSN Y REDIS, Y NO ES COSMETICO. Son dos razones que
+# se suman:
+#
+#   1. `entorno_limpio` (autouse, conftest raiz) borra toda variable con prefijo
+#      `S3_` o `SMTP_` antes de CADA test. Un `TEST_` no lo alcanza.
+#   2. **El pytest del CI corre en el RUNNER, no adentro del compose.** Ahi
+#      `minio` y `mailhog` no resuelven: los servicios se alcanzan por sus
+#      puertos publicados. El default con nombre de servicio sirve para correr
+#      la suite DENTRO del contenedor, y el workflow lo pisa con `localhost`.
+#
+# Se aprendio rompiendo: la primera version leia `S3_ENDPOINT` y dio verde en
+# local —donde la suite corre dentro del compose— y diez fallos en CI con
+# `EndpointConnectionError` contra `http://minio:9000`.
+#
+# Las credenciales son las de verdad y no un placeholder, a diferencia de las
+# que repone `reponer_entorno`: los tests de storage escriben en el bucket.
+S3_ENDPOINT = os.getenv("TEST_S3_ENDPOINT", "http://minio:9000")
+S3_BUCKET = os.getenv("TEST_S3_BUCKET", "deruedas-media")
+S3_ACCESS_KEY = os.getenv("TEST_S3_ACCESS_KEY", "minioadmin")
+S3_SECRET_KEY = os.getenv("TEST_S3_SECRET_KEY", "minioadmin")
+
+# El SMTP de prueba. Mismo criterio que arriba.
+SMTP_HOST = os.getenv("TEST_SMTP_HOST", "mailhog:1025")
+
 # Alembic construye `Settings` a traves de env.py, asi que necesita el conjunto
 # minimo de variables obligatorias. En el runner del CI solo estan las TEST_*,
 # de modo que las demas se pasan con valores de descarte: esta corrida migra, no
@@ -153,6 +179,31 @@ def reponer_entorno(monkeypatch: pytest.MonkeyPatch, *, dsn: str) -> None:
     monkeypatch.setenv("KEYCLOAK_CLIENT_SECRET", "no-se-usa-en-este-test")
     monkeypatch.setenv("S3_ACCESS_KEY", "no-se-usa-en-este-test")
     monkeypatch.setenv("S3_SECRET_KEY", "no-se-usa-en-este-test")
+    monkeypatch.setenv("TENANT_SECRETS_MASTER_KEY", "no-se-usa-en-este-test")
+    get_settings.cache_clear()
+
+
+def reponer_entorno_de_s3(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Repone las credenciales REALES de MinIO y descacha `Settings`.
+
+    Hermano de `reponer_entorno`, y separado a proposito: aquel pone valores de
+    relleno en `S3_ACCESS_KEY` porque sus tests solo necesitan que la
+    configuracion VALIDE. Los de storage escriben en el bucket, asi que con un
+    relleno recibirian un 403 de MinIO — un fallo que no dice "faltan
+    credenciales", dice "acceso denegado", y manda a buscar politicas del bucket.
+
+    El `cache_clear()` es por el mismo motivo que en `reponer_entorno`:
+    `get_settings` es `lru_cache(maxsize=1)` y se queda con el primer `Settings`
+    que alguien construya en la corrida.
+    """
+    monkeypatch.setenv("S3_ENDPOINT", S3_ENDPOINT)
+    monkeypatch.setenv("S3_BUCKET", S3_BUCKET)
+    monkeypatch.setenv("S3_ACCESS_KEY", S3_ACCESS_KEY)
+    monkeypatch.setenv("S3_SECRET_KEY", S3_SECRET_KEY)
+    # Las otras dos obligatorias que `Settings` valida de una: sin ellas la
+    # configuracion no se construye aunque S3 este completo.
+    monkeypatch.setenv("DATABASE_URL", DSN_APLICACION)
+    monkeypatch.setenv("KEYCLOAK_CLIENT_SECRET", "no-se-usa-en-este-test")
     monkeypatch.setenv("TENANT_SECRETS_MASTER_KEY", "no-se-usa-en-este-test")
     get_settings.cache_clear()
 

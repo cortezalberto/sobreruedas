@@ -19,6 +19,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import DomainError
+from app.core.outbox import registrar
 from app.modules.stock.models import Vehicle
 from app.modules.stock.repository import VehicleRepository, contar_vehiculos
 from app.modules.stock.schemas import (
@@ -96,6 +97,27 @@ class StockService:
         self._limites = PlanLimitsService(sesion)
         self._limites.registrar(Recurso.VEHICLES, contar_vehiculos)
 
+    def _evento(self, tipo: str, vehiculo: Vehicle, extra: dict[str, object]) -> None:
+        """Anota un hecho en el outbox. Sale cuando la transaccion commitee.
+
+        ⚠️ EL PAYLOAD ES MINIMO, Y ESO ES UNA DECISION DE SEGURIDAD. `RN-ST-12`
+        hace que `acquisition_cost_ars` no le viaje a un `salesperson` por la
+        API — pero **un evento no tiene quien pregunta**. Si el payload llevara
+        el vehiculo entero, el costo quedaria en un stream de Redis legible por
+        cualquier consumidor futuro, y la regla se evaporaria por la puerta de
+        atras. Quien necesite mas datos los pide por la API, con el rol de quien
+        pregunta.
+
+        `registrar` no es `async` ni toca la red: agrega la fila a esta misma
+        transaccion. Ver `ADR-036`.
+        """
+        registrar(
+            self._sesion,
+            tipo,
+            tenant_id=self._tenant_id,
+            payload={"vehicle_id": str(vehiculo.id), **extra},
+        )
+
     async def listar(self, filtros: FiltrosDeBusqueda) -> list[Vehicle]:
         return list(await self._repositorio.listar(filtros))
 
@@ -131,7 +153,10 @@ class StockService:
             status=EstadoDeVehiculo.EN_PREPARACION.value,
         )
         self._repositorio.agregar(vehiculo)
+        # El `flush` va ANTES del registro porque el evento lleva el id, y el id
+        # lo asigna la base: registrarlo antes anotaria un `None`.
         await self._sesion.flush()
+        self._evento("vehicle.created", vehiculo, {"status": vehiculo.status})
         return vehiculo
 
     async def cambiar_estado(
@@ -157,6 +182,15 @@ class StockService:
             vehiculo.sold_at = dt.datetime.now(dt.UTC)
 
         await self._sesion.flush()
+        # `from` y `to` en el payload: un consumidor que solo recibiera el estado
+        # nuevo no podria distinguir "se reservo" de "volvio a estar disponible
+        # y despues se reservo", y las automatizaciones de C-28 se disparan por
+        # la transicion, no por el estado.
+        self._evento(
+            "vehicle.status_changed",
+            vehiculo,
+            {"from": actual.value, "to": cambio.status.value},
+        )
         return vehiculo
 
     async def dar_de_baja(self, vehiculo_id: uuid.UUID) -> None:
@@ -170,3 +204,9 @@ class StockService:
         vehiculo = await self.obtener(vehiculo_id)
         vehiculo.deleted_at = dt.datetime.now(dt.UTC)
         await self._sesion.flush()
+        # ⚠️ `vehicle.archived` es la BAJA LOGICA, no el estado `archived`. Son
+        # dos cosas distintas que comparten nombre: `dar_de_baja` escribe
+        # `deleted_at` y no toca `status`, mientras que pasar a `archived` es una
+        # transicion de `RN-ST-05` que deja el vehiculo vivo. Un consumidor que
+        # las confunda va a borrar de su indice vehiculos que siguen existiendo.
+        self._evento("vehicle.archived", vehiculo, {"status": vehiculo.status})
