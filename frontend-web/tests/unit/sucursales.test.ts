@@ -8,7 +8,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ErrorDeApi, obtenerSucursales } from '@/lib/api';
+import { ErrorDeApi, obtenerSucursales, obtenerTodasLasSucursales } from '@/lib/api';
 
 const SUCURSAL_VALIDA = {
   id: '22222222-2222-2222-2222-222222222222',
@@ -79,5 +79,28 @@ describe('obtenerSucursales', () => {
     const sucursales = await obtenerSucursales('un-token');
 
     expect(sucursales).toHaveLength(1);
+  });
+});
+
+describe('obtenerTodasLasSucursales', () => {
+  it('conserva las dadas de baja — la ficha tiene que poder nombrarlas', () => {
+    // El complemento exacto del test de arriba, y la razon por la que el filtro
+    // se movio afuera de la funcion. Un vehiculo puede estar en una sucursal
+    // cerrada: el soft delete la conserva justamente para eso. Si la ficha
+    // pidiera el listado filtrado, mostraria un guion donde hay un nombre.
+    responderCon([SUCURSAL_VALIDA, { ...SUCURSAL_VALIDA, id: 'otra', is_active: false }]);
+
+    return expect(obtenerTodasLasSucursales('un-token')).resolves.toHaveLength(2);
+  });
+
+  it('valida igual que la version filtrada', () => {
+    // El filtro se movio, el guarda de tipo NO. Sin este test, sacar la
+    // validacion de la funcion nueva pasaria en verde: la vieja la sigue
+    // teniendo por delegacion, pero la nueva es la que usa la ficha.
+    const sinNombre: Record<string, unknown> = { ...SUCURSAL_VALIDA };
+    delete sinNombre.name;
+    responderCon([sinNombre]);
+
+    return expect(obtenerTodasLasSucursales('un-token')).rejects.toThrow(TypeError);
   });
 });

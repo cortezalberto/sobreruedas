@@ -16,25 +16,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { columnasPara, elBackendMandaElCosto, TRANSICIONES, transicionesDesde } from '@/lib/stock';
-import type { Vehiculo } from '@/lib/api';
 
-/** Un vehículo mínimo. Los campos que no importan acá se rellenan igual porque
- *  el tipo los exige, y exigirlos es lo que evita que el test mienta. */
-function vehiculo(extra: Partial<Vehiculo> = {}): Vehiculo {
-  return {
-    id: '00000000-0000-4000-8000-000000000001',
-    domain_plate: 'AB123CD',
-    chassis_number: null,
-    brand_id: '00000000-0000-4000-8000-0000000000b1',
-    model_id: '00000000-0000-4000-8000-0000000000m1',
-    year: 2021,
-    mileage_km: 30000,
-    color: 'Blanco',
-    status: 'available',
-    price_ars: '15000000.00',
-    ...extra,
-  };
-}
+// El fixture se comparte con el de la ficha. Vivia acá y se mudo cuando aparecio
+// el segundo consumidor: dos listas de 23 campos divergen a la primera columna
+// que el backend agregue. Ver el encabezado de `tests/fixtures/vehiculo.ts`.
+import { vehiculo } from '../fixtures/vehiculo';
 
 describe('la columna de costo', () => {
   it('no aparece cuando el backend NO mandó la clave', () => {

@@ -89,6 +89,13 @@ export async function cambiarEstado(vehiculoId: string, destino: string): Promis
     // recargue a mano: el render es del servidor y su caché no sabe que el dato
     // cambió por una acción.
     revalidatePath('/stock');
+    // LA FICHA TAMBIÉN, y no es redundante: los mismos botones viven en las dos
+    // pantallas. Revalidar solo el listado dejaba la ficha mostrando el estado
+    // viejo —con los botones de la transición ya hecha— hasta recargar a mano.
+    // Se revalida la RUTA y no el id concreto: `revalidatePath` con un segmento
+    // dinámico alcanza a todas sus instancias, que es lo que se quiere cuando la
+    // misma acción se dispara desde la fila de una tabla.
+    revalidatePath('/stock/[id]', 'page');
     return { ok: true, mensaje: 'Estado actualizado.' };
   }
 
