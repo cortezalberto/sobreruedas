@@ -211,7 +211,18 @@ export function idDeMarcaPorSlug(marcas: readonly Marca[], slug: string): string
 // ── Stock ────────────────────────────────────────────────────────────────────
 
 /**
- * Un vehiculo, como lo devuelve `GET /api/v1/vehicles`.
+ * Un vehiculo, como lo devuelven `GET /api/v1/vehicles` y `GET /vehicles/{id}`.
+ *
+ * LOS DOS ENDPOINTS RESPONDEN EL MISMO SCHEMA (`VehiculoSalida`), asi que hay un
+ * solo tipo. Declarar un `VehiculoDetalle` aparte daria dos formas para un unico
+ * contrato, y la que use menos pantallas es la que envejece sin que nadie mire.
+ *
+ * ⚠️ ESTA INTERFAZ DECLARA LOS 22 CAMPOS Y NO LOS QUE USA LA TABLA. Hasta la
+ * ficha declaraba 11: el listado no necesitaba mas, y los otros once llegaban
+ * por la red sin que TypeScript supiera que existian. Eso no es economia — es un
+ * contrato a medias que obliga a redescubrir el schema cada vez que una pantalla
+ * nueva necesita un campo. La lista de campos la vigila
+ * `backend/tests/unit/test_vehiculo_espejado.py`.
  *
  * ⚠️ `acquisition_cost_ars` ES OPCIONAL A NIVEL DE TIPO, y eso no es laxitud:
  * es `RN-ST-12` en el sistema de tipos. El backend devuelve 23 campos a un
@@ -223,16 +234,30 @@ export function idDeMarcaPorSlug(marcas: readonly Marca[], slug: string): string
  */
 export interface Vehiculo {
   id: string;
+  tenant_id: string;
+  branch_id: string;
+  assigned_user_id: string | null;
   domain_plate: string | null;
   chassis_number: string | null;
   brand_id: string;
   model_id: string;
+  version_id: string | null;
   year: number;
   mileage_km: number;
   color: string;
+  fuel_type: string;
+  transmission: string;
+  body_type: string;
   status: string;
   /** Decimal serializado como string. Ver el comentario de `Plan.price_ars`. */
   price_ars: string;
+  price_usd: string | null;
+  description: string | null;
+  features: string[];
+  /** ISO 8601, como lo serializa Pydantic. Se formatea en el momento de mostrar. */
+  acquired_at: string | null;
+  sold_at: string | null;
+  created_at: string;
   /**
    * Solo para `manager` y `admin_staff` (`RN-ST-12`).
    *
@@ -253,13 +278,28 @@ function esVehiculo(valor: unknown): valor is Vehiculo {
 
   return (
     typeof v.id === 'string' &&
+    typeof v.tenant_id === 'string' &&
+    typeof v.branch_id === 'string' &&
+    (v.assigned_user_id === null || typeof v.assigned_user_id === 'string') &&
+    (v.domain_plate === null || typeof v.domain_plate === 'string') &&
+    (v.chassis_number === null || typeof v.chassis_number === 'string') &&
     typeof v.brand_id === 'string' &&
     typeof v.model_id === 'string' &&
+    (v.version_id === null || typeof v.version_id === 'string') &&
     typeof v.year === 'number' &&
     typeof v.mileage_km === 'number' &&
     typeof v.color === 'string' &&
+    typeof v.fuel_type === 'string' &&
+    typeof v.transmission === 'string' &&
+    typeof v.body_type === 'string' &&
     typeof v.status === 'string' &&
     typeof v.price_ars === 'string' &&
+    (v.price_usd === null || typeof v.price_usd === 'string') &&
+    (v.description === null || typeof v.description === 'string') &&
+    Array.isArray(v.features) &&
+    (v.acquired_at === null || typeof v.acquired_at === 'string') &&
+    (v.sold_at === null || typeof v.sold_at === 'string') &&
+    typeof v.created_at === 'string' &&
     // El costo NO se exige. Su ausencia es el caso normal para un vendedor, y
     // `null` el de un gerente mirando un vehiculo sin costo cargado.
     (v.acquisition_cost_ars === undefined ||
@@ -274,6 +314,28 @@ export async function obtenerVehiculos(token: string): Promise<Vehiculo[]> {
 
   if (!Array.isArray(datos) || !datos.every(esVehiculo)) {
     throw new TypeError('El listado de vehiculos no tiene la forma esperada');
+  }
+
+  return datos;
+}
+
+/**
+ * Un vehiculo de la agencia del token, por su id.
+ *
+ * ⚠️ UN VEHICULO DE OTRA AGENCIA DA 404, NO 403, y esa es la respuesta correcta:
+ * la politica RLS hace que para esta sesion la fila no exista. Un 403 confirmaria
+ * que el id es real y le diria a quien pruebe ids al azar cuales estan tomados;
+ * un 404 no distingue "no existe" de "no es tuyo", que es justo lo que se quiere.
+ *
+ * El 404 se propaga como `ErrorDeApi` con `estado === 404`. La pagina lo traduce
+ * a `notFound()`; no se aplana acá a `null`, porque "no esta" y "el backend se
+ * cayo" tienen que poder distinguirse en el llamador.
+ */
+export async function obtenerVehiculo(id: string, token: string): Promise<Vehiculo> {
+  const datos = await pedirConToken(`/api/v1/vehicles/${encodeURIComponent(id)}`, token);
+
+  if (!esVehiculo(datos)) {
+    throw new TypeError('El vehiculo no tiene la forma esperada');
   }
 
   return datos;
@@ -333,20 +395,36 @@ function esSucursal(valor: unknown): valor is Sucursal {
 }
 
 /**
- * Las sucursales ACTIVAS de la agencia del token.
+ * TODAS las sucursales de la agencia del token, activas y dadas de baja.
  *
- * El filtro de `is_active` es de esta funcion y no del backend, que devuelve
- * todas: una sucursal dada de baja sigue existiendo —soft delete universal,
- * principio 3— y hace falta para mostrar el historial de un vehiculo que
- * estuvo ahi. Lo que no se puede es RECIBIR un vehiculo nuevo en ella, y este
- * listado alimenta justamente ese desplegable.
+ * Es lo que el backend devuelve, sin filtrar. Existe porque la ficha de un
+ * vehiculo tiene que poder nombrar la sucursal donde esta —y esa sucursal puede
+ * estar dada de baja, porque el soft delete universal (principio 3) la conserva—.
+ * Filtrarla acá dejaria la ficha mostrando un guion en vez del nombre, que es
+ * peor que nombrar una sucursal cerrada.
+ *
+ * El comentario de `obtenerSucursales` ya anticipaba este caso: decia que una
+ * sucursal de baja "hace falta para mostrar el historial de un vehiculo que
+ * estuvo ahi". Esta es esa necesidad, y por eso el filtro se movio afuera en vez
+ * de agregarle un booleano a la funcion.
  */
-export async function obtenerSucursales(token: string): Promise<Sucursal[]> {
+export async function obtenerTodasLasSucursales(token: string): Promise<Sucursal[]> {
   const datos = await pedirConToken('/api/v1/branches', token);
 
   if (!Array.isArray(datos) || !datos.every(esSucursal)) {
     throw new TypeError('El listado de sucursales no tiene la forma esperada');
   }
 
-  return datos.filter((sucursal) => sucursal.is_active);
+  return datos;
+}
+
+/**
+ * Las sucursales ACTIVAS de la agencia del token.
+ *
+ * El filtro de `is_active` es de esta funcion y no del backend: una sucursal dada
+ * de baja sigue existiendo, pero lo que no puede es RECIBIR un vehiculo nuevo, y
+ * este listado alimenta justamente ese desplegable.
+ */
+export async function obtenerSucursales(token: string): Promise<Sucursal[]> {
+  return (await obtenerTodasLasSucursales(token)).filter((sucursal) => sucursal.is_active);
 }
