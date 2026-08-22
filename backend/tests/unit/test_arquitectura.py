@@ -101,6 +101,18 @@ PERMITIDOS_CON_TENANT = (
     # relay. Si aparece un `select(OutboxEvent)` sin tenant en esta lista, es una
     # decision distinta y hay que verla en el diff.
     "core/outbox.py",
+    # Consumidor de eventos de dominio (C-06, `T-035`). Corre en el WORKER, sin
+    # request ni token: el tenant llega en el SOBRE del evento, y `_procesar_una_vez`
+    # ya establecio el contexto antes de invocar al manejador. Abre su sesion
+    # porque no hay ninguna que reusar.
+    #
+    # Misma forma que `importacion_servicio.py`, y con la misma advertencia: la
+    # cadena empieza en el claim con DOS eslabones mas —el endpoint que muto, y el
+    # sobre que se publico— y ninguno de los dos se ve desde acá. Lo que la
+    # sostiene es que el `tenant_id` del sobre lo escribe `core/outbox.py` desde
+    # `sesion.info`, o sea desde el token. Si algun dia un evento se publicara con
+    # un tenant de otra procedencia, este permiso lo dejaria pasar.
+    "modules/notifications/consumidor.py",
 )
 
 PERMITIDOS_CATALOGO = (
