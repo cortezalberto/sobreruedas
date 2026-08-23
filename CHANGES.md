@@ -163,7 +163,7 @@ Esto **no** son contradicciones entre documentos: es trabajo que **ninguna de la
 | **R-1** | **El contrato de API del portal deRuedas no existe.** Es la integración **más crítica del MVP** —la razón de ser de la épica E3— y ningún documento especifica su API: ni endpoints, ni autenticación, ni esquema de listing, ni códigos de error, ni rate limits. | **Bloqueo duro de C-22 y C-23** (15 tareas, T-115…T-129). `DerRuedasAdapter` (T-117) y el mapping `vehicle→listing` (T-118) son inescribibles sin él. | **C-22** | `PA-25` |
 | ~~**R-2**~~ | ✅ **CERRADO el 17-ago-2026 por [`ADR-024`](docs/adr/ADR-024-matriz-rbac-canonica.md).** El diagnóstico original —"no existe la matriz"— era incompleto: el corpus tenía **cuatro** fuentes, y las dos que la KB no había cruzado (las reglas `RN-*` y el principio `S3` del plan de seguridad) son las de mayor autoridad. Las dos vistas parciales **no eran un empate**: la funcional venía del manual de usuario, **N4 no normativo**, y perdía por `ADR-000`. | Los tests de autorización ya tienen contra qué escribirse. Los **9 módulos sin fuente quedan denegados en bloque** por denegar-por-defecto; cada change futuro agrega sus filas al ADR. | **C-02**, **C-05** | [`ADR-024`](docs/adr/ADR-024-matriz-rbac-canonica.md) |
 | **R-3** | **No existe la tabla canónica de variables de entorno.** La de `08_arquitectura_propuesta.md` está **derivada del stack, no transcripta de una fuente**. | Setup de entornos, `.env.example` (T-004), secretos de staging cifrados con SOPS (T-008). | **C-01** | `PA-06` |
-| **R-4** | **No existe el design system técnico.** El brand book remite a un "design system técnico" que **no está en el corpus**, y los *"13 componentes UI primitivos"* de T-037 **no están enumerados en ningún lado**. | T-036 y T-037 arrancan sin especificación de componentes. Agravado por `IN-44` (contraste AA vs AAA del mismo par de colores) e `IN-45` (el "Rojo crítico" `#974706` es un marrón, visualmente idéntico al "Amarillo atención" `#9C5700`). | **C-07** | `PA-30`, `PA-27` |
+| ~~**R-4**~~ ⬇️ | **DEGRADADO el 23-ago-2026.** El diagnóstico —*"los 13 componentes UI primitivos no están enumerados en ningún lado"*— **dejó de ser cierto**: están enumerados, uno por uno y con su justificación, en `frontend-web/src/components/ui/index.tsx` (líneas 11-31), y 11 de los 13 ya están implementados. `IN-44` e `IN-45` los cerró [`ADR-028`](docs/adr/ADR-028-tokens-de-color-y-el-rojo-que-no-era-rojo.md), con auditoría de contraste automatizada en CI. Queda como riesgo **menor**: no existe el design system técnico *como documento*, pero sí como código con criterio escrito. ~~No existe el design system técnico.~~ El brand book remite a un "design system técnico" que **no está en el corpus**, y los *"13 componentes UI primitivos"* de T-037 **no están enumerados en ningún lado**. | T-036 y T-037 arrancan sin especificación de componentes. Agravado por `IN-44` (contraste AA vs AAA del mismo par de colores) e `IN-45` (el "Rojo crítico" `#974706` es un marrón, visualmente idéntico al "Amarillo atención" `#9C5700`). | **C-07** | `PA-30`, `PA-27` |
 | **R-5** | **La marca no tiene tagline.** El brand book estructura *"logo + tagline"* en el footer pero **nunca escribe el texto** en sus 965 líneas. | Layout principal (T-038), piezas de marketing. Bajo impacto técnico. | **C-07** | `IN-58`, `PA-26` |
 
 > **R-1 es el riesgo dominante del MVP.** Recomendación: abrir la conversación con el equipo del portal deRuedas **ahora**, en paralelo con la OLA 0, sin esperar a llegar a C-22. Si el contrato no llega a tiempo, C-22/C-23 se posponen y el MVP sale sin publicación automática — lo que cambia la propuesta de valor.
@@ -552,7 +552,12 @@ Tres observaciones sobre la cadena:
   - `knowledge-base/05_reglas_de_negocio.md` §RN-DP (datos y privacidad)
 
 ### [C-07] `design-system-y-shell-web`
-- **Estado**: `[ ]` pendiente
+- **Estado**: 🟡 **muy avanzado, ~85 % — el índice decía `[ ]`.** Auditado contra el código el 23-ago-2026.
+  - ✅ **11 de 13 primitivos** en `frontend-web/src/components/ui/index.tsx` (527 líneas): `Boton`, `Alerta`, `Tarjeta`, `Etiqueta`, `EstadoVacio`, `Esqueleto`, `Seleccion`, `Campo`, `Migas`, `Tabla`, `Modal`. Radix entra **solo en el `Modal`**, con criterio escrito.
+  - ✅ **Shell completo**: `app/layout.tsx` monta `Encabezado`, `NavegacionPrincipal` (sidebar) y `<main>`, más `AtajosDeTeclado.tsx`.
+  - ✅ **Tokens y contraste cerrados**: `src/lib/tokens.ts` (paleta + utilidades WCAG), consumido por `tailwind.config.ts`, con auditoría automatizada en `tests/unit/contraste.test.ts` que corre en CI. [`ADR-028`](docs/adr/ADR-028-tokens-de-color-y-el-rojo-que-no-era-rojo.md) cierra `IN-44` e `IN-45`.
+  - ⛔ **Faltan `Casilla` y `Paginacion`** — diferidos a propósito: *"un primitivo sin consumidor se diseña a ciegas y se termina reescribiendo"*. `Paginacion` ya tiene su consumidor desde C-15, que expone el cursor.
+  - 📌 **El docstring dice que `Campo` está pendiente y está implementado.** Deriva menor, pero es el mismo patrón declarado-vs-escrito de C-14/C-15 en miniatura — encontrado, además, durante la auditoría de ese patrón.
 - **Rango**: `T-036`, `T-037`, `T-038` (3 tareas)
 - **Scope**:
   - Design tokens + configuración de Tailwind derivados del brand book: paleta, tipografía, escala jerárquica, espaciado
@@ -572,7 +577,12 @@ Tres observaciones sobre la cadena:
   - `knowledge-base/09_decisiones_y_supuestos.md` `DD-04` (ADR-004: Next.js 14)
 
 ### [C-08] `auth-frontend-y-api-client`
-- **Estado**: `[ ]` pendiente
+- **Estado**: 🟡 **parcial, ~50 % — y la mitad hecha es la riesgosa.** Auditado contra el código el 23-ago-2026.
+  - ✅ **NextAuth v5 + Keycloak con Authorization Code + PKCE** funcionando de punta a punta (`src/auth.ts`: `checks: ['pkce','state']`, `token_endpoint_auth_method: 'none'`), **con refresh de token real**. Verificado con sesión real de `gerente@demo.test`.
+  - ✅ **Cliente HTTP tipado** en `src/lib/api.ts` (464 líneas), con `Authorization: Bearer` y validación estructural de las respuestas.
+  - ⛔ **Falta `middleware.ts`** — hoy la protección se hace **página por página** con `auth()`, no centralizada por rol. Es el hueco de seguridad más relevante de los tres.
+  - ⛔ **Falta TanStack Query** — el cliente es `fetch` nativo; el paquete ni siquiera está en `package.json`, y el stack lo declara.
+  - ⛔ **No hay ruta `/login` dedicada** ni recuperación: el login es un botón inline en `Sesion.tsx` que redirige a Keycloak.
 - **Rango**: `T-039`, `T-040`, `T-041`, `T-042` (4 tareas)
 - **Scope**:
   - Cliente API tipado con TanStack Query, generado desde `docs/openapi.yaml`; interceptor de refresh de token; manejo de `problem+json`
@@ -667,7 +677,9 @@ Tres observaciones sobre la cadena:
   - `knowledge-base/09_decisiones_y_supuestos.md` §Parte A (Principio 2)
 
 ### [C-12] `usuarios-invitaciones-y-settings`
-- **Estado**: `[ ]` pendiente
+- **Estado**: 🟡 **backend completo, frontend en cero.** Auditado contra el código el 23-ago-2026.
+  - ✅ **7 endpoints** en `backend/app/modules/users/router_usuarios.py`: padrón, detalle, invitar, editar/cambiar rol, desactivar, baja y asignación de sucursales. Más `POST /api/v1/auth/accept-invitation` (público, sin contraseña, delegado a Keycloak por [`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md)).
+  - ⛔ **Frontend 0/4 pantallas** — `app/configuracion/page.tsx` es un placeholder que **se autoasigna a este change**. Falta también la página de aceptación de invitación y el E2E de `T-061`.
 - **Rango**: `T-054`, `T-055`, `T-056`, `T-057`, `T-061` (5 tareas)
 - **Scope**:
   - Página pública de aceptación de invitación (sin sesión) — consume **`POST /api/v1/auth/accept-invitation`** ([`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) §4). ⚠️ **No pide contraseña**: fijarla es trabajo de Keycloak, así que la página confirma la identidad y deriva al flujo de Keycloak
@@ -694,7 +706,10 @@ Tres observaciones sobre la cadena:
 > C-13 puede arrancar apenas cierren C-02 y C-07, muy antes que el resto de la ola.
 
 ### [C-13] `catalogo-de-vehiculos`
-- **Estado**: `[ ]` pendiente
+- **Estado**: 🟡 **la mitad del scope.** Auditado contra el código el 23-ago-2026.
+  - ✅ `vehicle_brands` y `vehicle_models` (migración `009`, exención de RLS documentada), **40 marcas** sembradas, y los endpoints de lectura. Navegación marca → modelo en `app/catalogo/`.
+  - ⛔ **`vehicle_versions` y `trims` no existen** — la propia migración `009` lo dice explícito en su docstring (línea 40). Sin esas tablas no hay selector en cascada completo, y **la importación CSV parsea la columna `version` y la descarta**.
+  - ⛔ Seed incompleto (falta llegar a los ~300 modelos / ~800 versiones de la KB), sin backoffice de catálogo para `super_admin`, y el paso `→ version` del selector no existe.
 - **Rango**: `T-063` … `T-070` (8 tareas)
 - **Scope**:
   - Migraciones `vehicle_brands`, `vehicle_models` (FK a brands), `vehicle_versions` y `trims` — **catálogo cross-tenant**, exento de RLS
@@ -823,7 +838,11 @@ Tres observaciones sobre la cadena:
   - `knowledge-base/06_funcionalidades.md` §Épica 2 — Gestión de stock
 
 ### [C-17] `importacion-csv-de-stock`
-- **Estado**: `[ ]` pendiente
+- **Estado**: 🟡 **backend completo, falta la pantalla.** Auditado contra el código el 23-ago-2026.
+  - ✅ `POST /api/v1/vehicles/import` (202, Celery), `GET /api/v1/imports`, `GET /api/v1/imports/{id}` y el template descargable — los tres con `require_permission("vehicles:import")` **ya cableado** (el docstring del archivo dice lo contrario: está desactualizado). Tabla `imports` con RLS de tres capas (migración `012`).
+  - ✅ Desde C-14 la importación masiva **deja fila de historial**; antes construía `Vehicle` directo y salteaba el servicio.
+  - ⛔ **No hay página de frontend** para subir el CSV, seguir el progreso ni bajar el template.
+  - ⚠️ **Bloqueado en parte por C-13**: la columna `version` del CSV se parsea y se descarta porque `vehicle_versions` no existe.
 - **Rango**: `T-093` … `T-097` (5 tareas)
 - **Scope**:
   - Migración `imports` + `ImportService.parse_csv` con validación fila a fila y reporte de errores por línea
