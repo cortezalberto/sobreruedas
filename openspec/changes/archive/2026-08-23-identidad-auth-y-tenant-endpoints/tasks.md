@@ -19,7 +19,7 @@
 ## 1. Migraciones
 
 - [x] 1.1 **`013`** y no `009` — ese número lo tomó el catálogo de vehículos (C-14) después de que se escribieran estas tareas. `EXENTAS_DE_RLS` deja de declarar exenta una tabla inexistente
-- [x] 1.2 [`test_identidad_migraciones.py`](../../../backend/tests/integration/test_identidad_migraciones.py) — `super_admins` sin `tenant_id` ni RLS; `users` y `user_branches` con política **y `FORCE`**. `FORCE` y no solo `ENABLE`: sin él las políticas no se aplican al dueño de la tabla, `pg_policies` la lista igual y cualquier auditoría la da por buena
+- [x] 1.2 [`test_identidad_migraciones.py`](../../../../backend/tests/integration/test_identidad_migraciones.py) — `super_admins` sin `tenant_id` ni RLS; `users` y `user_branches` con política **y `FORCE`**. `FORCE` y no solo `ENABLE`: sin él las políticas no se aplican al dueño de la tabla, `pg_policies` la lista igual y cualquier auditoría la da por buena
 - [x] 1.3 **`014`**. Enum de 3 valores verificado contra `pg_enum`. Sin las tres columnas de credencial.
       ⚠️ **`users.id` ES el `sub` de Keycloak**, sin `server_default`. Lo hace posible `D-5` —la invitación crea primero en Keycloak—, y lo hace **necesario** `ADR-024` §4: `verificar_alcance` compara `assigned_user_id` contra el `sub` del token. Con un id propio además del `sub` esa comparación no cerraría nunca, o habría que resolver el espejo en cada petición y `get_current_user` dejaría de salir puro del token.
       ⚠️ **Se crean `avatar_url` y `notification_preferences`**, que la spec no tiene: `ADR-024` §6 define `[perfil]` incluyéndolos, y declarar editable un campo inexistente deja la matriz apuntando a la nada.
@@ -34,12 +34,12 @@
 
 ## 2. El espejo local — `modules/users/`
 
-- [x] 2.1 [`modules/users/models.py`](../../../backend/app/modules/users/models.py). `User.id` sin `default=uuid4`: es el `sub` de Keycloak y lo trae quien crea la fila — un default invitaría a olvidarse de pasarlo, y el síntoma sería una fila que nunca coincide con ningún token
-- [x] 2.2 `mfa_secret` **ya estaba** en el guardián desde el 17-ago. Lo que faltaba es **`mfa_enabled`, y no va ahí**: no es una credencial sino un hecho de Keycloak, y meterlo en una lista llamada "nombres de contraseña" sería mentir sobre por qué está prohibido. Tiene su propio control en [`test_users_modelos.py`](../../../backend/tests/unit/test_users_modelos.py), sobre las columnas reales de las tres tablas, con su contrapeso
+- [x] 2.1 [`modules/users/models.py`](../../../../backend/app/modules/users/models.py). `User.id` sin `default=uuid4`: es el `sub` de Keycloak y lo trae quien crea la fila — un default invitaría a olvidarse de pasarlo, y el síntoma sería una fila que nunca coincide con ningún token
+- [x] 2.2 `mfa_secret` **ya estaba** en el guardián desde el 17-ago. Lo que faltaba es **`mfa_enabled`, y no va ahí**: no es una credencial sino un hecho de Keycloak, y meterlo en una lista llamada "nombres de contraseña" sería mentir sobre por qué está prohibido. Tiene su propio control en [`test_users_modelos.py`](../../../../backend/tests/unit/test_users_modelos.py), sobre las columnas reales de las tres tablas, con su contrapeso
 - [x] 2.3 `PerfilPropio` y `UsuarioEditarPerfil`. Este último es `[perfil]` de `ADR-024` §6 y **no** trae `role`, `status`, `tenant_id`, `email` ni sucursales
 - [x] 2.4 Pendiente — el endpoint de edición de perfil es del bloque 5.9, y sin él no hay body que rechazar. El schema ya está escrito con `extra="forbid"`
 - [x] 2.5 Dos filtros en toda consulta ordinaria: `tenant_id` explícito **y** `deleted_at IS NULL`. `incluir_dadas_de_baja` es por palabra clave: pedir a los muertos tiene que leerse en el sitio de la llamada
-- [x] 2.6 [`test_users_repositorio.py`](../../../backend/tests/integration/test_users_repositorio.py), con el contrapeso —si nunca devolviera a las dadas de baja, el primer test pasaría igual con un `WHERE false`— y el de que el listado no cruza agencias
+- [x] 2.6 [`test_users_repositorio.py`](../../../../backend/tests/integration/test_users_repositorio.py), con el contrapeso —si nunca devolviera a las dadas de baja, el primer test pasaría igual con un `WHERE false`— y el de que el listado no cruza agencias
 
 ## 3. Sincronización con Keycloak
 
@@ -61,7 +61,7 @@
 - [x] 4.6 Test: desactivar **sigue** consumiendo cupo; dar de baja lo libera (`D-6`)
 - [x] 4.7 Test: dar de baja **deshabilita** en Keycloak, no borra
 - [x] 4.8 Test: dar de baja **libera** el email en esa agencia, y reinvitar **rehabilita** la cuenta de Keycloak en vez de crear otra.
-      **Corregido el 21-ago-2026 — decia lo contrario.** El indice `ux_users_tenant_email` es parcial (`WHERE deleted_at IS NULL`) por una decision del bloque 1 con su razon escrita en [`test_identidad_migraciones.py`](../../../backend/tests/integration/test_identidad_migraciones.py): *"si no lo fuera, el email de alguien que se fue quedaria tomado para siempre y la reincorporacion seria imposible"*.
+      **Corregido el 21-ago-2026 — decia lo contrario.** El indice `ux_users_tenant_email` es parcial (`WHERE deleted_at IS NULL`) por una decision del bloque 1 con su razon escrita en [`test_identidad_migraciones.py`](../../../../backend/tests/integration/test_identidad_migraciones.py): *"si no lo fuera, el email de alguien que se fue quedaria tomado para siempre y la reincorporacion seria imposible"*.
       Tres evidencias en la misma direccion: (a) ese test existe y pasa; (b) `make seed` **depende** de que el email quede libre — al recrearse Keycloak cambia el `sub`, y como el `id` local ES el `sub`, el seed da de baja el espejo viejo y crea uno nuevo con el mismo email; (c) la reincorporacion de un empleado es un caso real del negocio.
       La divergencia con Keycloak —donde la cuenta sigue existiendo deshabilitada— **no se resuelve ocupando el email local sino reutilizando la cuenta remota**, que es lo que `D-5` ya insinuaba: *"la reinvitacion la reutiliza por email"*
 - [x] 4.9 Test: a lo sumo una sucursal principal por persona; marcar otra desmarca la anterior
@@ -70,7 +70,7 @@
 
 ## 5. Endpoints — necesitan `rbac.py` del bloque 6 de C-02
 
-- [x] 5.1 [`modules/users/router.py`](../../../backend/app/modules/users/router.py). Exige `auth:read_me`, alcance `self` (`ADR-033`). No hace falta `verificar_alcance`: el recurso ES el sujeto por construcción, porque el id con que se busca sale del token
+- [x] 5.1 [`modules/users/router.py`](../../../../backend/app/modules/users/router.py). Exige `auth:read_me`, alcance `self` (`ADR-033`). No hace falta `verificar_alcance`: el recurso ES el sujeto por construcción, porque el id con que se busca sale del token
 - [x] 5.2 Las tres formas en que alguien lo intentaría: query string, path y cabecera. Ninguna devuelve al otro
 - [x] 5.3 401 con código `not_authenticated`, distinguible del 403 por código y no solo por estado
 - [x] 5.4 Los dos casos. Cero sucursales es el estado **normal** de alguien recién invitado: devolver 500 ahí convertiría eso en una caída.

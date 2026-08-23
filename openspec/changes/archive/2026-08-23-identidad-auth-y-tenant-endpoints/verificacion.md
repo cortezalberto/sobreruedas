@@ -50,7 +50,7 @@ No es una lista de intenciones: cada fila nombra el test que lo prueba, y ese te
 
 ## Dos escenarios que se cumplen por otra vía que la que su texto sugiere
 
-**"Token de invitación inválido o vencido"** — el escenario supone un token de invitación propio. [`ADR-035`](../../../docs/adr/ADR-035-aceptar-la-invitacion-sin-token-propio.md) decidió no emitir ninguno: tener un access token válido de Keycloak ya prueba que la persona aceptó. El escenario se cumple igual —un token vencido da 401 y el espejo queda en `invited`— pero por la validación que ya existía, no por una lógica de expiración nueva. **Ese es el punto de la decisión**, no un atajo.
+**"Token de invitación inválido o vencido"** — el escenario supone un token de invitación propio. [`ADR-035`](../../../../docs/adr/ADR-035-aceptar-la-invitacion-sin-token-propio.md) decidió no emitir ninguno: tener un access token válido de Keycloak ya prueba que la persona aceptó. El escenario se cumple igual —un token vencido da 401 y el espejo queda en `invited`— pero por la validación que ya existía, no por una lógica de expiración nueva. **Ese es el punto de la decisión**, no un atajo.
 
 **"El email no se libera con la baja"** — decía lo contrario de lo que corresponde y se corrigió, con las tres evidencias escritas en el propio escenario. El índice parcial es una decisión del bloque 1 con su razón documentada, `make seed` depende de ese comportamiento, y la reincorporación de un empleado es un caso real.
 
