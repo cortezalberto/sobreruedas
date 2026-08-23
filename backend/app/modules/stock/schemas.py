@@ -26,7 +26,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 __all__ = [
     "Combustible",
@@ -226,6 +226,27 @@ class VehiculoEditar(_EntradaEstricta):
     `RN-ST-05` restringe las transiciones y `RN-ST-06` exige razon para algunas.
     Dejarlo entrar acá permitiria saltar de `in_preparation` a `sold` sin pasar
     por ninguna validacion.
+
+    EL `null` EXPLICITO SE DECIDE CAMPO POR CAMPO (`design.md` D-7)
+    ───────────────────────────────────────────────────────────────
+    Todo campo es `X | None = None` porque el servicio usa
+    `model_dump(exclude_unset=True)`: un campo AUSENTE del cuerpo no se toca,
+    y uno presente con `null` se vacia — son dos casos distintos en el JSON de
+    entrada y tienen que seguir viendose distintos aca.
+
+    Pero eso deja la puerta abierta a `{"color": null}`, y `color` es
+    `NOT NULL` en la base: sin defensa, ese `PATCH` seria un `IntegrityError`
+    de PostgreSQL llegandole al cliente como 500. Los `field_validator` de
+    abajo cierran esa puerta SOLO para los campos que la tabla no admite
+    nulos — `branch_id`, `mileage_km`, `color`, `price_ars`, `features` — y
+    dejan pasar el `null` en los que si lo admiten (`assigned_user_id`,
+    `version_id`, `price_usd`, `acquisition_cost_ars`, `description`), donde
+    vaciar es una operacion legitima.
+
+    Por que esto funciona sin tocar `exclude_unset`: Pydantic NO corre un
+    `field_validator` sobre el DEFAULT de un campo ausente —solo sobre lo que
+    el cuerpo realmente trae—, asi que `{}` nunca dispara estos validadores y
+    `{"color": null}` si.
     """
 
     branch_id: uuid.UUID | None = None
@@ -240,6 +261,20 @@ class VehiculoEditar(_EntradaEstricta):
     ) = None
     description: str | None = None
     features: list[str] | None = None
+
+    @field_validator("branch_id", "mileage_km", "color", "price_ars", "features")
+    @classmethod
+    def _no_admite_vaciarse(cls, valor: object, info: ValidationInfo) -> object:
+        """Rechaza el `null` explicito sobre un campo `NOT NULL` de la tabla.
+
+        Se dispara SOLO si el campo vino en el cuerpo: un default ausente no
+        pasa por aca (ver el docstring de la clase). El mensaje nombra el
+        campo — via `loc` (el nombre del `field_validator`) y via texto — para
+        que el 422 sea legible sin tener que adivinar cual de los cinco fue.
+        """
+        if valor is None:
+            raise ValueError(f"el campo '{info.field_name}' no admite quedar vacío")
+        return valor
 
 
 class VehiculoCambioDeEstado(_EntradaEstricta):
@@ -266,6 +301,26 @@ class FiltrosDeBusqueda(_EntradaEstricta):
     Los rangos se validan cruzados: un `precio_desde` mayor que el `precio_hasta`
     devuelve siempre vacio, y un listado vacio se lee como "no hay stock" en
     lugar de "preguntaste mal".
+
+    ⚠️ `cursor` Y `limit` VIVEN ACA, Y NO COMO PARAMETROS SUELTOS DEL ENDPOINT
+    ───────────────────────────────────────────────────────────────────────────
+    No es una cuestion de gusto: es una limitacion real de FastAPI (probada,
+    no leida) en la version instalada (`0.141.1`). `Annotated[Modelo,
+    Query()]` "desarma" el modelo en query params individuales SOLO si es el
+    UNICO parametro de ese tipo en la funcion — apenas aparece OTRO parametro
+    resuelto por query (otro modelo, o un escalar suelto como
+    `cursor: str | None = None`), FastAPI deja de desarmarlo y empieza a
+    esperar el modelo entero como un UNICO parametro JSON llamado `filtros`.
+    El sintoma es silencioso: cada campo del modelo vuelve `None` sin que
+    nada falle ni loguee nada.
+
+    La consecuencia es que `cursor` y `limit` de `GET /vehicles` (`T-080`)
+    tienen que declararse ACA, en el mismo modelo que `status` y el resto —no
+    en un segundo modelo de paginacion, y no como parametros sueltos del
+    endpoint— para seguir siendo UN solo modelo de query. `T-080` no inventa
+    esto: lo hereda de una restriccion de FastAPI que este proposal no puede
+    rediseñar, y que `test_vehicles_listado_paginado.py` fija en un test para
+    que la proxima persona que "limpie" esto no vuelva a romperlo en silencio.
     """
 
     status: EstadoDeVehiculo | None = None
@@ -277,6 +332,8 @@ class FiltrosDeBusqueda(_EntradaEstricta):
     price_from: Annotated[Decimal, Field(ge=0)] | None = None
     price_to: Annotated[Decimal, Field(ge=0)] | None = None
     q: Annotated[str, Field(min_length=2, max_length=120)] | None = None
+    cursor: str | None = None
+    limit: int | None = None
 
     @model_validator(mode="after")
     def _rangos_coherentes(self) -> FiltrosDeBusqueda:
@@ -357,7 +414,15 @@ class VehiculoSalidaConCosto(VehiculoSalida):
 class HistorialDeEstado(_Salida):
     """Una entrada de `GET /vehicles/{id}/history`.
 
-    `usuario_id` puede ser nulo: una transicion automatica —la que dispara un
+    `changed_by` y `changed_at`, y NO `user_id`/`occurred_at` — `design.md`
+    D-2 (C-14) los renombra contra los nombres de la TABLA (`spec-tecnica`
+    §3.4, N1), que gana sobre este schema por `ADR-000`: el schema nunca tuvo
+    un consumidor —ni endpoint, ni entrada en el espejo del frontend, ni en
+    `test_vehiculo_espejado.py`— asi que renombrarlo no rompe nada, y mapear
+    el atributo a la columna habria dejado dos vocabularios para la misma fila
+    para siempre.
+
+    `changed_by` puede ser nulo: una transicion automatica —la que dispara un
     evento de dominio, no una persona— no tiene autor.
     """
 
@@ -366,8 +431,8 @@ class HistorialDeEstado(_Salida):
     from_status: EstadoDeVehiculo | None
     to_status: EstadoDeVehiculo
     reason: str | None
-    user_id: uuid.UUID | None
-    occurred_at: dt.datetime
+    changed_by: uuid.UUID | None
+    changed_at: dt.datetime
 
 
 class ResultadoDeImportacion(_Salida):

@@ -62,6 +62,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.core.errors import DomainError, PlanQuotaExceeded
 from app.db.session import sesion_de_tenant
+from app.modules.stock.historial import registrar_transicion
 from app.modules.stock.importacion import (
     COLUMNA_DE_CAMPO,
     TAMANO_DE_LOTE,
@@ -179,8 +180,15 @@ async def ejecutar_importacion(importacion_id: uuid.UUID, tenant_id: uuid.UUID) 
     con "el archivo ya no esta disponible" en vez de importar.
     """
     async with sesion_de_tenant(tenant_id) as sesion:
-        if await _fila(sesion, importacion_id) is None:
+        corrida = await _fila(sesion, importacion_id)
+        if corrida is None:
             return False
+        # Se lee ACA, con la corrida todavia visible, y se lleva como valor
+        # simple al resto de las fases: `design.md` D-4 — la fila genesis de
+        # cada vehiculo importado lleva el usuario que lanzo la corrida SI la
+        # corrida lo conoce, y `NULL` si no. El procesamiento ocurre en un
+        # worker de Celery, donde no hay ningun sujeto en contexto.
+        creado_por = corrida.created_by
 
     try:
         contenido = await _traer_planilla(tenant_id, importacion_id)
@@ -192,7 +200,7 @@ async def ejecutar_importacion(importacion_id: uuid.UUID, tenant_id: uuid.UUID) 
 
         lectura = await _parsear(importacion_id, tenant_id, contenido)
         if lectura is not None:
-            await _importar(importacion_id, tenant_id, lectura)
+            await _importar(importacion_id, tenant_id, lectura, creado_por)
     except Exception as fallo:  # noqa: BLE001 — ver el docstring
         await _marcar_fallida(importacion_id, tenant_id, f"error inesperado: {fallo}")
     finally:
@@ -232,7 +240,9 @@ async def _parsear(
     return lectura
 
 
-async def _importar(importacion_id: uuid.UUID, tenant_id: uuid.UUID, lectura: Lectura) -> None:
+async def _importar(
+    importacion_id: uuid.UUID, tenant_id: uuid.UUID, lectura: Lectura, creado_por: uuid.UUID | None
+) -> None:
     """Fase `importing`. Lotes de `TAMANO_DE_LOTE` con commit por lote."""
     async with sesion_de_tenant(tenant_id) as sesion:
         try:
@@ -261,7 +271,7 @@ async def _importar(importacion_id: uuid.UUID, tenant_id: uuid.UUID, lectura: Le
                 # `rechazo` y no `fallo`: mas arriba hay un `except ... as
                 # fallo`, y Python borra ese nombre al salir del bloque —
                 # reusarlo acá compila y confunde al leer.
-                rechazo = await _insertar(sesion, tenant_id, fila, catalogo)
+                rechazo = await _insertar(sesion, tenant_id, fila, catalogo, creado_por)
                 if rechazo is None:
                     creados += 1
                 else:
@@ -288,13 +298,19 @@ async def _importar(importacion_id: uuid.UUID, tenant_id: uuid.UUID, lectura: Le
 
 
 async def _insertar(
-    sesion: AsyncSession, tenant_id: uuid.UUID, fila: FilaLeida, catalogo: _Catalogo
+    sesion: AsyncSession,
+    tenant_id: uuid.UUID,
+    fila: FilaLeida,
+    catalogo: _Catalogo,
+    creado_por: uuid.UUID | None,
 ) -> ErrorDeFila | None:
     """Una fila. Devuelve el error en vez de levantarlo.
 
     El SAVEPOINT es lo que permite que una fila mala no se lleve puesto el lote:
     sin el, la primera violacion de constraint aborta la transaccion y las 99
-    filas buenas que ya estaban adentro se pierden.
+    filas buenas que ya estaban adentro se pierden. La fila GENESIS del
+    historial (`design.md` D-4) va DENTRO del mismo SAVEPOINT que el vehiculo:
+    las dos escrituras se confirman o se deshacen juntas.
     """
     marca = catalogo.marcas.get(_clave(fila.marca))
     if marca is None:
@@ -313,14 +329,23 @@ async def _insertar(
     except ValidationError as fallo:
         return ErrorDeFila(fila.fila, _columna_de(fallo), _mensaje_de(fallo))
 
+    vehiculo = Vehicle(
+        **datos.model_dump(),
+        tenant_id=tenant_id,
+        status=EstadoDeVehiculo.EN_PREPARACION.value,
+    )
     try:
         async with sesion.begin_nested():
-            sesion.add(
-                Vehicle(
-                    **datos.model_dump(),
-                    tenant_id=tenant_id,
-                    status=EstadoDeVehiculo.EN_PREPARACION.value,
-                )
+            sesion.add(vehiculo)
+            await sesion.flush()
+            registrar_transicion(
+                sesion,
+                tenant_id=tenant_id,
+                vehiculo_id=vehiculo.id,
+                desde=None,
+                hasta=EstadoDeVehiculo.EN_PREPARACION,
+                razon=None,
+                autor=creado_por,
             )
             await sesion.flush()
     except IntegrityError:

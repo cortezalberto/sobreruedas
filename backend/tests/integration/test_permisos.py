@@ -67,6 +67,19 @@ TABLA = "platform_probe"
 PERMISOS_NECESARIOS = ("SELECT", "INSERT", "UPDATE")
 PERMISOS_PROHIBIDOS = ("DELETE", "TRUNCATE")
 
+# ESCAPE HATCH, declarado — el mismo criterio de arriba, para el otro sentido.
+#
+# `vehicle_status_history` (C-14, `design.md` D-1) es APPEND-ONLY por diseño: su
+# propia migracion (`019`) REVOCA `UPDATE` sobre si misma, a proposito, para que
+# un registro escrito no se pueda alterar ni con las credenciales de la
+# aplicacion. Sin esta excepcion DECLARADA, este test leeria esa revocacion
+# deliberada como el mismo "permiso que el init olvido otorgar" que el resto del
+# archivo persigue — exactamente lo contrario de lo que `019` hizo a proposito.
+#
+# Escrita a mano, como `EXENTAS_DE_RLS`: una excepcion que se autodetecta no es
+# una excepcion.
+SIN_UPDATE_A_PROPOSITO = {"vehicle_status_history"}
+
 PERMISO_DENEGADO = "42501"
 
 
@@ -144,7 +157,7 @@ async def test_toda_tabla_con_tenant_id_es_operable_por_la_aplicacion() -> None:
         tabla: [
             p
             for p, lo_tiene in (await permisos_sobre(rol, tabla, PERMISOS_NECESARIOS)).items()
-            if not lo_tiene
+            if not lo_tiene and not (p == "UPDATE" and tabla in SIN_UPDATE_A_PROPOSITO)
         ]
         for tabla in tablas
     }

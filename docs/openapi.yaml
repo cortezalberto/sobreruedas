@@ -109,6 +109,68 @@ components:
           type: array
       title: HTTPValidationError
       type: object
+    HistorialDeEstado:
+      description: 'Una entrada de `GET /vehicles/{id}/history`.
+
+
+        `changed_by` y `changed_at`, y NO `user_id`/`occurred_at` — `design.md`
+
+        D-2 (C-14) los renombra contra los nombres de la TABLA (`spec-tecnica`
+
+        §3.4, N1), que gana sobre este schema por `ADR-000`: el schema nunca tuvo
+
+        un consumidor —ni endpoint, ni entrada en el espejo del frontend, ni en
+
+        `test_vehiculo_espejado.py`— asi que renombrarlo no rompe nada, y mapear
+
+        el atributo a la columna habria dejado dos vocabularios para la misma fila
+
+        para siempre.
+
+
+        `changed_by` puede ser nulo: una transicion automatica —la que dispara un
+
+        evento de dominio, no una persona— no tiene autor.'
+      properties:
+        changed_at:
+          format: date-time
+          title: Changed At
+          type: string
+        changed_by:
+          anyOf:
+          - format: uuid
+            type: string
+          - type: 'null'
+          title: Changed By
+        from_status:
+          anyOf:
+          - $ref: '#/components/schemas/EstadoDeVehiculo'
+          - type: 'null'
+        id:
+          format: uuid
+          title: Id
+          type: string
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        to_status:
+          $ref: '#/components/schemas/EstadoDeVehiculo'
+        vehicle_id:
+          format: uuid
+          title: Vehicle Id
+          type: string
+      required:
+      - id
+      - vehicle_id
+      - from_status
+      - to_status
+      - reason
+      - changed_by
+      - changed_at
+      title: HistorialDeEstado
+      type: object
     ImportacionSalida:
       description: 'Lo que devuelve `GET /imports/{id}` en cada vuelta del polling.
 
@@ -993,6 +1055,127 @@ components:
       - price_ars
       title: VehiculoCrear
       type: object
+    VehiculoEditar:
+      additionalProperties: false
+      description: 'Edicion parcial. Todo opcional: es un `PATCH`.
+
+
+        `status` NO esta: el cambio de estado tiene su propio endpoint porque
+
+        `RN-ST-05` restringe las transiciones y `RN-ST-06` exige razon para algunas.
+
+        Dejarlo entrar acá permitiria saltar de `in_preparation` a `sold` sin pasar
+
+        por ninguna validacion.
+
+
+        EL `null` EXPLICITO SE DECIDE CAMPO POR CAMPO (`design.md` D-7)
+
+        ───────────────────────────────────────────────────────────────
+
+        Todo campo es `X | None = None` porque el servicio usa
+
+        `model_dump(exclude_unset=True)`: un campo AUSENTE del cuerpo no se toca,
+
+        y uno presente con `null` se vacia — son dos casos distintos en el JSON de
+
+        entrada y tienen que seguir viendose distintos aca.
+
+
+        Pero eso deja la puerta abierta a `{"color": null}`, y `color` es
+
+        `NOT NULL` en la base: sin defensa, ese `PATCH` seria un `IntegrityError`
+
+        de PostgreSQL llegandole al cliente como 500. Los `field_validator` de
+
+        abajo cierran esa puerta SOLO para los campos que la tabla no admite
+
+        nulos — `branch_id`, `mileage_km`, `color`, `price_ars`, `features` — y
+
+        dejan pasar el `null` en los que si lo admiten (`assigned_user_id`,
+
+        `version_id`, `price_usd`, `acquisition_cost_ars`, `description`), donde
+
+        vaciar es una operacion legitima.
+
+
+        Por que esto funciona sin tocar `exclude_unset`: Pydantic NO corre un
+
+        `field_validator` sobre el DEFAULT de un campo ausente —solo sobre lo que
+
+        el cuerpo realmente trae—, asi que `{}` nunca dispara estos validadores y
+
+        `{"color": null}` si.'
+      properties:
+        acquisition_cost_ars:
+          anyOf:
+          - exclusiveMinimum: 0.0
+            type: number
+          - pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,16}|(?=[\d.]{1,19}0*$)\d{0,16}\.\d{0,2}0*$)
+            type: string
+          - type: 'null'
+          title: Acquisition Cost Ars
+        assigned_user_id:
+          anyOf:
+          - format: uuid
+            type: string
+          - type: 'null'
+          title: Assigned User Id
+        branch_id:
+          anyOf:
+          - format: uuid
+            type: string
+          - type: 'null'
+          title: Branch Id
+        color:
+          anyOf:
+          - maxLength: 60
+            minLength: 1
+            type: string
+          - type: 'null'
+          title: Color
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        features:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Features
+        mileage_km:
+          anyOf:
+          - minimum: 0.0
+            type: integer
+          - type: 'null'
+          title: Mileage Km
+        price_ars:
+          anyOf:
+          - exclusiveMinimum: 0.0
+            type: number
+          - pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,16}|(?=[\d.]{1,19}0*$)\d{0,16}\.\d{0,2}0*$)
+            type: string
+          - type: 'null'
+          title: Price Ars
+        price_usd:
+          anyOf:
+          - exclusiveMinimum: 0.0
+            type: number
+          - pattern: ^(?!^[-+.]*$)[+-]?0*(?:\d{0,16}|(?=[\d.]{1,19}0*$)\d{0,16}\.\d{0,2}0*$)
+            type: string
+          - type: 'null'
+          title: Price Usd
+        version_id:
+          anyOf:
+          - format: uuid
+            type: string
+          - type: 'null'
+          title: Version Id
+      title: VehiculoEditar
+      type: object
     VehiculoSalida:
       description: 'Lo que ve CUALQUIER rol con acceso al vehiculo.
 
@@ -1672,6 +1855,22 @@ paths:
       - usuarios
   /api/v1/vehicles:
     get:
+      description: '`T-080`, `design.md` D-2. El cuerpo sigue siendo un ARRAY de vehiculos
+
+        —no un sobre `{items, next_cursor}`— porque
+
+        `frontend-web/src/lib/api.ts:312` valida `Array.isArray` y un sobre lo
+
+        rompe en tiempo de ejecucion. El cursor de la pagina siguiente viaja en el
+
+        header `X-Next-Cursor`; su ausencia es la ultima pagina.
+
+
+        `app/core/pagination.py` no se toca (C-02, CRITICO): `filtros.limit`
+
+        llega tal cual a `acotar_tamano` adentro de `paginar`, sin revalidarlo
+
+        acá con otro criterio — pedir mas del maximo se acota, no falla.'
       operationId: listar_vehiculos_api_v1_vehicles_get
       parameters:
       - in: query
@@ -1759,6 +1958,22 @@ paths:
             type: string
           - type: 'null'
           title: Q
+      - in: query
+        name: cursor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - in: query
+        name: limit
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Limit
       responses:
         '200':
           content:
@@ -1775,7 +1990,21 @@ paths:
       tags:
       - stock
     post:
+      description: 'Acepta `Idempotency-Key` (`T-078`): un reintento con la misma
+        clave y el mismo contenido devuelve el vehiculo ya creado en vez de crear
+        un segundo.'
       operationId: crear_vehiculo_api_v1_vehicles_post
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        required: false
+        schema:
+          anyOf:
+          - maxLength: 255
+            minLength: 1
+            type: string
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         content:
           application/json:
@@ -1890,6 +2119,74 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Un vehiculo
+      tags:
+      - stock
+    patch:
+      description: 'Edicion PARCIAL (`PATCH`). No admite `status`: el cambio de estado
+        tiene su propio endpoint porque `RN-ST-05`/`RN-ST-06` lo restringen.'
+      operationId: editar_vehiculo_api_v1_vehicles__vehiculo_id__patch
+      parameters:
+      - in: path
+        name: vehiculo_id
+        required: true
+        schema:
+          format: uuid
+          title: Vehiculo Id
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehiculoEditar'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Editar un vehiculo
+      tags:
+      - stock
+  /api/v1/vehicles/{vehiculo_id}/history:
+    get:
+      description: 'Del cambio mas reciente al mas viejo. Mismo permiso que listar/obtener
+        (`vehicles:read`), pero SIN el recorte de campos que ese permiso le aplica
+        al VEHICULO (`D-4`, design.md): es una lista blanca de otro recurso, y aplicarla
+        acá devolveria registros en blanco en vez de un error.'
+      operationId: historial_de_vehiculo_api_v1_vehicles__vehiculo_id__history_get
+      parameters:
+      - in: path
+        name: vehiculo_id
+        required: true
+        schema:
+          format: uuid
+          title: Vehiculo Id
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/HistorialDeEstado'
+                title: Response Historial De Vehiculo Api V1 Vehicles  Vehiculo Id  History
+                  Get
+                type: array
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: La linea de tiempo de un vehiculo
       tags:
       - stock
   /api/v1/vehicles/{vehiculo_id}/status:

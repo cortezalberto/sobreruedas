@@ -68,6 +68,48 @@ describe('obtenerVehiculos', () => {
 
     await expect(obtenerVehiculos('un-token')).resolves.toHaveLength(1);
   });
+
+  // ── C-15 · el backend pagina: 20 por defecto, no "todos" ──────────────────
+
+  it('recorre todas las páginas siguiendo `X-Next-Cursor` en vez de truncar en silencio', async () => {
+    // `T-080`: `GET /vehicles` pasó de devolver TODO a devolver una página de
+    // 20. Sin este cambio, una agencia con más de 20 autos vería solo los
+    // primeros 20 en la pantalla de stock, sin ningún error — la regresión
+    // invisible que `design.md` D-2 dice que este change no puede permitirse.
+    const primero = vehiculo({ id: '00000000-0000-4000-8000-000000000001' });
+    const segundo = vehiculo({ id: '00000000-0000-4000-8000-000000000002' });
+    const llamadas: string[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        llamadas.push(String(url));
+        if (String(url).includes('cursor=abc')) {
+          return new Response(JSON.stringify([segundo]), { status: 200 });
+        }
+        return new Response(JSON.stringify([primero]), {
+          status: 200,
+          headers: { 'X-Next-Cursor': 'abc' },
+        });
+      }),
+    );
+
+    const stock = await obtenerVehiculos('un-token');
+
+    expect(stock.map((v) => v.id)).toEqual([primero.id, segundo.id]);
+    expect(llamadas).toHaveLength(2);
+    expect(llamadas[1]).toContain('cursor=abc');
+  });
+
+  it('se detiene en una sola pagina cuando el backend no manda `X-Next-Cursor`', async () => {
+    // El contrapeso: sin este test, un recorrido que siempre pidiera una
+    // pagina de mas pasaria el test de arriba igual.
+    responderCon([VEHICULO_VALIDO]);
+
+    await obtenerVehiculos('un-token');
+
+    expect(vi.mocked(fetch).mock.calls).toHaveLength(1);
+  });
 });
 
 describe('obtenerVehiculo', () => {

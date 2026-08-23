@@ -26,6 +26,7 @@ from sqlalchemy import text
 
 from app.core.outbox import pendientes
 from app.db.session import sesion_de_tenant
+from app.modules.stock.historial import HistorialRepository
 from app.modules.stock.schemas import (
     EstadoDeVehiculo,
     FiltrosDeBusqueda,
@@ -215,7 +216,7 @@ async def test_la_transicion_permitida_se_aplica(
         creado = await servicio.crear(_datos(sucursal, marca, modelo, domain_plate="AA600AA"))
 
         actualizado = await servicio.cambiar_estado(
-            creado.id, VehiculoCambioDeEstado(status=EstadoDeVehiculo.DISPONIBLE)
+            creado.id, VehiculoCambioDeEstado(status=EstadoDeVehiculo.DISPONIBLE), autor=None
         )
 
         assert actualizado.status == EstadoDeVehiculo.DISPONIBLE.value
@@ -236,11 +237,14 @@ async def test_vender_deja_la_fecha_de_venta(
             EstadoDeVehiculo.DISPONIBLE,
             EstadoDeVehiculo.RESERVADO,
         ):
-            await servicio.cambiar_estado(creado.id, VehiculoCambioDeEstado(status=estado))
+            await servicio.cambiar_estado(
+                creado.id, VehiculoCambioDeEstado(status=estado), autor=None
+            )
 
         vendido = await servicio.cambiar_estado(
             creado.id,
             VehiculoCambioDeEstado(status=EstadoDeVehiculo.VENDIDO, reason="contado"),
+            autor=None,
         )
 
         assert vendido.sold_at is not None
@@ -260,6 +264,7 @@ async def test_una_transicion_prohibida_levanta(
             await servicio.cambiar_estado(
                 creado.id,
                 VehiculoCambioDeEstado(status=EstadoDeVehiculo.VENDIDO, reason="x"),
+                autor=None,
             )
 
 
@@ -351,7 +356,7 @@ async def test_el_cambio_de_estado_anota_de_donde_y_adonde(
         servicio = StockService(sesion, tenant)
         creado = await servicio.crear(_datos(sucursal, marca, modelo, domain_plate="AA202AA"))
         await servicio.cambiar_estado(
-            creado.id, VehiculoCambioDeEstado(status=EstadoDeVehiculo.DISPONIBLE)
+            creado.id, VehiculoCambioDeEstado(status=EstadoDeVehiculo.DISPONIBLE), autor=None
         )
 
         alta, transicion = pendientes(sesion)
@@ -415,7 +420,7 @@ async def test_el_payload_no_lleva_el_costo_de_adquisicion(
             )
         )
         await servicio.cambiar_estado(
-            creado.id, VehiculoCambioDeEstado(status=EstadoDeVehiculo.DISPONIBLE)
+            creado.id, VehiculoCambioDeEstado(status=EstadoDeVehiculo.DISPONIBLE), autor=None
         )
         await servicio.dar_de_baja(creado.id)
 
@@ -450,7 +455,159 @@ async def test_una_transicion_rechazada_no_anota_nada(
         # estados, que es donde vive el `registrar`.
         with pytest.raises(TransicionInvalida):
             await servicio.cambiar_estado(
-                creado.id, VehiculoCambioDeEstado(status=EstadoDeVehiculo.RESERVADO)
+                creado.id, VehiculoCambioDeEstado(status=EstadoDeVehiculo.RESERVADO), autor=None
             )
 
         assert [sobre.type for sobre in pendientes(sesion)] == ["vehicle.created"]
+
+
+# ── C-14 · El historial de estados (`design.md` D-4, D-5) ────────────────────
+
+
+async def test_crear_deja_la_fila_genesis(
+    escenario: tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID],
+) -> None:
+    """`design.md` D-4: `from_status = NULL`, `to_status = 'in_preparation'`.
+
+    Es el UNICO productor posible de un `from_status` nulo: sin esta fila, la
+    columna nullable de la spec no tiene quien la llene.
+    """
+    tenant, sucursal, marca, modelo = escenario
+
+    async with sesion_de_tenant(tenant, dsn=DSN_APLICACION) as sesion:
+        creado = await StockService(sesion, tenant).crear(
+            _datos(sucursal, marca, modelo, domain_plate="AA210AA")
+        )
+
+        (fila,) = await HistorialRepository(sesion, tenant).listar_historial(creado.id)
+
+    assert fila.from_status is None
+    assert fila.to_status == EstadoDeVehiculo.EN_PREPARACION.value
+
+
+async def test_cambiar_estado_deja_una_fila_con_de_donde_adonde_razon_y_autor(
+    escenario: tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID],
+) -> None:
+    tenant, sucursal, marca, modelo = escenario
+    autor = uuid.uuid4()
+
+    async with sesion_de_propietario() as sesion:
+        await sesion.execute(
+            text(
+                "INSERT INTO users (id, tenant_id, email, full_name, role, status) "
+                "VALUES (:id, :t, :e, 'Autora', 'manager', 'active')"
+            ),
+            {"id": autor, "t": tenant, "e": f"{autor}@example.com"},
+        )
+
+    # DOS transacciones: `crear` y `cambiar_estado` en la misma comparten
+    # `now()` —PostgreSQL lo fija al INICIO de la transaccion, no por
+    # sentencia— y el `id DESC` que desempata es un UUID aleatorio, asi que no
+    # se podria distinguir por POSICION cual fila es la transicion. En
+    # produccion esto nunca pasa: cada peticion abre su propia transaccion.
+    async with sesion_de_tenant(tenant, dsn=DSN_APLICACION) as sesion:
+        creado = await StockService(sesion, tenant).crear(
+            _datos(sucursal, marca, modelo, domain_plate="AA211AA")
+        )
+        vehiculo_id = creado.id
+
+    async with sesion_de_tenant(tenant, dsn=DSN_APLICACION) as sesion:
+        await StockService(sesion, tenant).cambiar_estado(
+            vehiculo_id,
+            VehiculoCambioDeEstado(status=EstadoDeVehiculo.DISPONIBLE),
+            autor=autor,
+        )
+
+    async with sesion_de_tenant(tenant, dsn=DSN_APLICACION) as sesion:
+        filas = await HistorialRepository(sesion, tenant).listar_historial(vehiculo_id)
+
+    # La mas nueva primero: la transicion recien hecha.
+    transicion = filas[0]
+    assert transicion.from_status == EstadoDeVehiculo.EN_PREPARACION.value
+    assert transicion.to_status == EstadoDeVehiculo.DISPONIBLE.value
+    assert transicion.changed_by == autor
+    assert transicion.changed_by == autor
+
+
+async def test_una_transicion_rechazada_no_deja_fila(
+    escenario: tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID],
+) -> None:
+    """El contrapeso del test de arriba: sin el, un registrador que escribe
+    SIEMPRE pasaria los dos."""
+    tenant, sucursal, marca, modelo = escenario
+
+    async with sesion_de_tenant(tenant, dsn=DSN_APLICACION) as sesion:
+        servicio = StockService(sesion, tenant)
+        creado = await servicio.crear(_datos(sucursal, marca, modelo, domain_plate="AA212AA"))
+
+        with pytest.raises(TransicionInvalida):
+            await servicio.cambiar_estado(
+                creado.id,
+                VehiculoCambioDeEstado(status=EstadoDeVehiculo.VENDIDO, reason="x"),
+                autor=None,
+            )
+
+        filas = await HistorialRepository(sesion, tenant).listar_historial(creado.id)
+
+    # Solo la fila genesis del alta: la transicion rechazada no dejo ninguna.
+    assert len(filas) == 1
+    assert filas[0].from_status is None
+
+
+async def test_dar_de_baja_no_deja_fila_de_historial(
+    escenario: tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID],
+) -> None:
+    """`H-d` del proposal: la baja logica escribe `deleted_at` y no toca
+    `status` — no hay transicion, no hay fila. No es un olvido."""
+    tenant, sucursal, marca, modelo = escenario
+
+    async with sesion_de_tenant(tenant, dsn=DSN_APLICACION) as sesion:
+        servicio = StockService(sesion, tenant)
+        creado = await servicio.crear(_datos(sucursal, marca, modelo, domain_plate="AA213AA"))
+
+        await servicio.dar_de_baja(creado.id)
+
+    async with sesion_de_tenant(tenant, dsn=DSN_APLICACION) as sesion:
+        filas = await HistorialRepository(sesion, tenant).listar_historial(creado.id)
+
+    # Sigue habiendo UNA sola fila: la genesis del alta. La baja no agrego nada.
+    assert len(filas) == 1
+
+
+async def test_si_la_transaccion_se_revierte_no_sobrevive_ni_el_cambio_ni_el_historial(
+    escenario: tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID],
+) -> None:
+    """El requisito de atomicidad de la spec: el historial tiene que estar en
+    la MISMA unidad de trabajo que el cambio que documenta."""
+    tenant, sucursal, marca, modelo = escenario
+
+    with pytest.raises(RuntimeError):
+        async with sesion_de_tenant(tenant, dsn=DSN_APLICACION) as sesion:
+            servicio = StockService(sesion, tenant)
+            creado = await servicio.crear(_datos(sucursal, marca, modelo, domain_plate="AA214AA"))
+            vehiculo_id = creado.id
+
+            await servicio.cambiar_estado(
+                vehiculo_id,
+                VehiculoCambioDeEstado(status=EstadoDeVehiculo.DISPONIBLE),
+                autor=None,
+            )
+            # Se rompe DESPUES de la transicion y ANTES de que la transaccion
+            # commitee: `sesion_de_tenant` hace rollback ante cualquier
+            # excepcion que salga de su bloque.
+            raise RuntimeError("fallo simulado despues del cambio de estado")
+
+    # Con el rol PROPIETARIO pero SIN contexto de tenant esto daria "sin
+    # filas" siempre —`FORCE ROW LEVEL SECURITY` tambien alcanza al dueño de
+    # la tabla— y el test pasaria sin probar nada. Hace falta una sesion CON
+    # el contexto puesto para que la ausencia de filas signifique lo que dice.
+    async with sesion_de_tenant(tenant, dsn=DSN_APLICACION) as sesion:
+        vehiculo = await sesion.scalar(
+            text("SELECT status FROM vehicles WHERE id = :id"), {"id": vehiculo_id}
+        )
+        filas = await HistorialRepository(sesion, tenant).listar_historial(vehiculo_id)
+
+    # Ni el vehiculo ni ninguna fila de historial sobrevivieron: el `crear`
+    # tambien se revirtio, porque estaba en la misma transaccion.
+    assert vehiculo is None
+    assert filas == []

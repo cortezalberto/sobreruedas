@@ -318,7 +318,7 @@ async def test_una_notificacion_se_dispara_desde_un_evento_publicado(
         # El vendedor a cargo: es a quien el manejador va a notificar.
         vehiculo.assigned_user_id = vendedor
         await servicio.cambiar_estado(
-            vehiculo.id, VehiculoCambioDeEstado(status=EstadoDeVehiculo.DISPONIBLE)
+            vehiculo.id, VehiculoCambioDeEstado(status=EstadoDeVehiculo.DISPONIBLE), autor=None
         )
 
     # 3 — el drenaje, ya con la transaccion commiteada.

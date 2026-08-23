@@ -20,13 +20,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import DomainError
 from app.core.outbox import registrar
+from app.modules.stock.historial import registrar_transicion
 from app.modules.stock.models import Vehicle
-from app.modules.stock.repository import VehicleRepository, contar_vehiculos
+from app.modules.stock.repository import PaginaDeVehiculos, VehicleRepository, contar_vehiculos
 from app.modules.stock.schemas import (
     EstadoDeVehiculo,
     FiltrosDeBusqueda,
     VehiculoCambioDeEstado,
     VehiculoCrear,
+    VehiculoEditar,
     es_transicion_valida,
 )
 from app.modules.tenancy.limits import PlanLimitsService, Recurso
@@ -121,6 +123,20 @@ class StockService:
     async def listar(self, filtros: FiltrosDeBusqueda) -> list[Vehicle]:
         return list(await self._repositorio.listar(filtros))
 
+    async def listar_paginado(
+        self,
+        filtros: FiltrosDeBusqueda,
+        *,
+        cursor: str | None = None,
+        tamano: int | None = None,
+    ) -> PaginaDeVehiculos:
+        """`GET /vehicles` — `T-080`. El tenant lo pone ESTE servicio, con el
+        valor que ya tiene guardado (viene del token), no un parametro nuevo
+        que otro llamador pudiera pisar."""
+        return await self._repositorio.listar_paginado(
+            filtros, tenant=self._tenant_id, cursor=cursor, tamano=tamano
+        )
+
     async def obtener(self, vehiculo_id: uuid.UUID) -> Vehicle:
         vehiculo = await self._repositorio.obtener(vehiculo_id)
         if vehiculo is None:
@@ -156,17 +172,40 @@ class StockService:
         # El `flush` va ANTES del registro porque el evento lleva el id, y el id
         # lo asigna la base: registrarlo antes anotaria un `None`.
         await self._sesion.flush()
+        # La fila GENESIS (`design.md` D-4): `from_status = NULL` es el unico
+        # productor posible de esa columna nullable — sin esta fila, la linea
+        # de tiempo de un vehiculo empezaria en su segundo estado.
+        #
+        # `autor=None`: `crear` no recibe un sujeto (a diferencia de
+        # `cambiar_estado`, cuyo router ya trae `SujetoActual` por
+        # `verificar_alcance`). Hilar el autor hasta acá es una decision de
+        # `design.md` D-3 que este change no toma.
+        registrar_transicion(
+            self._sesion,
+            tenant_id=self._tenant_id,
+            vehiculo_id=vehiculo.id,
+            desde=None,
+            hasta=EstadoDeVehiculo.EN_PREPARACION,
+            razon=None,
+            autor=None,
+        )
         self._evento("vehicle.created", vehiculo, {"status": vehiculo.status})
         return vehiculo
 
     async def cambiar_estado(
-        self, vehiculo_id: uuid.UUID, cambio: VehiculoCambioDeEstado
+        self, vehiculo_id: uuid.UUID, cambio: VehiculoCambioDeEstado, *, autor: uuid.UUID | None
     ) -> Vehicle:
         """`RN-ST-05` y `RN-ST-06`.
 
         La transicion se valida contra el estado ACTUAL, que es el dato que el
         schema no puede conocer. Lo que no esta en la tabla de permitidas se
         rechaza: denegar por defecto.
+
+        `autor` es OBLIGATORIO por palabra clave (`design.md` D-3): `None` es
+        un valor legitimo — transicion automatica, sin persona detras — y no
+        un default silencioso. El router YA tiene `SujetoActual` para
+        `verificar_alcance`, asi que pasarlo no agrega ninguna dependencia
+        nueva al endpoint.
         """
         vehiculo = await self.obtener(vehiculo_id)
         actual = EstadoDeVehiculo(vehiculo.status)
@@ -181,6 +220,20 @@ class StockService:
         if cambio.status is EstadoDeVehiculo.VENDIDO:
             vehiculo.sold_at = dt.datetime.now(dt.UTC)
 
+        # ANTES del flush final: la fila de historial tiene que estar en la
+        # MISMA unidad de trabajo que el cambio que documenta (`design.md`
+        # D-5) — si la transaccion se revierte despues de esta linea, ni el
+        # cambio de estado ni el registro sobreviven.
+        registrar_transicion(
+            self._sesion,
+            tenant_id=self._tenant_id,
+            vehiculo_id=vehiculo.id,
+            desde=actual,
+            hasta=cambio.status,
+            razon=cambio.reason,
+            autor=autor,
+        )
+
         await self._sesion.flush()
         # `from` y `to` en el payload: un consumidor que solo recibiera el estado
         # nuevo no podria distinguir "se reservo" de "volvio a estar disponible
@@ -191,6 +244,53 @@ class StockService:
             vehiculo,
             {"from": actual.value, "to": cambio.status.value},
         )
+        return vehiculo
+
+    async def editar(
+        self, vehiculo_id: uuid.UUID, datos: VehiculoEditar, *, autor: uuid.UUID | None
+    ) -> Vehicle:
+        """`T-075`. Edicion parcial DE VERDAD (`design.md` D-7).
+
+        `model_dump(exclude_unset=True)` y no `exclude_none`: un campo AUSENTE
+        del cuerpo no se toca, y uno presente en `null` se vacia — cuando la
+        tabla lo admite. Lo que la tabla no admite ya lo rechazo el schema, con
+        un 422 legible, antes de llegar aca.
+
+        NO puede tocar el estado: `status` no esta en `VehiculoEditar` y no se
+        agrega. El cambio de estado tiene su propio endpoint porque `RN-ST-05`
+        restringe las transiciones y `RN-ST-06` exige razon para algunas —
+        dejarlo entrar por aca saltearia las dos de un tiron.
+
+        `autor` es obligatorio por palabra clave, igual que en
+        `cambiar_estado` (`design.md` D-3) — consistencia de firma entre los
+        metodos que auditan una mutacion, aunque esta no escriba una fila de
+        historial (no hay transicion que registrar) ni lo lleve el evento
+        (`D-6`: el payload nombra los campos que cambiaron, nunca quien ni con
+        que valor).
+        """
+        vehiculo = await self.obtener(vehiculo_id)
+
+        cambios = datos.model_dump(exclude_unset=True)
+        # Ordenados: un consumidor del evento no puede depender del orden de
+        # insercion de un dict, y dos ediciones con los mismos campos tienen
+        # que producir el MISMO payload.
+        campos_modificados = sorted(
+            campo for campo, valor in cambios.items() if getattr(vehiculo, campo) != valor
+        )
+        if not campos_modificados:
+            # `D-6`: un PATCH que no cambia nada no es un hecho. Mandar el
+            # mismo precio dos veces no tiene que disparar una reindexacion.
+            return vehiculo
+
+        for campo in campos_modificados:
+            setattr(vehiculo, campo, cambios[campo])
+        vehiculo.updated_at = dt.datetime.now(dt.UTC)
+
+        await self._sesion.flush()
+        # Los NOMBRES de los campos, nunca sus valores (`D-6`, `RN-ST-12`): un
+        # evento no tiene quien pregunta, y `acquisition_cost_ars` es dato
+        # restringido por la API.
+        self._evento("vehicle.updated", vehiculo, {"campos": campos_modificados})
         return vehiculo
 
     async def dar_de_baja(self, vehiculo_id: uuid.UUID) -> None:

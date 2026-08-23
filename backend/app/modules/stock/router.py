@@ -40,24 +40,29 @@ lectura es donde las dos se despegan.
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Header, Query, Response, status
 from fastapi.responses import PlainTextResponse
 
 from app.core.auth import SujetoActual
+from app.core.idempotency import ejecutar_idempotente
 from app.core.rbac import (
     Concesion,
+    recortar,
     require_permission,
     verificar_alcance,
     verificar_transicion,
 )
 from app.db.dependencias import SesionDeTenant
+from app.modules.stock.historial import HistorialRepository, VehicleStatusHistory
 from app.modules.stock.importacion import PLANTILLA
 from app.modules.stock.schemas import (
     FiltrosDeBusqueda,
+    HistorialDeEstado,
     VehiculoCambioDeEstado,
     VehiculoCrear,
+    VehiculoEditar,
     VehiculoSalida,
     VehiculoSalidaConCosto,
 )
@@ -110,14 +115,36 @@ def _servicio(sesion: SesionDeTenant) -> StockService:
     summary="Listar el stock",
 )
 async def listar_vehiculos(
+    respuesta: Response,
     sesion: SesionDeTenant,
     concesion: Annotated[Concesion, Depends(require_permission("vehicles:read"))],
     # `Query()` explicito: sin eso FastAPI leeria el modelo del CUERPO, y un GET
     # con cuerpo es una peticion que ningun cliente HTTP normal manda.
+    #
+    # `cursor` y `limit` viajan COMO CAMPOS de `FiltrosDeBusqueda` (ver su
+    # docstring) y no como parametros sueltos de esta funcion: agregarlos
+    # sueltos hace que FastAPI deje de desarmar el modelo en query params
+    # individuales, y `status`, `brand_id`, etc. empiezan a volver `None` en
+    # silencio. No es una preferencia de estilo — es una limitacion medida de
+    # la version de FastAPI instalada.
     filtros: Annotated[FiltrosDeBusqueda, Query()] = SIN_FILTROS,
 ) -> list[VehiculoSalida]:
-    vehiculos = await _servicio(sesion).listar(filtros)
-    return [_salida(v, concesion) for v in vehiculos]
+    """`T-080`, `design.md` D-2. El cuerpo sigue siendo un ARRAY de vehiculos
+    —no un sobre `{items, next_cursor}`— porque
+    `frontend-web/src/lib/api.ts:312` valida `Array.isArray` y un sobre lo
+    rompe en tiempo de ejecucion. El cursor de la pagina siguiente viaja en el
+    header `X-Next-Cursor`; su ausencia es la ultima pagina.
+
+    `app/core/pagination.py` no se toca (C-02, CRITICO): `filtros.limit`
+    llega tal cual a `acotar_tamano` adentro de `paginar`, sin revalidarlo
+    acá con otro criterio — pedir mas del maximo se acota, no falla.
+    """
+    pagina = await _servicio(sesion).listar_paginado(
+        filtros, cursor=filtros.cursor, tamano=filtros.limit
+    )
+    if pagina.cursor_siguiente is not None:
+        respuesta.headers["X-Next-Cursor"] = pagina.cursor_siguiente
+    return [_salida(v, concesion) for v in pagina.items]
 
 
 @router.get(
@@ -133,15 +160,139 @@ async def obtener_vehiculo(
     return _salida(await _servicio(sesion).obtener(vehiculo_id), concesion)
 
 
+@router.get(
+    "/{vehiculo_id}/history",
+    response_model=list[HistorialDeEstado],
+    summary="La linea de tiempo de un vehiculo",
+    description=(
+        "Del cambio mas reciente al mas viejo. Mismo permiso que listar/obtener "
+        "(`vehicles:read`), pero SIN el recorte de campos que ese permiso le "
+        "aplica al VEHICULO (`D-4`, design.md): es una lista blanca de otro "
+        "recurso, y aplicarla acá devolveria registros en blanco en vez de un "
+        "error."
+    ),
+)
+async def historial_de_vehiculo(
+    vehiculo_id: uuid.UUID,
+    sesion: SesionDeTenant,
+    _: Annotated[Concesion, Depends(require_permission("vehicles:read"))],
+) -> list[VehicleStatusHistory]:
+    """`T-085`.
+
+    `_servicio(sesion).obtener(...)` primero, y no directo al repositorio de
+    historial: es lo que hace que un vehiculo inexistente O de otra agencia O
+    dado de baja de la 404 identica de `VehiculoNoEncontrado` — la misma
+    respuesta que ya dan `obtener_vehiculo` y `editar_vehiculo` para los
+    mismos tres casos, sin escribir la comprobacion una segunda vez.
+
+    NO se llama a `_salida()` ni a `recortar()`: el conjunto de campos de la
+    concesion esta definido sobre el VEHICULO (`RN-ST-12`), y el historial es
+    otro recurso — `ADR-024` §3 no le pone restriccion de campos a ninguno de
+    los tres roles sobre esta fila.
+    """
+    await _servicio(sesion).obtener(vehiculo_id)
+    return list(
+        await HistorialRepository(sesion, sesion.info["tenant_id"]).listar_historial(vehiculo_id)
+    )
+
+
 @router.post(
     "",
     response_model=VehiculoSalida,
     status_code=status.HTTP_201_CREATED,
     summary="Cargar un vehiculo",
+    description=(
+        "Acepta `Idempotency-Key` (`T-078`): un reintento con la misma clave y el "
+        "mismo contenido devuelve el vehiculo ya creado en vez de crear un segundo."
+    ),
     dependencies=[Depends(require_permission("vehicles:create"))],
 )
-async def crear_vehiculo(datos: VehiculoCrear, sesion: SesionDeTenant) -> VehiculoSalida:
-    return VehiculoSalida.model_validate(await _servicio(sesion).crear(datos))
+async def crear_vehiculo(
+    datos: VehiculoCrear,
+    sesion: SesionDeTenant,
+    # `Header(alias=...)`: HTTP no distingue mayusculas en los nombres de
+    # cabecera, pero el nombre del parametro Python si necesita ser un
+    # identificador valido. `max_length=255` es el borde de `design.md`
+    # D-1 punto 4: la columna `key` de la migracion `003` es `TEXT`, sin
+    # techo, y una clave de un megabyte NO puede llegar a la base.
+    idempotency_key: Annotated[
+        str | None, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+    ] = None,
+) -> VehiculoSalida:
+    """`T-078`, `design.md` D-1. CODIGO QUE TOCA `core/idempotency.py` (CRITICO).
+
+    `sesion` se pasa a `ejecutar_idempotente`: es la MISMA transaccion que ya
+    abrio `SesionDeTenant`, y por eso `drenar()` en `db/dependencias.py` sigue
+    publicando `vehicle.created` normalmente cuando la peticion termina — la
+    opcion descartada en `design.md` (el router pidiendo su propia sesion)
+    dejaba de pasar por ahi y el evento se perdia en silencio.
+
+    `cuerpo = datos.model_dump(mode="json")`: el modelo YA VALIDADO, no los
+    bytes crudos de la peticion — dos serializaciones distintas del mismo
+    contenido (orden de claves, `2000.0` vs `2000.00`) tienen que contar
+    como el MISMO reintento, y validar primero normaliza eso.
+
+    La respuesta se guarda como el `dict` que produce `VehiculoSalida`, y
+    NUNCA `VehiculoSalidaConCosto`: `_salida()` no interviene acá, a
+    proposito (`D-1`, la precondicion del patron —
+    `test_post_vehicles_responde_la_misma_forma_para_todos_los_roles`).
+    """
+
+    async def crear() -> tuple[dict[str, Any], int]:
+        vehiculo = await _servicio(sesion).crear(datos)
+        salida = VehiculoSalida.model_validate(vehiculo).model_dump(mode="json")
+        return salida, status.HTTP_201_CREATED
+
+    respuesta, _codigo = await ejecutar_idempotente(
+        tenant=sesion.info["tenant_id"],
+        clave=idempotency_key,
+        cuerpo=datos.model_dump(mode="json"),
+        crear=crear,
+        sesion=sesion,
+    )
+    return VehiculoSalida.model_validate(respuesta)
+
+
+@router.patch(
+    "/{vehiculo_id}",
+    # `response_model=None`, igual que `listar`/`obtener`: la forma depende de
+    # la concesion (`RN-ST-12`), y un `response_model` fijo recortaria el
+    # costo tambien a quien SI puede verlo.
+    response_model=None,
+    summary="Editar un vehiculo",
+    description=(
+        "Edicion PARCIAL (`PATCH`). No admite `status`: el cambio de estado "
+        "tiene su propio endpoint porque `RN-ST-05`/`RN-ST-06` lo restringen."
+    ),
+)
+async def editar_vehiculo(
+    vehiculo_id: uuid.UUID,
+    datos: VehiculoEditar,
+    sesion: SesionDeTenant,
+    sujeto: SujetoActual,
+    concesion: Annotated[Concesion, Depends(require_permission("vehicles:update"))],
+) -> VehiculoSalida:
+    """`T-079`, `design.md` D-3.
+
+    ⚠️ ASIMETRIA DELIBERADA CON `cambiar_estado`: acá NO se llama a
+    `verificar_alcance`. Las tres celdas de `vehicles:update` son `all`
+    (`ADR-024` §3) — el `salesperson` es `all` con campos acotados y no `own`,
+    porque la autoasignacion (`assigned_user_id`) seria imposible si solo
+    pudiera tocar los vehiculos que ya tiene asignados. No es un olvido: es
+    que acá no hay alcance que verificar.
+
+    El recorte de campos SI aplica, y se hace ANTES de llamar al servicio:
+    `recortar()` es la unica lectura de `ADR-024` (via la concesion que ya
+    trajo `rbac.py`), y no hay un `if sujeto.role ==` en este router — esa
+    seria la SEGUNDA lectura de la matriz, y la segunda es la que se despega.
+    """
+    recortado = recortar(datos.model_dump(exclude_unset=True), concesion)
+    editado = await _servicio(sesion).editar(
+        vehiculo_id,
+        VehiculoEditar.model_construct(**recortado),
+        autor=uuid.UUID(sujeto.user_id),
+    )
+    return _salida(editado, concesion)
 
 
 @router.post(
@@ -168,7 +319,9 @@ async def cambiar_estado(
     # por rol, y recien en el servicio la maquina de estados. Quien no
     # alcanza el registro no se entera de en que estado esta.
     verificar_transicion(concesion, desde=vehiculo.status, hasta=cambio.status.value)
-    return VehiculoSalida.model_validate(await servicio.cambiar_estado(vehiculo_id, cambio))
+    return VehiculoSalida.model_validate(
+        await servicio.cambiar_estado(vehiculo_id, cambio, autor=uuid.UUID(sujeto.user_id))
+    )
 
 
 @router.delete(
