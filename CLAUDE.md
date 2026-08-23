@@ -168,7 +168,9 @@ Cada change de `CHANGES.md` declara: scope, nivel de gobernanza, dependencias, r
 
 13. **NUNCA una migración que rompa hacia atrás** → toda migración debe dejar funcionando a la versión **inmediatamente anterior** de la aplicación. Prohibido en un solo paso: renombrar, borrar columna o tabla, `SET NOT NULL` sin default, quitar un valor de enum, o agregar una constraint que el dato existente no cumpla. Se hace en tres despliegues: **expand → migrar → contract**.
     *`ADR-025`. No es preferencia de estilo: el despliegue azul-verde comparte una sola base entre los dos stacks, así que una migración destructiva **inutiliza el stack viejo**, que es justamente la red de seguridad de la reversión.*
-    > Lo hacen cumplir dos gates de CI: un lint de DDL destructivo —que se levanta solo con el marcador explícito `# migracion-contract:` en la migración— y la suite de integración del commit anterior corrida contra el esquema nuevo.
+    > Lo hacen cumplir dos gates de CI: un lint de DDL destructivo —que se levanta solo con un marcador explícito en la migración— y la suite de integración del commit anterior corrida contra el esquema nuevo.
+    >
+    > **Los marcadores son dos, y elegir mal el ancho es el error frecuente**: `# migracion-contract:` silencia el **archivo entero**, y `# migracion-segura:` silencia **solo esa línea**. Usá el angosto siempre que alcance — la migración `015` lo dejó escrito en el código: *"linea, no con `migracion-contract`, para no silenciar el resto del archivo"*. Un `contract:` puesto por comodidad apaga el gate para todo el DDL que venga después en el mismo archivo, incluido el que escriba otra persona dentro de seis meses.
 
 ---
 

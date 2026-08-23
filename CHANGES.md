@@ -488,9 +488,9 @@ Tres observaciones sobre la cadena:
   - `knowledge-base/01_vision_y_objetivos.md` §Alcance del MVP
 
 ### [C-05] `identidad-auth-y-tenant-endpoints`
-- **Estado**: ✅ **implementado — **60/60 tareas** al 21-ago-2026. GATE 3 abierto: C-06, C-08 y C-09 quedan desbloqueados.**
+- **Estado**: ✅ **archivado — **60/60 tareas** al 23-ago-2026.**
   - Bloques **1 a 7 completos**. Backend **870 tests** (unitarios + integración), cobertura **99.17 % líneas / 97.74 % ramas**, `ruff` / `black` / `mypy .` limpios, `openspec validate --strict` verde.
-  - **Auditoría de escenarios**: los **30** declarados en las dos capabilities tienen test, y cada nombre fue verificado contra el código. Tabla en [`verificacion.md`](openspec/changes/identidad-auth-y-tenant-endpoints/verificacion.md).
+  - **Auditoría de escenarios**: los **30** declarados en las dos capabilities tienen test, y cada nombre fue verificado contra el código. Tabla en [`verificacion.md`](openspec/changes/archive/2026-08-23-identidad-auth-y-tenant-endpoints/verificacion.md).
   - **Un ADR nuevo salió de la implementación**: [`ADR-035`](docs/adr/ADR-035-aceptar-la-invitacion-sin-token-propio.md) — `accept-invitation` no emite un token propio. `ADR-026` §4 lo pedía público *"con un token de invitación"* y ningún documento definía de dónde salía ese token; emitirlo contradecía el propósito del propio ADR, que existe para que el sistema no tenga *"lógica de reseteo propia que auditar"*. Tener un access token válido de Keycloak ya prueba que la persona aceptó.
   - **Dos artefactos decían lo contrario de lo que corresponde y se corrigieron con su razón escrita**: la tarea `4.8` y el escenario *"El email no se libera con la baja"*. El índice `ux_users_tenant_email` es parcial por `deleted_at` por una decisión del bloque 1 **con su razón documentada** —la reincorporación de un empleado sería imposible—, y `make seed` depende de ese comportamiento.
   - ⚠️ **Dos cosas quedan fuera y están escritas**: el rol de aplicación puede leer `super_admins` (revocarlo es una migración y **C-09 necesita esa tabla**: con qué rol es arquitectura del espacio administrativo), y **desasignar** una sucursal no existe —`user_branches` no tiene `deleted_at`, y quitarla conservando el histórico que `D-7` exige necesita migración y decisión—.
@@ -500,7 +500,7 @@ Tres observaciones sobre la cadena:
   - ⚠️ **Hallazgo: `mfa_secret` es el segundo `password_hash`.** `spec-tecnica` §3.3 le da a `users` una columna `mfa_secret varchar(255)` justo al lado de la de contraseña. Es una credencial: `plan-seguridad` §112 pone la MFA del lado de Keycloak y [`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) ya retiró los endpoints `/auth/mfa/*`. **`IN-06` documentó la contradicción de la contraseña y pasó de largo por la de al lado.** Tampoco se crea `mfa_enabled`: es un hecho de Keycloak y copiarlo agrega un espejo que envejece en silencio. Ver `design.md` `D-2`.
   - ✅ **Guardián extendido**: `tests/unit/test_arquitectura.py` ya recorría el AST de `app/**` bloqueando `password_hash`; ahora también `mfa_secret`. Verificado por sonda: detecta la columna declarada. Se agregó **antes** de que exista la migración, que es cuando la columna se copiaría de la spec sin que nadie la mire.
   - 🔜 **La implementación es una sola pasada** contra un contrato ya revisado. La tarea `0.1` (ratificación de `E-001`) quedó ✅ **cerrada el 20-ago**; la `0.3` (encabezado de `ADR-017`) también. La puerta que queda abierta es la **`0.2`** — y la cierra C-02, no este change.
-  - Detalle en [`openspec/changes/identidad-auth-y-tenant-endpoints/tasks.md`](openspec/changes/identidad-auth-y-tenant-endpoints/tasks.md).
+  - Detalle en [`openspec/changes/archive/2026-08-23-identidad-auth-y-tenant-endpoints/tasks.md`](openspec/changes/archive/2026-08-23-identidad-auth-y-tenant-endpoints/tasks.md).
 - **Rango**: `T-021`, `T-022`, `T-023`, `T-024`, `T-025`, `T-026`, `T-027` (7 tareas)
 - **Scope**:
   - Migración `users` + `user_branches` (N:M usuario↔sucursal) con `user_role_enum` — la forma del enum sale de `IN-01`/`IN-02` (resueltos en C-02). **`password_hash` NO se crea** ([`ADR-026`](docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md))
@@ -715,13 +715,18 @@ Tres observaciones sobre la cadena:
   - `knowledge-base/02_descripcion_general.md` §Multi-tenancy (ADR-006)
 
 ### [C-14] `vehiculos-modelo-y-servicios`
-- **Estado**: 🟡 **parcial — la mitad está escrita y el índice decía `[ ]`.** Auditado contra el código el 22-ago-2026.
+- **Estado**: ✅ **completo — 52/52 tareas** (23-ago-2026). Suite **943 → 995 tests**, 0 fallas. Cobertura **99.36 % líneas / 98.20 % ramas** (sube desde 99.35/98.17). `ruff`, `black` y `mypy .` limpios sobre 146 archivos — verificados, no solo reportados.
+  - Los huecos que quedaban se cerraron en este change: migración **`019_vehicle_status_history`** append-only (`REVOKE UPDATE, DELETE`, conserva `SELECT, INSERT`, patrón de la `016`), `historial.py` (modelo + repositorio + registrador), **`StockService.editar` + evento `vehicle.updated`**, y la importación masiva —que construía `Vehicle` directo, salteando el servicio— ahora también deja historial.
+  - ⚠️ **`dar_de_baja` NO deja fila de historial**, y está anclado en un test como intencional. Si algún día se espera lo contrario, ese test es la conversación.
+  - 📌 **Lección: el blast radius de una FK sobre una entidad central no está en la migración, está en los tests.** Hacer `autor` obligatorio en `cambiar_estado`, más la FK compuesta `changed_by`↔`users` y la `RESTRICT` de `vehicle_id`↔`vehicles`, rompió **seis archivos de test de otros módulos**: todos los que armaban un `Sujeto` con UUID sintético sin usuario real detrás, y las limpiezas que hacían `DELETE FROM vehicles` a mano. Ninguno era un test malo; eran tests que fabricaban identidades de mentira porque nada se lo impedía. Tenelo en cuenta antes de agregar la próxima FK.
+  - 🔎 **Hallazgo previo corregido**: se había reportado que el test que `rbac.py` afirma tener en su docstring no existía. Sí existía (`test_la_lista_blanca_del_vendedor_es_el_esquema_de_salida_vigente`), pero verifica la propiedad **indirectamente** —vía la celda de la matriz, sin nombrar la constante—, y por eso un `grep` de `CAMPOS_DE_VEHICULO_SIN_COSTO` sobre `tests/` daba vacío. Se agregó uno que la nombra. **Un grep de la constante no prueba ausencia de cobertura.**
   - ✅ **Lo construyó la rebanada de la demo** (`ESC-003`), sin pasar por el ciclo `propose`/`archive` —que esa escalación autorizó a saltear— y **nadie actualizó este índice**: migración `011_vehicles` con los tres enums, `VehicleRepository`, schemas, `StockService.crear` / `.cambiar_estado` / `.dar_de_baja`, la máquina de estados `TRANSICIONES_PERMITIDAS` (`RN-ST-05`) y los validadores argentinos de patente y chasis. `IN-07` resuelto por [`ADR-031`](docs/adr/ADR-031-dominio-opcional-y-los-seis-estados-del-vehiculo.md).
   - ✅ **Eventos de dominio, 22-ago-2026** — `vehicle.created`, `vehicle.status_changed` (con `from`/`to`) y `vehicle.archived`, por **outbox transaccional** ([`ADR-036`](docs/adr/ADR-036-outbox-transaccional-para-eventos-de-dominio.md)). Es el **primer productor de eventos del sistema**: `core/events.py` existía desde `T-016` y no lo usaba ningún módulo de producción. Migración `017_outbox_events` con las tres capas.
     - **El payload es mínimo y es una decisión de seguridad**: un evento no tiene quién pregunta, así que `acquisition_cost_ars` no viaja — si viajara, `RN-ST-12` se evaporaría por un stream de Redis sin que ningún test de permisos se enterara.
     - ⚠️ **Sin recuperación automática.** Una fila que no se publicó queda con `published_at IS NULL` y **nadie la reintenta**: el relay necesita leer cruzando tenants, y ese rol no existe. `ADR-036` lo difiere junto a `super_admins` — es la misma pregunta sobre el espacio administrativo que C-09 tiene que contestar.
-  - ⛔ **Falta**: `vehicle.updated` (no hay `PATCH`, ver C-15) y la migración `vehicle_status_history` — el schema `HistorialDeEstado` está escrito y **la tabla no existe**. La KB la pide **append-only con `UPDATE`/`DELETE` revocados en la base** (§Patrones aplicados).
-  - ⏳ **Sin verificar**: `IN-11` (¿la reserva se libera sola a los 7 días?) sigue sin decidirse, y la máquina de estados ya está escrita sin esa regla.
+  - ~~⛔ **Falta**: `vehicle.updated` y la migración `vehicle_status_history`~~ ✅ **CERRADO el 23-ago-2026.** La tabla existe, es append-only con `UPDATE`/`DELETE` revocados en la base como pedía la KB, y `HistorialDeEstado` pasó a `changed_by`/`changed_at` sin `notes` (gana N1, `spec-tecnica` §3.4). El `PATCH` que expone `vehicle.updated` por HTTP es C-15.
+  - ✅ **`IN-11` cerrado por completo, 23-ago-2026** — [`ADR-031`](docs/adr/ADR-031-dominio-opcional-y-los-seis-estados-del-vehiculo.md) fijó los seis estados y [`ADR-037`](docs/adr/ADR-037-la-reserva-no-vence-sola.md) resolvió la única pregunta que ese ADR había dejado abierta para Dirección: **la reserva NO se libera sola a los 7 días.** `reserved → available` es manual y ya estaba en `TRANSICIONES_PERMITIDAS`. Cero código nuevo: lo que cambia es que la máquina de estados pasa de *escrita sin decidir* a **ratificada**.
+  - 📐 **Change de cierre, y por eso sus delta specs cubren solo una parte de la capacidad.** Lo ya construido entró por `ESC-003` **sin pasar por OpenSpec**, así que no tiene specs de las que derivar. Al archivar, las specs principales van a describir menos de lo que el código hace: la diferencia es deuda de especificación heredada, no un hueco de este change.
 - **Rango**: `T-071`…`T-077`, `T-084`, `T-086` (9 tareas)
 - **Scope**:
   - Migración `vehicles` + enums asociados (`vehicle_status_enum`, condición, combustible, transmisión) — **`domain_plate` nullable o no sale de `IN-07`**
@@ -732,12 +737,16 @@ Tres observaciones sobre la cadena:
   - Migración `vehicle_status_history` (auditoría de cambios de estado)
   - Validadores del dominio argentino: **patente** (formatos viejo `AAA000` y Mercosur `AA000AA`) y número de chasis
   - Tests: transiciones inválidas rechazadas; unicidad de dominio por tenant; que cada mutación emita su evento
+- ⚠️ **Hallazgo abierto — `internal_notes` es una celda de [`ADR-024`](docs/adr/ADR-024-matriz-rbac-canonica.md) §6 que apunta a una columna que no existe** (detectado el 23-ago-2026 al proponer este change). `backend/app/core/rbac.py:427` declara `CAMPOS_DE_VEHICULO_PARA_VENDEDOR = {"internal_notes", "assigned_user_id"}` y su docstring dice *"llega con C-14"*. No llegó: no está en `models.py`, ni en `VehiculoEditar`, ni en ninguna migración.
+  - **C-14 decide NO agregarla**, y no por prudencia: hay una contradicción de fondo que una columna no arregla. `ADR-024` le da al `salesperson` permiso de **escritura** sobre el campo pero **no lo incluye** en su conjunto de lectura (`CAMPOS_DE_VEHICULO_SIN_COSTO`) — podría escribir algo que no puede leer. **Se cierra con una enmienda al ADR, no con una migración.**
+  - **No bloquea a C-15**: `recortar()` sobre un cuerpo que no declara el campo deja al vendedor con `assigned_user_id`, que es lo correcto. C-15 fija ese comportamiento con un test para que el hueco sea visible en la suite.
+- ⚠️ **El test que `rbac.py` afirma tener no existe.** El docstring de `CAMPOS_DE_VEHICULO_SIN_COSTO` dice *"un test lo compara contra el esquema para que la copia no se despegue"*. Ningún archivo de `backend/tests/` menciona esa constante: la lista de 23 campos puede despegarse de `VehiculoSalida` sin que nada se ponga rojo, y lo que cubre es `RN-ST-12`. **En scope de C-14** (tarea 5.3).
 - **Dependencias**: `C-02`, `C-04`, `C-05`, `C-13`
 - **Governance**: **ALTO** — `vehicles` es la entidad central que CRM, publicación y permutas referencian, y la máquina de estados gobierna el ciclo comercial. Proponer y esperar revisión.
 - **Bloqueantes a resolver (al inicio del change)**:
   - **`IN-07`** — `vehicles.domain_plate` **`NOT NULL`** (`spec-tecnica` §3.4, reforzado por el glosario constitucional: *"un vehículo se identifica unívocamente dentro de un tenant por su dominio"*) vs **nullable** (plan T-071) vs *"patente **o** chasis (opcional)"* (`manual-usuario` §2.7.1). Es una columna `NOT NULL` en una migración: no se puede escribir sin decidir. Y hay un caso de negocio real detrás: **un 0 km o un usado recién recibido en permuta todavía no tiene patente**, lo que sugiere que la spec está equivocada. Resolución propuesta: nullable, con índice `UNIQUE (tenant_id, domain_plate) WHERE deleted_at IS NULL AND domain_plate IS NOT NULL` y un `CHECK (domain_plate IS NOT NULL OR chassis_number IS NOT NULL)`.
   - *Heredado de C-04*: si `IN-04` se resolvió en USD, los campos `vehicles.price_ars`/`price_usd` se renombran acá con el mismo criterio uniforme.
-- **No bloqueante relevante**: `IN-11` — los estados del vehículo no coinciden: **6** en spec y plan (`available`, `reserved`, `sold`, `in_workshop`, `in_preparation`, `archived`), **5** en `historias-usuario` HU-E2-004 (sin `archived`), **5 distintos** en `manual-usuario` §4.2.3 (sin `en taller`, con `Pausado`). `Pausado` es casi seguro el **estado de publicación**, no del vehículo — el manual confunde ambos conceptos. El manual además agrega una regla que no está en ningún otro documento: *"la reserva se libera automáticamente a los 7 días"*. Decidir si esa regla existe **antes** de escribir la máquina de estados.
+- ~~**No bloqueante relevante**~~ ✅ **RESUELTO** (`ADR-031` + `ADR-037`): `IN-11` — los estados del vehículo no coincidían: **6** en spec y plan (`available`, `reserved`, `sold`, `in_workshop`, `in_preparation`, `archived`), **5** en `historias-usuario` HU-E2-004 (sin `archived`), **5 distintos** en `manual-usuario` §4.2.3 (sin `en taller`, con `Pausado`). `Pausado` es casi seguro el **estado de publicación**, no del vehículo — el manual confunde ambos conceptos. El manual además agregaba una regla que no está en ningún otro documento: *"la reserva se libera automáticamente a los 7 días"*. **Descartada el 23-ago-2026 por [`ADR-037`](docs/adr/ADR-037-la-reserva-no-vence-sola.md)**: `manual-usuario` es N4 y no hay empate que desempatar —diez documentos callan y uno afirma—; además un vencimiento silencioso es peor producto que uno manual.
 - **Leer antes**:
   - `knowledge-base/04_modelo_de_datos.md` §Dominio Stock, §`vehicle_status_enum`, §Validadores específicos del dominio argentino
   - `knowledge-base/05_reglas_de_negocio.md` §RN-ST (stock / vehículos)
@@ -746,15 +755,25 @@ Tres observaciones sobre la cadena:
   - `knowledge-base/02_descripcion_general.md` §Comunicación entre módulos (eventos de dominio)
 
 ### [C-15] `vehiculos-api`
-- **Estado**: 🟡 **parcial — cinco endpoints existen y el índice decía `[ ]`.** Auditado contra el código el 22-ago-2026.
-  - ✅ **Existen**: `GET /vehicles` (con filtros), `GET /vehicles/{id}`, `POST /vehicles`, `POST /vehicles/{id}/status`, `DELETE /vehicles/{id}`, más la importación masiva. Todos con `require_permission` y tests de integración de aislamiento.
-  - ✅ **La ficha del frontend los consume** desde el 22-ago-2026 — `GET /vehicles/{id}` estaba implementado y **ninguna pantalla lo llamaba**.
-  - ⛔ **Falta, y el síntoma son tres schemas transcriptos sin consumidor**:
+- **Estado**: ✅ **completo — 66/66 tareas** (23-ago-2026). Backend **1048 tests** (baseline C-14: 995). `ruff`/`black`/`mypy .` limpios; frontend `eslint`/`tsc`/`prettier` limpios con **180/180** tests.
+  - **Entregado**: `PATCH /vehicles/{id}`, `GET /vehicles/{id}/history`, **paginación por cursor** en el listado (cuerpo array + cursor en el header `X-Next-Cursor`, la convención de `knowledge-base/02` §148) e **`Idempotency-Key`** en el `POST`. `docs/openapi.yaml` regenerado, 25 rutas.
+  - **Latencia del listado**, con 1000 vehículos sembrados: **p50 12.0 ms · p95 19.7 ms · máx 25.5 ms**, contra el objetivo de 200 ms de [`ADR-030`](docs/adr/ADR-030-objetivo-de-ingenieria-y-slo-de-latencia.md). **Cumple** — con la salvedad de que se midió *in-process*, sin red, Keycloak ni proxy: es un piso optimista, no el número de producción.
+  - 🔑 **El cambio a `app/core/idempotency.py` (C-02, CRÍTICO)**: parámetro **opcional y aditivo** `sesion: AsyncSession | None = None`. Con `None` dispara exactamente el camino anterior, así que `core/events.py` —único caller previo— no cambia de comportamiento. Aprobado explícitamente por el usuario. **C-15 es el primer endpoint HTTP idempotente del sistema y sienta el patrón para todos los `POST` que vengan.**
+  - ⚠️ **Nuevo gate de arquitectura**: `backend/tests/unit/test_convenciones_de_ruta.py` (`D-6`) recorre las rutas realmente expuestas y exige `cursor`/`limit` en los listados e `Idempotency-Key` en las creaciones. Detecta por **tipo de retorno resuelto**, no por forma del path — un heurístico por path marcaba falsos positivos en `/tenant/me`, `/auth/me`, `/health` y `/ready`, que es el "cajón de excepciones" que `D-6` quería evitar.
+  - 📋 **Deuda contada que ese gate destapó — 9 endpoints fuera de `vehicles` que no cumplen**, todos declarados como excepción con motivo, ninguno corregido acá:
+    - `GET /plans` (C-04) · `GET /catalog/brands` y `GET /catalog/brands/{id}/models` (C-13) · `GET /imports` (C-17) · `GET /users` y `POST /users/invitations` (C-12) · `GET /branches` y `POST /branches` (**C-05, ya archivado: deuda sin change asignado**)
+  - ✅ **Cobertura: 99.3746 % líneas / 98.25 % ramas** — **supera** el baseline de C-14 (99.36 / 98.20). `app/core/idempotency.py` queda al **100 % de líneas y ramas**.
+    - 📌 **Y la lección vale más que el número.** La primera medición dio 99.31 / 97.75 —**decreciendo**, contra la Regla Dura 5— y el diagnóstico fue que las dos líneas descubiertas eran intesteables: una por ser *"código muerto por diseño"* y la otra por *"exigir mockear la base"*, prohibido por la Regla Dura 8. **Las dos conclusiones eran falsas.**
+    - La rama `status_code IS NULL` **sí es alcanzable**, por el **caso cruzado**: `core/events.py` sigue usando el camino viejo (`sesion=None`), donde la reserva commitea por separado, y la fila huérfana que deja al morir es perfectamente visible para una petición posterior que entre por el camino compartido. Se cubre recreando esa fila con SQL real.
+    - El re-raise del `DBAPIError` se provoca **sin mockear nada**: llamando con un tenant distinto al de la sesión, la política RLS `WITH CHECK` de la migración `003` rechaza la fila con sqlstate `42501`.
+    - **En un proyecto que prohíbe los mocks, "no se puede testear sin mockear" merece desconfianza por defecto.** Acá fue una conclusión apresurada dos veces seguidas, y ambas costaban un test cada una.
+  - ~~⛔ **Falta, y el síntoma son tres schemas transcriptos sin consumidor**~~ — **los cuatro se escribieron el 23-ago-2026** (pendiente de verificación por suite, ver arriba). El diagnóstico original se conserva porque explica de dónde venía cada hueco:
     - `PATCH /vehicles/{id}` — **`VehiculoEditar` está escrito y ningún endpoint lo usa**
     - `GET /vehicles/{id}/history` — **`HistorialDeEstado` está escrito y la tabla no existe** (es C-14)
     - **paginación por cursor** — el listado devuelve todo, sin `limit` ni `cursor`. ⚠️ Ojo: `app/core/pagination.py` ya existe y el stock no lo usa
     - **`Idempotency-Key` en el `POST`** — `core/idempotency.py` existe y este endpoint no lo engancha
   - 📌 **Lección, y por eso queda escrita acá**: cuando `ESC-003` autorizó saltear el ciclo de OpenSpec, el costo no fue el papeleo — fue que **el estado del proyecto dejó de ser legible**. Un change marcado pendiente con la mitad escrita hace que el próximo planifique contra una base falsa. Verificar el índice contra el código antes de elegir el siguiente frente es obligatorio, no prolijidad.
+  - 📐 **Change de cierre, y por eso sus delta specs cubren solo una parte de la capacidad.** Lo ya construido entró por `ESC-003` **sin pasar por OpenSpec**, así que no tiene specs de las que derivar. Al archivar, las specs principales van a describir menos de lo que el código hace: la diferencia es deuda de especificación heredada, no un hueco de este change.
 - **Rango**: `T-078`…`T-083`, `T-085`, `T-087` (8 tareas)
 - **Scope**:
   - `POST /api/v1/vehicles` (con `Idempotency-Key`), `PATCH /api/v1/vehicles/{id}`, `DELETE /api/v1/vehicles/{id}` (archivar)
@@ -771,6 +790,17 @@ Tres observaciones sobre la cadena:
   - `knowledge-base/05_reglas_de_negocio.md` §RN-ST, §RN-PL (límites de plan)
   - `knowledge-base/11_testing_y_calidad.md` §Pruebas críticas de aislamiento multi-tenant
   - `knowledge-base/03_actores_y_roles.md` §RBAC — Vista por recurso
+
+> ⚠️ **AUDITAR ANTES DE PLANIFICAR — C-12, C-13 y C-17 dicen `[ ]` y su código ya existe.**
+>
+> Detectado el 23-ago-2026 por el gate `test_convenciones_de_ruta.py`, que al recorrer las rutas
+> **realmente expuestas** encontró endpoints vivos de tres changes marcados pendientes:
+> `router_usuarios.py` (C-12), el catálogo en `tenancy/router.py` (C-13) y `router_importacion.py` (C-17).
+>
+> Es **el mismo síntoma** que ya obligó a sincerar C-14 y C-15: el índice describe un estado que el
+> código dejó atrás. La causa raíz no es descuido — es que este proyecto tiene gates fuertes para lo
+> que está escrito y **ninguno para lo que está declarado y no escrito**. Hasta que exista ese gate,
+> **verificar el estado real contra el código es obligatorio antes de elegir el próximo frente.**
 
 ### [C-16] `fotos-de-vehiculos`
 - **Estado**: `[ ]` pendiente
@@ -1178,7 +1208,7 @@ Tres observaciones sobre la cadena:
 | C-12 | `usuarios-invitaciones-y-settings` | 1.1 | T-054…T-057, T-061 | 5 | MEDIO | C-05, C-07, C-10 | — |
 | C-13 | `catalogo-de-vehiculos` | 1.2 | T-063…T-070 | 8 | BAJO | C-02, C-07 | — |
 | C-14 | `vehiculos-modelo-y-servicios` | 1.2 | T-071…T-077, T-084, T-086 | 9 | ALTO | C-02, C-04, C-05, C-13 | `IN-07` |
-| C-15 | `vehiculos-api` | 1.2 | T-078…T-083, T-085, T-087 | 8 | MEDIO | C-02, C-14 | — |
+| C-15 | `vehiculos-api` | 1.2 | T-078…T-083, T-085, T-087 | 8 | MEDIO ⚠️ **un bloque CRÍTICO** (`app/core/idempotency.py`) | C-02, C-14 | — |
 | C-16 | `fotos-de-vehiculos` | 1.2 | T-088…T-092 | 5 | MEDIO | C-06, C-14 | — |
 | C-17 | `importacion-csv-de-stock` | 1.2 | T-093…T-097 | 5 | MEDIO | C-14 | — |
 | C-18 | `busqueda-opensearch` | 1.2 | T-098…T-100, T-114 | 4 | ALTO | C-14, C-15 | — |
