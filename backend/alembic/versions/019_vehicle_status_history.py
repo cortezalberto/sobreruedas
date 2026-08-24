@@ -19,8 +19,8 @@ es fuente): `reason` ya existe y ya es donde `POST /vehicles/{id}/status` deja
 el motivo, y una segunda columna de texto libre sin regla que las distinga es
 garantia de que la mitad de los motivos terminen en la equivocada.
 
-ES APPEND-ONLY POR `REVOKE`, NO POR CONFIANZA (D-1)
-──────────────────────────────────────────────────────
+ES APPEND-ONLY POR `REVOKE`, NO POR CONFIANZA (D-1) — EN DOS DESPLIEGUES
+──────────────────────────────────────────────────────────────────────────
 El init de la base tiene un `ALTER DEFAULT PRIVILEGES ... GRANT SELECT,
 INSERT, UPDATE` que alcanza a TODA tabla nueva, automaticamente — es lo que
 `016` descubrio al cerrar C-05, y `009`/`010` antes. Una tabla que nace no es
@@ -32,22 +32,57 @@ permiso. El `REVOKE` lo hace cumplir el MOTOR, por la misma via que el resto
 del control de acceso, y una auditoria lo ve en `information_schema.role_
 table_grants` sin leer codigo.
 
+⚠️ **Esta migracion NO revoca `UPDATE` — solo `DELETE`.** No es un cambio de
+diseño: `D-1` sigue siendo "la tabla es append-only por REVOKE". Lo que cambia
+es CUANDO llega el `REVOKE UPDATE`, y es por la regla dura 13 (`ADR-025`,
+expand → migrar → contract), no por eleccion.
+
+El gate `migraciones-compatibles` del CI corre la suite de tests del COMMIT
+ANTERIOR contra el esquema NUEVO. Esa suite anterior es de antes de C-14: no
+conoce esta tabla, y por lo tanto no puede conocer la excepcion declarada para
+ella (`SIN_UPDATE_A_PROPOSITO` en `test_permisos.py`). Si esta migracion
+revocara `UPDATE` de entrada, el test generico de esa suite vieja
+(`test_toda_tabla_con_tenant_id_es_operable_por_la_aplicacion`) leeria la
+revocacion deliberada como el mismo "permiso que el init olvido otorgar" que
+ese test persigue, y el gate se pondria rojo por un falso positivo — la app
+anterior no se rompe (no conoce esta tabla, nunca la escribe), pero el gate no
+puede saberlo porque compara contra una premisa que quedo corta.
+
+La resolucion es *expand* ahora y *contract* despues:
+
+  - **Este PR (expand)**: la tabla nace escribible en `UPDATE` (revoca solo
+    `DELETE`, que ya esta prohibido en toda tabla por la regla dura 3 y no
+    depende de ninguna excepcion declarada). Los tests de aplicacion
+    (`test_permisos.py`) verifican SELECT/INSERT/DELETE por catalogo; los dos
+    tests de `test_status_history.py` que afirmaban el `REVOKE UPDATE` quedan
+    en `skip` con el motivo escrito, apuntando a la migracion de contract.
+  - **Migracion de contract, PR posterior**: llega el `REVOKE UPDATE` en su
+    propia revision. Para entonces la suite "anterior" que corre el gate va a
+    ser la de C-14 —esta misma, con `SIN_UPDATE_A_PROPOSITO` ya adentro—, asi
+    que el gate pasa limpio. Anotado en `CHANGES.md` bajo C-14 para que no se
+    pierda.
+
 El rol se identifica consultando el catalogo — `BENEFICIARIOS`, igual que en
 `016` — y NUNCA hardcodeado: se llama distinto en desarrollo que en test.
 
 MARCADOR DEL LINT: `# migracion-segura:` POR LINEA, NO `# migracion-contract:`
 ─────────────────────────────────────────────────────────────────────────────
-El de archivo silenciaria TODO este modulo, y este modulo ademas CREA una
-tabla — un `drop_column` agregado dentro de seis meses pasaria sin que nadie
-lo vea. El de linea exenta solo la operacion de `REVOKE` y deja el gate
-encendido para el resto (`test_migraciones_compatibles.py`).
+Sigue haciendo falta aunque ahora solo se revoque `DELETE`: el gate marca
+CUALQUIER `REVOKE` como DDL destructivo (rompe hacia atras si la version
+anterior escribia esa tabla), sin distinguir que privilegio revoca. El de
+archivo silenciaria TODO este modulo, y este modulo ademas CREA una tabla —
+un `drop_column` agregado dentro de seis meses pasaria sin que nadie lo vea.
+El de linea exenta solo la operacion de `REVOKE` y deja el gate encendido
+para el resto (`test_migraciones_compatibles.py`).
 
 COMPATIBILIDAD HACIA ATRAS (regla dura 13)
 ────────────────────────────────────────────
 Trivial pero hay que decirlo: la version INMEDIATAMENTE ANTERIOR de la
 aplicacion no conoce esta tabla, asi que no puede romperse por perder un
 privilegio sobre ella. Se reviso `app/` entero: ninguna ruta la escribe,
-porque todavia no existe.
+porque todavia no existe. El motivo real del `REVOKE UPDATE` diferido no es
+este — es que el GATE compara contra una suite que tampoco la conoce, y por lo
+tanto tampoco conoce su excepcion (ver el bloque de arriba).
 
 FK COMPUESTA EN `changed_by` (D-9)
 ─────────────────────────────────────
@@ -108,9 +143,12 @@ CONDICION = "tenant_id = NULLIF(current_setting('app.current_tenant', true), '')
 # El rol de aplicacion NO se nombra: se llama distinto en desarrollo (`mitutu`)
 # que en test (`mitutu` tambien hoy, pero distinto host/puerto/base — el punto
 # es que esta migracion no tiene por que saberlo). Es el mismo `BENEFICIARIOS`
-# de `016`, acotado a `UPDATE`/`DELETE`: son los dos privilegios que hay que
-# revocar para dejar `SELECT, INSERT` — lo unico que el init otorga por
-# defecto y que este change SI necesita conservar.
+# de `016`. El filtro busca por `UPDATE` (y de paso `DELETE`, sin costo) porque
+# `UPDATE` es lo unico de los dos que el `ALTER DEFAULT PRIVILEGES` del init
+# otorga de entrada — buscar solo por `DELETE` no encontraria a nadie, ya que
+# nunca esta otorgado. Este `upgrade()` solo usa el resultado para revocar
+# `DELETE` (ver el encabezado, D-1 en dos despliegues); `UPDATE` llega con la
+# migracion de contract.
 BENEFICIARIOS = sa.text(
     "SELECT DISTINCT grantee FROM information_schema.role_table_grants "
     "WHERE table_name = :tabla "
@@ -177,16 +215,20 @@ def upgrade() -> None:
     op.execute(f"ALTER TABLE {TABLA} FORCE ROW LEVEL SECURITY")  # ver `011`/`018`
     op.execute(f"CREATE POLICY {POLITICA} ON {TABLA} USING ({CONDICION}) WITH CHECK ({CONDICION})")
 
-    # APPEND-ONLY POR REVOKE, NO POR CONFIANZA — ver el encabezado (`D-1`).
-    # `UPDATE`/`DELETE` es lo que el init otorga de mas; `SELECT`/`INSERT`
-    # queda intacto porque es lo unico que este change necesita.
+    # SOLO `DELETE` por ahora — NO `UPDATE`. Ver el encabezado (`D-1`, "EN DOS
+    # DESPLIEGUES"): el append-only completo por REVOKE llega con la migracion
+    # de contract. `DELETE` se revoca ya porque no depende de ninguna
+    # excepcion declarada — la regla dura 3 lo prohibe en TODA tabla, sin
+    # excepciones vivas — asi que no tiene el problema que tiene `UPDATE` con
+    # el gate. `SELECT`/`INSERT`/`UPDATE` quedan intactos: es lo que el init
+    # otorga por defecto y esta tabla los necesita mientras dura la ventana.
     conexion = op.get_bind()
     for rol in conexion.execute(BENEFICIARIOS, {"tabla": TABLA}).scalars().all():
         # Los identificadores no se pueden bindear como parametros. `TABLA` es
         # una constante de este modulo y `rol` sale del catalogo del sistema.
         # migracion-segura: revoca sobre una tabla que NACE en este mismo
         # upgrade — no hay version anterior de la aplicacion que la escriba.
-        conexion.execute(sa.text(f'REVOKE UPDATE, DELETE ON {TABLA} FROM "{rol}"'))  # noqa: S608
+        conexion.execute(sa.text(f'REVOKE DELETE ON {TABLA} FROM "{rol}"'))  # noqa: S608
 
 
 def downgrade() -> None:

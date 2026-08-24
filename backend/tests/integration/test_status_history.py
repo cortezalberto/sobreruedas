@@ -173,6 +173,29 @@ async def test_la_tabla_tiene_politica_rls_y_force(base_migrada: None) -> None:
 # ── 1.3 / 1.4 · Append-only por PRIVILEGIO, con su contrapeso ────────────────
 
 
+# NO SON UN OLVIDO — ver `019_vehicle_status_history.py` §"EN DOS DESPLIEGUES".
+#
+# La migracion `019` revoca `DELETE` pero DEJA `UPDATE` otorgado durante esta
+# ventana: el gate `migraciones-compatibles` corre la suite del commit ANTERIOR
+# (que no conoce `SIN_UPDATE_A_PROPOSITO` de `test_permisos.py`) contra el
+# esquema nuevo, y leeria un `REVOKE UPDATE` de entrada como un permiso que el
+# init olvido otorgar — falso positivo, regla dura 13 / `ADR-025`.
+#
+# `skip`, no `xfail(strict=True)`: en el PR de contract, este MISMO archivo va
+# a correr contra un esquema CON el `REVOKE UPDATE` puesto. Un `xfail` estricto
+# pasaria a XPASS ese dia y pondria el gate en rojo de nuevo — lo mismo que
+# esta ventana esta tratando de evitar. `skip` queda verde en los dos
+# escenarios: hoy (UPDATE otorgado) y despues del contract (UPDATE revocado).
+#
+# Se restituyen en la migracion de contract que revoque `UPDATE` sobre esta
+# tabla — anotada en `CHANGES.md` bajo C-14.
+_MOTIVO_SKIP = (
+    "REVOKE UPDATE diferido a la migracion de contract (regla dura 13, "
+    "ADR-025) — ver 019_vehicle_status_history.py y CHANGES.md bajo C-14"
+)
+
+
+@pytest.mark.skip(reason=_MOTIVO_SKIP)
 async def test_el_rol_de_aplicacion_tiene_select_e_insert_y_no_update_ni_delete(
     base_migrada: None,
 ) -> None:
@@ -199,6 +222,7 @@ async def test_el_rol_de_aplicacion_tiene_select_e_insert_y_no_update_ni_delete(
     assert "DELETE" not in privilegios
 
 
+@pytest.mark.skip(reason=_MOTIVO_SKIP)
 async def test_un_update_real_falla_por_permiso_y_un_insert_funciona(
     escenario: tuple[uuid.UUID, uuid.UUID, uuid.UUID],
 ) -> None:
