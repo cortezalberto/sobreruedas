@@ -56,11 +56,13 @@ La resolucion es *expand* ahora y *contract* despues:
     (`test_permisos.py`) verifican SELECT/INSERT/DELETE por catalogo; los dos
     tests de `test_status_history.py` que afirmaban el `REVOKE UPDATE` quedan
     en `skip` con el motivo escrito, apuntando a la migracion de contract.
-  - **Migracion de contract, PR posterior**: llega el `REVOKE UPDATE` en su
-    propia revision. Para entonces la suite "anterior" que corre el gate va a
-    ser la de C-14 —esta misma, con `SIN_UPDATE_A_PROPOSITO` ya adentro—, asi
-    que el gate pasa limpio. Anotado en `CHANGES.md` bajo C-14 para que no se
-    pierda.
+  - **Migracion de contract**: llego en `020_vehicle_status_history_revoke_
+    update.py`, que revoca `UPDATE` en su propia revision. Para entonces la
+    suite "anterior" que corre el gate ya era la de C-14 —esta misma, con
+    `SIN_UPDATE_A_PROPOSITO` ya adentro—, asi que el gate paso limpio. Los dos
+    tests que quedaron en `skip` arriba se reactivaron en esa misma migracion.
+    Detalle completo en `020_vehicle_status_history_revoke_update.py` y en
+    `CHANGES.md` bajo C-14.
 
 El rol se identifica consultando el catalogo — `BENEFICIARIOS`, igual que en
 `016` — y NUNCA hardcodeado: se llama distinto en desarrollo que en test.

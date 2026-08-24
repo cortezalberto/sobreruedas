@@ -69,24 +69,25 @@ PERMISOS_PROHIBIDOS = ("DELETE", "TRUNCATE")
 
 # ESCAPE HATCH, declarado — el mismo criterio de arriba, para el otro sentido.
 #
-# `vehicle_status_history` (C-14, `design.md` D-1) es APPEND-ONLY por diseño: su
-# propia migracion (`019`) REVOCA `UPDATE` sobre si misma, a proposito, para que
-# un registro escrito no se pueda alterar ni con las credenciales de la
+# `vehicle_status_history` (C-14, `design.md` D-1) es APPEND-ONLY por diseño:
+# `019` revoca `DELETE` sobre ella y `020` revoca `UPDATE`, a proposito, para
+# que un registro escrito no se pueda alterar ni con las credenciales de la
 # aplicacion. Sin esta excepcion DECLARADA, este test leeria esa revocacion
 # deliberada como el mismo "permiso que el init olvido otorgar" que el resto del
-# archivo persigue — exactamente lo contrario de lo que `019` hizo a proposito.
+# archivo persigue — exactamente lo contrario de lo que `020` hizo a proposito.
 #
 # Escrita a mano, como `EXENTAS_DE_RLS`: una excepcion que se autodetecta no es
 # una excepcion.
 #
-# HOY TODAVIA NO TIENE EFECTO — y eso es correcto, no un error de este archivo.
-# La migracion `019` (expand, este PR) revoca `DELETE` pero **deja `UPDATE`
-# otorgado**: el `REVOKE UPDATE` se movio a una migracion de contract posterior
-# (regla dura 13, `ADR-025` — ver `019_vehicle_status_history.py`
-# §"EN DOS DESPLIEGUES"). Esta linea se ADELANTA a proposito: es permisiva
-# (solo perdona un permiso ausente, nunca exige que falte), asi que no rompe
-# nada mientras `UPDATE` sigue otorgado, y va a ser lo que haga pasar este
-# mismo gate el dia que el contract llegue y revoque `UPDATE` de verdad.
+# YA TIENE EFECTO. La migracion `019` (expand) dejo `UPDATE` otorgado a
+# proposito para no romper el gate `migraciones-compatibles` con la suite
+# anterior a C-14, que no conocia esta excepcion (regla dura 13, `ADR-025` —
+# ver `019_vehicle_status_history.py` §"EN DOS DESPLIEGUES"). Esta linea se
+# escribio ADELANTADA, en ese mismo PR, para que ya estuviera lista cuando
+# llegara el contract. `020_vehicle_status_history_revoke_update.py` revoco
+# `UPDATE` de verdad, y desde entonces esta linea es lo que hace pasar este
+# mismo test: sin ella, el `UPDATE` ausente en esta tabla se leeria como el
+# permiso que el init olvido otorgar.
 SIN_UPDATE_A_PROPOSITO = {"vehicle_status_history"}
 
 PERMISO_DENEGADO = "42501"
