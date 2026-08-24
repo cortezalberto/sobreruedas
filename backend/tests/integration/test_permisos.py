@@ -67,6 +67,28 @@ TABLA = "platform_probe"
 PERMISOS_NECESARIOS = ("SELECT", "INSERT", "UPDATE")
 PERMISOS_PROHIBIDOS = ("DELETE", "TRUNCATE")
 
+# ESCAPE HATCH, declarado — el mismo criterio de arriba, para el otro sentido.
+#
+# `vehicle_status_history` (C-14, `design.md` D-1) es APPEND-ONLY por diseño: su
+# propia migracion (`019`) REVOCA `UPDATE` sobre si misma, a proposito, para que
+# un registro escrito no se pueda alterar ni con las credenciales de la
+# aplicacion. Sin esta excepcion DECLARADA, este test leeria esa revocacion
+# deliberada como el mismo "permiso que el init olvido otorgar" que el resto del
+# archivo persigue — exactamente lo contrario de lo que `019` hizo a proposito.
+#
+# Escrita a mano, como `EXENTAS_DE_RLS`: una excepcion que se autodetecta no es
+# una excepcion.
+#
+# HOY TODAVIA NO TIENE EFECTO — y eso es correcto, no un error de este archivo.
+# La migracion `019` (expand, este PR) revoca `DELETE` pero **deja `UPDATE`
+# otorgado**: el `REVOKE UPDATE` se movio a una migracion de contract posterior
+# (regla dura 13, `ADR-025` — ver `019_vehicle_status_history.py`
+# §"EN DOS DESPLIEGUES"). Esta linea se ADELANTA a proposito: es permisiva
+# (solo perdona un permiso ausente, nunca exige que falte), asi que no rompe
+# nada mientras `UPDATE` sigue otorgado, y va a ser lo que haga pasar este
+# mismo gate el dia que el contract llegue y revoque `UPDATE` de verdad.
+SIN_UPDATE_A_PROPOSITO = {"vehicle_status_history"}
+
 PERMISO_DENEGADO = "42501"
 
 
@@ -144,7 +166,7 @@ async def test_toda_tabla_con_tenant_id_es_operable_por_la_aplicacion() -> None:
         tabla: [
             p
             for p, lo_tiene in (await permisos_sobre(rol, tabla, PERMISOS_NECESARIOS)).items()
-            if not lo_tiene
+            if not lo_tiene and not (p == "UPDATE" and tabla in SIN_UPDATE_A_PROPOSITO)
         ]
         for tabla in tablas
     }

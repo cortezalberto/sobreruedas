@@ -20,6 +20,7 @@ from app.core import auth
 from app.core.auth import RUTAS_EXENTAS, Sujeto, SujetoActual
 from app.core.rbac import (
     CAMPOS_DE_PERFIL,
+    CAMPOS_DE_VEHICULO_SIN_COSTO,
     EQUIVALENCIA_EN_GLOSARIO,
     MATRIZ_DE_PLATAFORMA,
     MATRIZ_DE_TENANT,
@@ -510,6 +511,21 @@ def test_la_lista_blanca_del_vendedor_es_el_esquema_de_salida_vigente() -> None:
 
     vendedor = MATRIZ_DE_TENANT[RolDeTenant.SALESPERSON]["vehicles:read"]
     assert vendedor.campos == frozenset(VehiculoSalida.model_fields)
+
+
+def test_campos_de_vehiculo_sin_costo_es_exactamente_vehiculo_salida() -> None:
+    """`H-b` de C-14: el guardian que el docstring de `CAMPOS_DE_VEHICULO_SIN_COSTO`
+    afirma tener y que un `grep` sobre la constante no encontraba.
+
+    El test de arriba (`test_la_lista_blanca_del_vendedor_es_el_esquema_de_
+    salida_vigente`) YA ejercita esta misma garantia, pero pasando por la celda
+    de la matriz — nunca importa la constante por nombre. Este la nombra
+    explicitamente: `RN-ST-12` se rompe si las dos listas se despegan, y tiene
+    que poder encontrarse buscando el nombre de la constante, no solo su efecto.
+    """
+    from app.modules.stock.schemas import VehiculoSalida
+
+    assert CAMPOS_DE_VEHICULO_SIN_COSTO == frozenset(VehiculoSalida.model_fields)
 
 
 def test_ningun_rol_de_tenant_cambia_el_plan_contratado() -> None:

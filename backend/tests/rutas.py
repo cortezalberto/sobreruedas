@@ -9,23 +9,41 @@ para el gate de "ninguna operacion sin declaracion de acceso".
 Copiarlo habria sido garantizar que un dia se arregle uno solo. Y este recorrido
 en particular ya se rompio una vez —ver la advertencia de `todas_las_rutas`—, asi
 que la copia no era una hipotesis: era la repeticion de un fallo conocido.
+
+C-15 SUMA UN TERCER GATE, MISMA RAZON
+──────────────────────────────────────
+`test_convenciones_de_ruta.py` (`design.md` `D-6` de `vehiculos-api`) necesita
+el mismo recorrido para verificar las dos convenciones de
+`platform/api-conventions` sobre rutas REALES: idempotencia en las creaciones,
+cursor/limit en los listados. `es_creacion`, `es_coleccion`,
+`declara_idempotency_key` y `declara_cursor_y_limit` viven aca por el mismo
+motivo que las de arriba — un tercer test que reimplemente el recorrido es un
+tercer lugar donde se puede romper y no enterarse.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import get_origin, get_type_hints
 
-from fastapi import FastAPI
+from fastapi import FastAPI, status
 from fastapi.routing import APIRoute
+from pydantic import BaseModel
 
 from app.core.auth import get_current_user
 from app.core.rbac import Concesion, Espacio, ExigePermiso, ExigeRol, Rol
 
 __all__ = [
     "alcanzables_por",
+    "declara_cursor_y_limit",
+    "declara_idempotency_key",
+    "es_coleccion",
+    "es_creacion",
     "exige_identidad",
+    "motivos_faltantes",
     "permisos_de",
     "roles_de",
+    "rutas_que_incumplen_convenciones",
     "rutas_sin_declaracion_de_acceso",
     "todas_las_rutas",
 ]
@@ -159,3 +177,112 @@ def alcanzables_por(
         and (permisos := permisos_de(ruta))
         and all(permiso in celdas for permiso, _ in permisos)
     }
+
+
+# ── D-6 de `vehiculos-api` — las dos convenciones de plataforma ─────────────
+
+
+def es_creacion(ruta: APIRoute) -> bool:
+    """Si el `POST` declara que CREA un recurso.
+
+    Se lee el `status_code` que el propio endpoint declara, `201 Created`, y no
+    la forma del path. La forma es ambigua: `POST /vehicles/import` tambien
+    tiene un path sin parametro (`/import`, no `/import/{id}`) y NO es una
+    creacion sincronica de un recurso — es `202 Accepted`, con su propio
+    mecanismo de progreso. El status code es la unica senal que no admite dos
+    lecturas, y es ademas la que los tres endpoints de creacion que existen hoy
+    (`POST /vehicles`, `POST /branches`, `POST /users/invitations`) ya
+    declaran, cada uno por su cuenta, sin que nadie se lo pidiera para esto.
+    """
+    return "POST" in (ruta.methods or set()) and ruta.status_code == status.HTTP_201_CREATED
+
+
+def es_coleccion(ruta: APIRoute) -> bool:
+    """Si el `GET` devuelve una lista.
+
+    Se lee el tipo de retorno REAL con `get_type_hints`, y no
+    `ruta.endpoint.__annotations__` a secas: todo `app/` lleva
+    `from __future__ import annotations`, que convierte las anotaciones en
+    texto (`"list[Vehiculo]"` en vez del tipo `list[Vehiculo]`), y
+    `get_origin` sobre un string siempre da `None` — el chequeo pasaria
+    siempre, calladamente, sobre cualquier endpoint.
+
+    Y NO la forma del path (sin `{param}` final): esa señal marca como
+    "coleccion" a `GET /tenant/me`, `GET /auth/me`, `/health` y `/ready`, que
+    devuelven un objeto — cuatro excepciones de puro ruido por cada gate que
+    corra, y `D-6` es explicito sobre el riesgo: *"sin este test la lista de
+    excepciones se vuelve un cajón"*. El tipo de retorno no tiene ese problema:
+    a esas cuatro rutas ni las mira.
+    """
+    if "GET" not in (ruta.methods or set()):
+        return False
+    return get_origin(get_type_hints(ruta.endpoint).get("return")) is list
+
+
+def declara_idempotency_key(ruta: APIRoute) -> bool:
+    """Si la ruta declara el header `Idempotency-Key` (por su alias HTTP)."""
+    return any(
+        (campo.alias or campo.name) == "Idempotency-Key" for campo in ruta.dependant.header_params
+    )
+
+
+def _nombres_de_query(ruta: APIRoute) -> set[str]:
+    """Los query params que la ruta expone, DESARMANDO modelos anidados.
+
+    `GET /vehicles` no declara `cursor` y `limit` como parametros sueltos:
+    viajan como CAMPOS de `FiltrosDeBusqueda` (ver el docstring de
+    `listar_vehiculos` en `modules/stock/router.py` — es deliberado, no un
+    descuido). FastAPI los desarma en el OpenAPI que genera, pero
+    `dependant.query_params` los deja agrupados en UN `ModelField` cuyo nombre
+    es el del parametro de Python (`filtros`), no el de sus campos. Sin este
+    desarme, cualquier ruta que use el mismo patron se veria sin `cursor` ni
+    `limit` aunque los tenga.
+    """
+    nombres: set[str] = set()
+    for campo in ruta.dependant.query_params:
+        anotacion = campo.field_info.annotation
+        if isinstance(anotacion, type) and issubclass(anotacion, BaseModel):
+            nombres |= set(anotacion.model_fields.keys())
+        else:
+            nombres.add(campo.alias or campo.name)
+    return nombres
+
+
+def declara_cursor_y_limit(ruta: APIRoute) -> bool:
+    """Si la ruta declara AMBOS parametros de paginacion por cursor."""
+    nombres = _nombres_de_query(ruta)
+    return "cursor" in nombres and "limit" in nombres
+
+
+def rutas_que_incumplen_convenciones(
+    app: FastAPI, *, excepciones: dict[tuple[str, str], str]
+) -> dict[tuple[str, str], str]:
+    """`(metodo, path)` -> que le falta, para cada ruta real que incumple.
+
+    Recibe la app COMPLETA, no un prefijo: las dos convenciones de
+    `platform/api-conventions` son de plataforma, no de `vehicles` — el gate
+    tiene que poder nombrar un incumplimiento tanto ahi como en cualquier otro
+    modulo. `excepciones` es `(metodo, path) -> motivo`; una entrada sin motivo
+    (cadena vacia) no excusa nada, la valida `motivos_faltantes`.
+    """
+    incumplimientos: dict[tuple[str, str], str] = {}
+    for ruta in todas_las_rutas(app):
+        for metodo in {"GET", "POST"} & (ruta.methods or set()):
+            clave = (metodo, ruta.path)
+            if excepciones.get(clave, "").strip():
+                continue
+            if metodo == "POST" and es_creacion(ruta) and not declara_idempotency_key(ruta):
+                incumplimientos[clave] = "POST de creacion sin declarar `Idempotency-Key`"
+            elif metodo == "GET" and es_coleccion(ruta) and not declara_cursor_y_limit(ruta):
+                incumplimientos[clave] = "GET de coleccion sin declarar `cursor`/`limit`"
+    return incumplimientos
+
+
+def motivos_faltantes(excepciones: dict[tuple[str, str], str]) -> set[tuple[str, str]]:
+    """Las excepciones SIN motivo — un cajón en formación.
+
+    `D-6`: *"Una excepción con nombre y razón se lee en un diff; un gate que no
+    existe, no"*. Una excepción con motivo vacío es exactamente ese cajón —
+    pasa la revisión de un diff sin que nadie tenga que justificar nada.
+    """
+    return {clave for clave, motivo in excepciones.items() if not motivo.strip()}

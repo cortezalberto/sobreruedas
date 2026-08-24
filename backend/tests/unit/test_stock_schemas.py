@@ -19,6 +19,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.modules.stock.schemas import (
+    TRANSICIONES_PERMITIDAS,
     Carroceria,
     Combustible,
     EstadoDeVehiculo,
@@ -26,6 +27,7 @@ from app.modules.stock.schemas import (
     Transmision,
     VehiculoCambioDeEstado,
     VehiculoCrear,
+    VehiculoEditar,
     VehiculoSalida,
     VehiculoSalidaConCosto,
     es_transicion_valida,
@@ -259,3 +261,110 @@ def test_un_rango_de_precios_invertido_se_rechaza() -> None:
 def test_los_filtros_son_todos_opcionales() -> None:
     """`GET /vehicles` sin parametros lista todo el stock del tenant."""
     assert FiltrosDeBusqueda().status is None
+
+
+# ── C-14 · `VehiculoEditar`: el `null` explicito se decide campo por campo ──
+#
+# `design.md` D-7: `exclude_unset` distingue "campo ausente" de "campo puesto
+# en null" en el JSON de entrada, pero nada impide mandar `{"color": null}` y
+# `color` es `NOT NULL` en la base. Sin defensa, eso seria un `IntegrityError`
+# de PostgreSQL llegandole al cliente como 500.
+
+
+@pytest.mark.parametrize("campo", ["branch_id", "mileage_km", "color", "price_ars", "features"])
+def test_editar_rechaza_el_null_explicito_sobre_campos_obligatorios(campo: str) -> None:
+    with pytest.raises(ValidationError) as fallo:
+        VehiculoEditar(**{campo: None})
+
+    errores = fallo.value.errors()
+    assert any(error["loc"] == (campo,) for error in errores)
+    assert any(campo in error["msg"] for error in errores)
+
+
+@pytest.mark.parametrize(
+    "campo",
+    ["assigned_user_id", "version_id", "price_usd", "acquisition_cost_ars", "description"],
+)
+def test_editar_acepta_el_null_explicito_sobre_campos_que_admiten_vacio(campo: str) -> None:
+    """El contrapeso: sin este test, un validador que rechace TODO `null`
+    pasaria igual el test de arriba."""
+    editado = VehiculoEditar(**{campo: None})
+    assert getattr(editado, campo) is None
+
+
+def test_editar_sin_nada_no_levanta() -> None:
+    """`{}` es un `PATCH` legitimo que no toca ningun campo."""
+    editado = VehiculoEditar()
+    assert editado.model_fields_set == set()
+
+
+# ── `ADR-037`: la maquina de estados queda RATIFICADA, no solo escrita ──────
+#
+# `ADR-037-la-reserva-no-vence-sola.md`, decidido el 23-ago-2026: la regla de
+# los 7 dias NO EXISTE, `reserved -> available` es manual, y
+# `TRANSICIONES_PERMITIDAS` queda ratificada TAL CUAL ESTA. Hasta este ADR, la
+# tabla era codigo que nadie habia aprobado — este test es donde ese cierre
+# queda anclado: fija el CONJUNTO completo, no una muestra.
+
+
+def test_transiciones_permitidas_tiene_exactamente_las_nueve_de_rn_st_05() -> None:
+    """`ADR-037`. Ni una transicion de mas, ni una de menos.
+
+    Los tests de arriba (`test_las_transiciones_de_rn_st_05_estan_permitidas`,
+    `test_lo_que_no_esta_en_la_tabla_esta_prohibido`) verifican una MUESTRA.
+    Este fija el CONJUNTO: lo que decide `RN-ST-05` es la lista completa, no
+    unos pares sueltos.
+    """
+    E = EstadoDeVehiculo
+    assert TRANSICIONES_PERMITIDAS == {
+        (E.EN_PREPARACION, E.DISPONIBLE),
+        (E.DISPONIBLE, E.RESERVADO),
+        (E.RESERVADO, E.VENDIDO),
+        (E.RESERVADO, E.DISPONIBLE),
+        (E.DISPONIBLE, E.EN_TALLER),
+        (E.EN_TALLER, E.DISPONIBLE),
+        (E.VENDIDO, E.ARCHIVADO),
+        (E.DISPONIBLE, E.ARCHIVADO),
+        (E.ARCHIVADO, E.DISPONIBLE),
+    }
+    assert len(TRANSICIONES_PERMITIDAS) == 9
+
+
+# ── `ADR-037`: la ausencia es la decision ────────────────────────────────────
+#
+# Un test sobre algo que NO existe se lee raro, y es exactamente lo que impide
+# que la regla de los 7 dias vuelva por la puerta de atras — el ADR mismo lo
+# advierte. Sin este test, alguien podria agregar `reserved_at` o una tarea de
+# vencimiento sin que nada se ponga rojo, y la "decision" de `ADR-037` seria
+# solo un parrafo en un documento que el codigo no respalda.
+
+
+def test_no_existe_la_columna_reserved_at() -> None:
+    """`ADR-037`: la reserva no vence sola. Sin la columna, no hay dato que
+    respalde ningun vencimiento por tiempo — el `CHECK` mas fuerte posible."""
+    from app.modules.stock.models import Vehicle
+
+    assert "reserved_at" not in Vehicle.__table__.columns.keys()
+
+
+def test_no_existe_ninguna_tarea_periodica_de_liberacion_de_reservas() -> None:
+    """`ADR-037`: cero codigo nuevo. `stock.importar` (C-17) es la UNICA tarea
+    de Celery del sistema, y no hay `beat_schedule` configurado."""
+    from app.core.tasks import app as celery_app
+
+    nombres_de_dominio = {nombre for nombre in celery_app.tasks if not nombre.startswith("celery.")}
+    assert nombres_de_dominio == {"stock.importar"}
+    assert not celery_app.conf.beat_schedule
+
+
+# ── C-14 · `HistorialDeEstado` usa los nombres de la TABLA (`design.md` D-2) ─
+
+
+def test_historial_de_estado_usa_changed_by_y_changed_at() -> None:
+    """N1 (`spec-tecnica` §3.4) gana sobre el schema viejo (`user_id`/
+    `occurred_at`), que nunca tuvo un consumidor."""
+    from app.modules.stock.schemas import HistorialDeEstado
+
+    assert {"changed_by", "changed_at"} <= set(HistorialDeEstado.model_fields)
+    assert "user_id" not in HistorialDeEstado.model_fields
+    assert "occurred_at" not in HistorialDeEstado.model_fields

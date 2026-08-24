@@ -93,8 +93,28 @@ async def otra_agencia() -> tuple[uuid.UUID, uuid.UUID]:
     return await agencia_con_sucursal()
 
 
-def _cabecera(proveedor: EmisorDePrueba, tenant: uuid.UUID) -> dict[str, str]:
-    return {"Authorization": f"Bearer {proveedor.firmar(tenant_id=tenant)}"}
+def _cabecera(
+    proveedor: EmisorDePrueba, tenant: uuid.UUID, *, sub: uuid.UUID | None = None
+) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {proveedor.firmar(tenant_id=tenant, sub=str(sub) if sub else None)}"
+    }
+
+
+async def _persona(tenant: uuid.UUID, *, rol: str = "manager") -> uuid.UUID:
+    """Un usuario REAL, para que `changed_by` (FK compuesta, `design.md` D-9)
+    tenga a quien apuntar cuando el sub del token pasa a ser el autor de una
+    transicion — ver `cambiar_estado` en `router.py`."""
+    uid = uuid.uuid4()
+    async with sesion_de_propietario() as sesion:
+        await sesion.execute(
+            text(
+                "INSERT INTO users (id, tenant_id, email, full_name, role, status) "
+                "VALUES (:id, :t, :e, 'Autora de prueba', :r, 'active')"
+            ),
+            {"id": uid, "t": tenant, "e": f"{uid}@example.com", "r": rol},
+        )
+    return uid
 
 
 def _cuerpo(
@@ -339,7 +359,7 @@ def test_el_mismo_dominio_en_dos_agencias_no_choca(
     assert dos.status_code == 201
 
 
-def test_una_transicion_prohibida_se_rechaza(
+async def test_una_transicion_prohibida_se_rechaza(
     cliente: TestClient,
     proveedor: EmisorDePrueba,
     agencia: tuple[uuid.UUID, uuid.UUID],
@@ -347,7 +367,7 @@ def test_una_transicion_prohibida_se_rechaza(
 ) -> None:
     """`RN-ST-05`: de `in_preparation` no se pasa a `sold`."""
     tenant, sucursal = agencia
-    cabecera = _cabecera(proveedor, tenant)
+    cabecera = _cabecera(proveedor, tenant, sub=await _persona(tenant))
 
     creado = cliente.post(
         "/api/v1/vehicles",
@@ -364,14 +384,14 @@ def test_una_transicion_prohibida_se_rechaza(
     assert rechazo.status_code == 422
 
 
-def test_la_transicion_permitida_se_aplica(
+async def test_la_transicion_permitida_se_aplica(
     cliente: TestClient,
     proveedor: EmisorDePrueba,
     agencia: tuple[uuid.UUID, uuid.UUID],
     modelo_del_catalogo: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
     tenant, sucursal = agencia
-    cabecera = _cabecera(proveedor, tenant)
+    cabecera = _cabecera(proveedor, tenant, sub=await _persona(tenant))
 
     creado = cliente.post(
         "/api/v1/vehicles",
@@ -410,14 +430,14 @@ def test_dar_de_baja_es_borrado_logico(
     ]
 
 
-def test_el_filtro_por_estado_acota(
+async def test_el_filtro_por_estado_acota(
     cliente: TestClient,
     proveedor: EmisorDePrueba,
     agencia: tuple[uuid.UUID, uuid.UUID],
     modelo_del_catalogo: tuple[uuid.UUID, uuid.UUID],
 ) -> None:
     tenant, sucursal = agencia
-    cabecera = _cabecera(proveedor, tenant)
+    cabecera = _cabecera(proveedor, tenant, sub=await _persona(tenant))
 
     primero = cliente.post(
         "/api/v1/vehicles",

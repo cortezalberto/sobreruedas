@@ -272,6 +272,24 @@ def _vendedor(identificador: uuid.UUID, tenant: uuid.UUID) -> Sujeto:
     return Sujeto(user_id=str(identificador), tenant_id=tenant, role="salesperson")
 
 
+async def _persona_real(tenant: uuid.UUID, *, rol: str = "salesperson") -> uuid.UUID:
+    """Un usuario REAL — C-14: `cambiar_estado` ahora escribe `changed_by` con
+    el `user_id` del sujeto, y la FK compuesta (`design.md` D-9) exige que
+    exista en `users` para ese tenant. Sin esto, un sujeto sintetico como los
+    que este archivo usaba hasta C-14 hace que la transicion EXITOSA reviente
+    con un `IntegrityError` al escribir la fila de historial."""
+    uid = uuid.uuid4()
+    async with sesion_de_propietario() as sesion:
+        await sesion.execute(
+            text(
+                "INSERT INTO users (id, tenant_id, email, full_name, role, status) "
+                "VALUES (:id, :t, :e, 'Persona de prueba', :r, 'active')"
+            ),
+            {"id": uid, "t": tenant, "e": f"{uid}@example.com", "r": rol},
+        )
+    return uid
+
+
 async def _vehiculo_disponible(
     sesion: AsyncSession,
     tenant: uuid.UUID,
@@ -317,7 +335,7 @@ class TestElAlcanceOwn:
         self, catalogo: tuple[uuid.UUID, uuid.UUID]
     ) -> None:
         tenant, sucursal = await agencia_con_sucursal()
-        vendedor = uuid.uuid4()
+        vendedor = await _persona_real(tenant)
 
         async with _sesion(tenant) as sesion:
             vehiculo = await _vehiculo_disponible(
@@ -407,6 +425,7 @@ class TestElAlcanceOwn:
         """Contrapeso. Si `all` tambien mirara `assigned_user_id`, los tests de
         arriba pasarian igual y no probarian `own` sino una denegacion general."""
         tenant, sucursal = await agencia_con_sucursal()
+        gerente = await _persona_real(tenant, rol="manager")
 
         async with _sesion(tenant) as sesion:
             vehiculo = await _vehiculo_disponible(
@@ -416,7 +435,7 @@ class TestElAlcanceOwn:
                 vehiculo.id,
                 VehiculoCambioDeEstado(status=EstadoDeVehiculo.RESERVADO),
                 sesion,
-                Sujeto(user_id=str(uuid.uuid4()), tenant_id=tenant, role="manager"),
+                Sujeto(user_id=str(gerente), tenant_id=tenant, role="manager"),
                 CELDA_DEL_GERENTE,
             )
 
@@ -434,7 +453,7 @@ class TestElAlcanceOwn:
         quien lo tenia cuando abrio sesion.
         """
         tenant, sucursal = await agencia_con_sucursal()
-        primero, segundo = uuid.uuid4(), uuid.uuid4()
+        primero, segundo = await _persona_real(tenant), uuid.uuid4()
 
         async with _sesion(tenant) as sesion:
             vehiculo = await _vehiculo_disponible(
@@ -506,6 +525,7 @@ class TestElAlcanceOwn:
         `available` -> `sold`, que **no** es transicion legal para nadie.
         """
         tenant, sucursal = await agencia_con_sucursal()
+        gerente = await _persona_real(tenant, rol="manager")
 
         async with _sesion(tenant) as sesion:
             vehiculo = await _vehiculo_disponible(
@@ -515,7 +535,7 @@ class TestElAlcanceOwn:
                 vehiculo.id,
                 VehiculoCambioDeEstado(status=EstadoDeVehiculo.EN_TALLER),
                 sesion,
-                Sujeto(user_id=str(uuid.uuid4()), tenant_id=tenant, role="manager"),
+                Sujeto(user_id=str(gerente), tenant_id=tenant, role="manager"),
                 CELDA_DEL_GERENTE,
             )
 
@@ -532,7 +552,7 @@ class TestElAlcanceOwn:
         no encuentra ningun control en el medio. El eje de `ADR-034` si.
         """
         tenant, sucursal = await agencia_con_sucursal()
-        vendedor = uuid.uuid4()
+        vendedor = await _persona_real(tenant)
 
         async with _sesion(tenant) as sesion:
             vehiculo = await _vehiculo_disponible(

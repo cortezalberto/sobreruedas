@@ -21,14 +21,40 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any, TypeVar
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.pagination import paginar
 from app.modules.stock.models import Vehicle
 from app.modules.stock.schemas import EstadoDeVehiculo, FiltrosDeBusqueda
 
-__all__ = ["VehicleRepository", "contar_vehiculos"]
+__all__ = ["PaginaDeVehiculos", "VehicleRepository", "contar_vehiculos"]
+
+
+@dataclass(frozen=True)
+class PaginaDeVehiculos:
+    """Una pagina de `listar_paginado`, con instancias de `Vehicle` y no
+    `Row` (`design.md` D-2, riesgo de refactorizacion).
+
+    No se reusa `app.core.pagination.Pagina` tal cual: su `items` es
+    `list[Row[Any]]`, y devolver `Vehicle` bajo esa firma seria mentirle a
+    mypy sobre lo que hay adentro. Este tipo propio del modulo es lo que hace
+    que `router.py` reciba vehiculos de verdad sin que el repositorio finja
+    ser el `Row` que `core/pagination.py` (C-02, CRITICO) nunca prometio dar.
+    """
+
+    items: list[Vehicle]
+    cursor_siguiente: str | None
+
+
+# `_vivos` y `_filtrar` se aplican tanto a `select(Vehicle)` (una columna) como
+# a `select(Vehicle, Vehicle.created_at.label(...), Vehicle.id.label(...))`
+# (tres, para `listar_paginado`). El `TypeVar` preserva la forma exacta de la
+# consulta en cada sitio de llamada en vez de ensancharla a `Any`.
+_Fila = TypeVar("_Fila", bound=tuple[Any, ...])
 
 
 class VehicleRepository:
@@ -46,14 +72,77 @@ class VehicleRepository:
         return (await self._sesion.execute(consulta)).scalars().first()
 
     async def listar(self, filtros: FiltrosDeBusqueda) -> Sequence[Vehicle]:
-        """Los vehiculos del tenant, del mas nuevo al mas viejo.
+        """Los vehiculos del tenant, del mas nuevo al mas viejo, SIN paginar.
+
+        ⚠️ Sigue existiendo por compatibilidad con quien ya lo llama sin
+        cursor —`test_cuota_de_vehiculos.py`, `test_stock_service.py`— y no
+        por el endpoint: `GET /vehicles` usa `listar_paginado` desde C-15
+        (`T-080`). Devolver TODO sin techo es justo lo que ese change vino a
+        cerrar; este metodo queda para quien opera a nivel de servicio y sabe
+        que esta pidiendo el conjunto completo.
 
         Por `created_at` descendente: lo que se acaba de cargar es lo que se
         busca. Sin `ORDER BY` explicito PostgreSQL devuelve cualquier orden, y un
         listado que se reordena entre dos cargas es imposible de usar.
         """
-        consulta = self._vivos(select(Vehicle))
+        consulta = self._filtrar(self._vivos(select(Vehicle)), filtros)
+        return (
+            (await self._sesion.execute(consulta.order_by(Vehicle.created_at.desc())))
+            .scalars()
+            .all()
+        )
 
+    async def listar_paginado(
+        self,
+        filtros: FiltrosDeBusqueda,
+        *,
+        tenant: uuid.UUID,
+        cursor: str | None = None,
+        tamano: int | None = None,
+    ) -> PaginaDeVehiculos:
+        """`GET /vehicles` — `T-080`, `design.md` D-2.
+
+        ⚠️ EL DETALLE QUE NO ES OBVIO (`D-2`): `paginar()` exige que la
+        consulta seleccione EXPLICITAMENTE `created_at` e `id` — son las dos
+        columnas del orden y las que arman el cursor de la pagina siguiente.
+        Un `select(Vehicle)` a secas no alcanza: la `Row` que vuelve tiene UN
+        solo elemento (la entidad), y `getattr(fila, "created_at")` -que es lo
+        que `paginar` hace para armar el cursor- falla.
+
+        Por eso la consulta selecciona la ENTIDAD MAS las dos columnas del
+        orden, etiquetadas (`Vehicle.created_at.label("created_at")`,
+        `Vehicle.id.label("id")`): `paginar` encuentra lo que su contrato pide
+        en `selected_columns`, y este metodo recupera la entidad con `fila[0]`
+        para que quien llama siga recibiendo instancias de `Vehicle` — no
+        `Row`. La PRIMERA refactorizacion que "simplifica" esto de vuelta a
+        `select(Vehicle)` rompe `paginar` en silencio (riesgo de
+        `design.md`); `test_vehicles_listado_paginado.py` lo pone en rojo.
+
+        `paginar` NO agrega el filtro de tenant —lo dice su propio
+        docstring—: va en `consulta`, y acá lo pone `self._vivos()`, igual que
+        en `listar`. Capa 3 de la regla dura 1.
+        """
+        consulta = self._filtrar(
+            self._vivos(
+                select(
+                    Vehicle,
+                    Vehicle.created_at.label("created_at"),
+                    Vehicle.id.label("id"),
+                )
+            ),
+            filtros,
+        )
+        pagina = await paginar(self._sesion, consulta, tenant=tenant, cursor=cursor, tamano=tamano)
+        return PaginaDeVehiculos(
+            items=[fila[0] for fila in pagina.items],
+            cursor_siguiente=pagina.cursor_siguiente,
+        )
+
+    def _filtrar(self, consulta: Select[_Fila], filtros: FiltrosDeBusqueda) -> Select[_Fila]:
+        """Los filtros de busqueda de `FiltrosDeBusqueda`, comunes a `listar`
+        y `listar_paginado`: una sola copia, para que paginar y no paginar la
+        misma consulta de negocio siga siendo, de verdad, la misma consulta.
+        """
         if filtros.status is not None:
             consulta = consulta.where(Vehicle.status == filtros.status.value)
         if filtros.brand_id is not None:
@@ -70,12 +159,7 @@ class VehicleRepository:
             consulta = consulta.where(Vehicle.price_ars >= filtros.price_from)
         if filtros.price_to is not None:
             consulta = consulta.where(Vehicle.price_ars <= filtros.price_to)
-
-        return (
-            (await self._sesion.execute(consulta.order_by(Vehicle.created_at.desc())))
-            .scalars()
-            .all()
-        )
+        return consulta
 
     async def existe_dominio(self, dominio: str) -> bool:
         """`RN-ST-01`. Se pregunta ANTES de insertar para dar un error legible.
@@ -95,7 +179,7 @@ class VehicleRepository:
         self._sesion.add(vehiculo)
         return vehiculo
 
-    def _vivos(self, consulta: Select[tuple[Vehicle]]) -> Select[tuple[Vehicle]]:
+    def _vivos(self, consulta: Select[_Fila]) -> Select[_Fila]:
         """Tenant + no borrado. Las dos condiciones que toda consulta lleva."""
         return consulta.where(
             Vehicle.tenant_id == self._tenant_id,

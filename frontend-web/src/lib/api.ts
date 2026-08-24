@@ -308,15 +308,49 @@ function esVehiculo(valor: unknown): valor is Vehiculo {
   );
 }
 
-/** El stock de la agencia del token. */
+/**
+ * El stock de la agencia del token.
+ *
+ * ⚠️ RECORRE TODAS LAS PAGINAS — C-15, `T-080`, `design.md` D-2. Desde ese
+ * change `GET /vehicles` dejo de devolver TODO el stock: pagina por cursor,
+ * 20 vehiculos por defecto, con la pagina siguiente indicada en el header
+ * `X-Next-Cursor` (su ausencia es la ultima pagina). El CUERPO de cada
+ * pagina sigue siendo un array — eso es lo que `esVehiculo` sigue validando
+ * sin cambios — asi que lo unico nuevo acá es EL LOOP que las junta.
+ *
+ * Esta funcion sigue devolviendo la lista COMPLETA a proposito: la
+ * paginacion de la UI es **C-19**, todavia no existe, y truncar en 20 sin
+ * avisar seria peor que el problema que este change vino a cerrar — una
+ * agencia con mas de 20 autos veria solo los primeros 20 en la pantalla de
+ * stock, sin ningun error.
+ */
 export async function obtenerVehiculos(token: string): Promise<Vehiculo[]> {
-  const datos = await pedirConToken('/api/v1/vehicles', token);
+  const vehiculos: Vehiculo[] = [];
+  let cursor: string | null = null;
 
-  if (!Array.isArray(datos) || !datos.every(esVehiculo)) {
-    throw new TypeError('El listado de vehiculos no tiene la forma esperada');
-  }
+  do {
+    const ruta: string = cursor
+      ? `/api/v1/vehicles?cursor=${encodeURIComponent(cursor)}`
+      : '/api/v1/vehicles';
+    const respuesta = await fetch(`${API_BASE_URL}${ruta}`, {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
 
-  return datos;
+    if (!respuesta.ok) {
+      throw new ErrorDeApi(respuesta.status, ruta);
+    }
+
+    const datos: unknown = await respuesta.json();
+    if (!Array.isArray(datos) || !datos.every(esVehiculo)) {
+      throw new TypeError('El listado de vehiculos no tiene la forma esperada');
+    }
+
+    vehiculos.push(...datos);
+    cursor = respuesta.headers.get('X-Next-Cursor');
+  } while (cursor !== null);
+
+  return vehiculos;
 }
 
 /**

@@ -22,10 +22,10 @@ Es además el **único serializador duro del proyecto**: en GATE 3 los tres agen
 
 | Decisión | Dónde | Qué fija |
 |---|---|---|
-| [`ADR-026`](../../../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) | `IN-06`, `IN-12(a)` | sin `password_hash`; login PKCE; 2 de 8 endpoints de `/auth`; path de `accept-invitation` |
-| [`ADR-017`](../../../docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md) | `IN-01`, `IN-02` | `user_role_enum` con **3** valores; `super_admin` en tabla propia |
-| [`ADR-021`](../../../docs/adr/ADR-021-claims-de-tenant-y-rol.md) | — | `tenant_id` y `role` como claims planos |
-| [`ADR-024`](../../../docs/adr/ADR-024-matriz-rbac-canonica.md) | `R-2` | las celdas de permisos de `users`, `branches` y `tenant` |
+| [`ADR-026`](../../../../docs/adr/ADR-026-autenticacion-delegada-sin-password-hash.md) | `IN-06`, `IN-12(a)` | sin `password_hash`; login PKCE; 2 de 8 endpoints de `/auth`; path de `accept-invitation` |
+| [`ADR-017`](../../../../docs/adr/ADR-017-catalogo-de-roles-y-super-admin.md) | `IN-01`, `IN-02` | `user_role_enum` con **3** valores; `super_admin` en tabla propia |
+| [`ADR-021`](../../../../docs/adr/ADR-021-claims-de-tenant-y-rol.md) | — | `tenant_id` y `role` como claims planos |
+| [`ADR-024`](../../../../docs/adr/ADR-024-matriz-rbac-canonica.md) | `R-2` | las celdas de permisos de `users`, `branches` y `tenant` |
 
 **No se re-deciden. Se aplican.**
 

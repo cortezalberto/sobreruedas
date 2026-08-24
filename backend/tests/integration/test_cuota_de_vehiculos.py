@@ -80,6 +80,13 @@ async def agencia_con_plan() -> (
             # `imports` tambien apunta a `tenants`. Va PRIMERO por eso: la FK
             # no la contempla `ON DELETE`, asi que el orden es la unica garantia.
             await sesion.execute(text("DELETE FROM imports WHERE tenant_id = :t"), {"t": tenant_id})
+            # `vehicle_status_history` (C-14) tiene FK `RESTRICT` a `vehicles`:
+            # cada alta deja su fila genesis, asi que borrar el vehiculo antes
+            # que su historial rompe con `ForeignKeyViolationError`. Va ANTES
+            # por el mismo motivo que `imports`.
+            await sesion.execute(
+                text("DELETE FROM vehicle_status_history WHERE tenant_id = :t"), {"t": tenant_id}
+            )
             await sesion.execute(
                 text("DELETE FROM vehicles WHERE tenant_id = :t"), {"t": tenant_id}
             )

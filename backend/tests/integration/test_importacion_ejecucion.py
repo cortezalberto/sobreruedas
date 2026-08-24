@@ -30,6 +30,7 @@ from redis.asyncio import Redis
 from sqlalchemy import func, select, text
 
 from app.db.session import sesion_de_tenant
+from app.modules.stock.historial import HistorialRepository
 from app.modules.stock.importacion_modelo import EstadoDeImportacion, Import
 from app.modules.stock.importacion_servicio import (
     ImportacionNoEncontrada,
@@ -37,6 +38,7 @@ from app.modules.stock.importacion_servicio import (
     ejecutar_importacion,
 )
 from app.modules.stock.models import Vehicle
+from app.modules.stock.schemas import EstadoDeVehiculo
 
 from .soporte import (
     DSN_APLICACION,
@@ -436,6 +438,12 @@ async def test_la_cuota_del_plan_se_verifica_contra_el_total_y_no_fila_por_fila(
             # `imports` tambien apunta a `tenants`. Va PRIMERO por eso: la FK
             # no la contempla `ON DELETE`, asi que el orden es la unica garantia.
             await sesion.execute(text("DELETE FROM imports WHERE tenant_id = :t"), {"t": tenant_id})
+            # `vehicle_status_history` (C-14) tiene FK `RESTRICT` a `vehicles`:
+            # cada alta deja su fila genesis, asi que borrar el vehiculo antes
+            # que su historial rompe con `ForeignKeyViolationError`.
+            await sesion.execute(
+                text("DELETE FROM vehicle_status_history WHERE tenant_id = :t"), {"t": tenant_id}
+            )
             await sesion.execute(
                 text("DELETE FROM vehicles WHERE tenant_id = :t"), {"t": tenant_id}
             )
@@ -645,3 +653,85 @@ async def test_actualizar_una_corrida_que_ya_no_esta_no_hace_nada(base_migrada: 
     from app.modules.stock.importacion_servicio import _actualizar
 
     await _actualizar(uuid.uuid4(), uuid.uuid4(), status="completed")
+
+
+# ── C-14 · La fila genesis (`design.md` D-4) ─────────────────────────────────
+#
+# `importacion_servicio.py:319` construye `Vehicle(...)` directo, sin pasar
+# por `StockService.crear`. Sin tocar este archivo, los vehiculos importados
+# -la via de alta masiva, hasta 5.000 por corrida (RN-ST-13)- entrarian sin
+# fila de historial, y una auditoria append-only con agujeros es peor que no
+# tenerla: se consulta creyendole.
+
+
+async def test_los_vehiculos_importados_tienen_fila_genesis(
+    agencia: tuple[uuid.UUID, str, str],
+    planilla: Planilla,
+    correr: Callable[[bytes], Awaitable[Import]],
+) -> None:
+    tenant_id, _, _ = agencia
+
+    await correr(planilla.csv(planilla.fila("AE100AA"), planilla.fila("AE200AA")))
+
+    async with sesion_de_tenant(tenant_id, dsn=DSN_APLICACION) as sesion:
+        vehiculos = (await sesion.execute(select(Vehicle))).scalars().all()
+        assert len(vehiculos) == 2
+        historial = HistorialRepository(sesion, tenant_id)
+        for vehiculo in vehiculos:
+            filas = await historial.listar_historial(vehiculo.id)
+            assert len(filas) == 1, f"vehiculo {vehiculo.id} sin fila genesis"
+            assert filas[0].from_status is None
+            assert filas[0].to_status == EstadoDeVehiculo.EN_PREPARACION.value
+
+
+async def test_la_fila_genesis_de_la_importacion_es_null_cuando_no_se_conoce_el_usuario(
+    agencia: tuple[uuid.UUID, str, str],
+    planilla: Planilla,
+    correr: Callable[[bytes], Awaitable[Import]],
+) -> None:
+    """`correr` registra con `creado_por=None`: el procesamiento ocurre en un
+    worker de Celery donde el sujeto ya no esta en contexto."""
+    tenant_id, _, _ = agencia
+
+    await correr(planilla.csv(planilla.fila("AE400AA")))
+
+    async with sesion_de_tenant(tenant_id, dsn=DSN_APLICACION) as sesion:
+        vehiculo = (await sesion.execute(select(Vehicle))).scalars().one()
+        (fila,) = await HistorialRepository(sesion, tenant_id).listar_historial(vehiculo.id)
+
+    assert fila.changed_by is None
+
+
+async def test_la_fila_genesis_de_la_importacion_lleva_el_usuario_que_la_lanzo(
+    agencia: tuple[uuid.UUID, str, str],
+    planilla: Planilla,
+) -> None:
+    """Contrapeso del anterior: `changed_by` es el usuario de la corrida
+    CUANDO la corrida lo conoce."""
+    tenant_id, _, _ = agencia
+    lanzador = uuid.uuid4()
+
+    async with sesion_de_propietario() as sesion:
+        await sesion.execute(
+            text(
+                "INSERT INTO users (id, tenant_id, email, full_name, role, status) "
+                "VALUES (:id, :t, :e, 'Lanzadora', 'manager', 'active')"
+            ),
+            {"id": lanzador, "t": tenant_id, "e": f"{lanzador}@example.com"},
+        )
+
+    async with sesion_de_tenant(tenant_id, dsn=DSN_APLICACION) as sesion:
+        corrida = await ImportService(sesion, tenant_id).registrar(
+            nombre_archivo="stock.csv",
+            contenido=planilla.csv(planilla.fila("AE500AA")),
+            creado_por=lanzador,
+        )
+        corrida_id = corrida.id
+
+    await ejecutar_importacion(corrida_id, tenant_id)
+
+    async with sesion_de_tenant(tenant_id, dsn=DSN_APLICACION) as sesion:
+        vehiculo = (await sesion.execute(select(Vehicle))).scalars().one()
+        (fila,) = await HistorialRepository(sesion, tenant_id).listar_historial(vehiculo.id)
+
+    assert fila.changed_by == lanzador
